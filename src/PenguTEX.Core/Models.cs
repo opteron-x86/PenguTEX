@@ -1,0 +1,48 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace PenguTEX.Core;
+
+public static class JsonFiles
+{
+    public static readonly JsonSerializerOptions Options = new()
+    {
+        WriteIndented = true, PropertyNameCaseInsensitive = true,
+        Converters = { new JsonStringEnumConverter() },
+    };
+    public static T Read<T>(string path) => JsonSerializer.Deserialize<T>(File.ReadAllText(path), Options)
+        ?? throw new InvalidDataException("Empty JSON document: " + path);
+    public static void Write<T>(string path, T value)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        string temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try { File.WriteAllText(temp, JsonSerializer.Serialize(value, Options)); File.Move(temp, path, true); }
+        finally { if (File.Exists(temp)) File.Delete(temp); }
+    }
+    public static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+}
+
+public sealed record SourceOptions(string? Folder = null, string? Instance = null, string? Profile = null,
+    string? Game = null, string? Mods = null, string? Profiles = null, string? Overwrite = null,
+    string? WinePrefix = null, string? Ini = null, string[]? ExcludeMods = null, string? Data = null);
+public sealed record Diagnostic(string Severity, string Message);
+public sealed record Asset(string Path, string Origin, string Container, long Length, Func<Stream> Open);
+public sealed record Catalog(SourceOptions Source, IReadOnlyList<string> Roots,
+    IReadOnlyList<Asset> Assets, IReadOnlyList<Diagnostic> Diagnostics);
+public sealed record JobProgress(string Phase, int Done, int Total, string Path, string Message);
+public enum Decision { Keep, Reduce, Protected, Unsupported, Invalid }
+public sealed record PlanItem(string Path, string Origin, string Container, string Category, Decision Decision,
+    string Reason, DdsInfo? Input, int DropMips, int TargetWidth, int TargetHeight, long OutputPayload)
+{
+    public long SavedBytes => Input is null ? 0 : Input.PayloadBytes - OutputPayload;
+}
+public sealed record OptimizationPlan(int Schema, SourceOptions Source, Policy Policy, DateTimeOffset Created,
+    IReadOnlyList<PlanItem> Items, IReadOnlyList<Diagnostic> Diagnostics)
+{
+    public int ChangedCount => Items.Count(x => x.Decision == Decision.Reduce);
+    public long SavedPayloadBytes => Items.Sum(x => x.SavedBytes);
+    public long InputPayloadBytes => Items.Sum(x => x.Input?.PayloadBytes ?? 0);
+    public bool CompleteSource => Diagnostics.All(d => d.Severity != "Error");
+}
