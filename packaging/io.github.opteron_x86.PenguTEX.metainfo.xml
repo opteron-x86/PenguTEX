@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.opteron_x86.PenguTEX</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <name>PenguTEX</name>
+  <summary>Optimize Skyrim textures on Linux</summary>
+  <developer id="io.github.opteron_x86"><name>PenguTEX contributors</name></developer>
+  <description><p>Inspect winning textures from native mod profiles or folders, review changes, and generate a removable texture optimization mod. PenguTEX provides desktop and command line workflows.</p></description>
+  <launchable type="desktop-id">io.github.opteron_x86.PenguTEX.desktop</launchable>
+  <url type="homepage">https://github.com/opteron-x86/PenguTEX</url>
+  <url type="bugtracker">https://github.com/opteron-x86/PenguTEX/issues</url>
+  <content_rating type="oars-1.1"/>
+  <releases><release version="0.1.0-alpha.1" date="2026-10-29" type="development"/></releases>
+</component>

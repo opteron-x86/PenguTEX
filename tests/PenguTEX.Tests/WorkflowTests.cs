@@ -78,6 +78,33 @@ public class WorkflowTests
     [Theory] [InlineData("textures/../escape.dds")] [InlineData("/absolute.dds")] [InlineData("textures/C:/bad.dds")]
     public void RejectsUnsafeOutputPaths(string path)
     { using var f = new Fixture(); Assert.Throws<InvalidDataException>(() => JobRunner.Resolve(f.Root, path)); }
+    [Fact] public void InterruptedDirectorySwapRestoresThenRebuildsOutput()
+    {
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds());
+        var catalog = CatalogLoader.Load(new(Folder: f.Dir("source"))); var plan = Planner.Analyze(catalog, Small);
+        string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
+        var first = JobRunner.Build(catalog, plan, output, cache);
+        string backup = Path.Combine(f.Root, ".pengutex-previous-" + JsonFiles.Hash(output)[..20]); Directory.Move(output, backup);
+        using var cancel = new CancellationTokenSource(); cancel.Cancel();
+        Assert.ThrowsAny<OperationCanceledException>(() => JobRunner.Build(catalog, plan, output, cache, ct: cancel.Token));
+        Assert.Equal(first.Manifest.Files[0].OutputHash, JobRunner.Verify(output).Files[0].OutputHash);
+        Assert.False(Directory.Exists(backup)); Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache).Reused);
+    }
+    [Fact] public void OutputLockAndSymbolicLinksPreventConflictingWrites()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds());
+        var catalog = CatalogLoader.Load(new(Folder: f.Dir("source"))); var plan = Planner.Analyze(catalog, Small);
+        string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
+        string lockPath = Path.Combine(f.Root, ".pengutex-" + JsonFiles.Hash(output)[..20] + ".lock");
+        using (var held = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+            Assert.Throws<IOException>(() => JobRunner.Build(catalog, plan, output, cache));
+        JobRunner.Build(catalog, plan, output, cache);
+        var external = f.Text("outside/keep.txt", "preserve"); File.CreateSymbolicLink(Path.Combine(output, "link.txt"), external);
+        Assert.Throws<IOException>(() => JobRunner.Build(catalog, plan, output, cache)); Assert.Equal("preserve", File.ReadAllText(external));
+        string linkedOutput = Path.Combine(f.Root, "linked-output"); Directory.CreateSymbolicLink(linkedOutput, output);
+        Assert.Throws<IOException>(() => JobRunner.Build(catalog, plan, linkedOutput, cache));
+    }
     [Fact] public void ProtectionsAndExplicitOverridesAreExplained()
     {
         var policy = Small; Assert.NotNull(policy.Classify("textures/landscape/rocks/a_n.dds").Protection);

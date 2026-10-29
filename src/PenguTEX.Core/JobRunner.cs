@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Reflection;
 
 namespace PenguTEX.Core;
 
@@ -19,6 +20,7 @@ public static class JobRunner
     public const string ManifestName = "pengutex-manifest.json";
     public const string Product = "PenguTEX";
     public const string RecipeVersion = "mip-copy-v1";
+    public static string Version => typeof(JobRunner).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
 
     private static string Canonical(string path)
     {
@@ -154,7 +156,7 @@ public static class JobRunner
             progress?.Report(new("Build", Interlocked.Increment(ref done), changed.Length, item.Path, entry.Recipe));
         });
         ct.ThrowIfCancellationRequested();
-        var manifest = new OutputManifest(Product, 1, typeof(JobRunner).Assembly.GetName().Version?.ToString() ?? "0.1.0", DateTimeOffset.UtcNow,
+        var manifest = new OutputManifest(Product, 1, Version, DateTimeOffset.UtcNow,
             policyHash, entries, plan.Items.Count(x => x.Decision == Decision.Keep), plan.Items.Count(x => x.Decision == Decision.Protected),
             plan.Items.Count(x => x.Decision == Decision.Unsupported), plan.Items.Count(x => x.Decision == Decision.Invalid));
         JsonFiles.Write(Path.Combine(stage, ManifestName), manifest);

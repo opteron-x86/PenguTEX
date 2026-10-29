@@ -4,6 +4,10 @@ A Linux-first texture optimizer for Skyrim Special Edition modlists. PenguTEX re
 Fluorine and Mod Organizer 2 profiles directly, explains proposed changes, and writes
 a separate texture override mod. It does not need Wine or a running game.
 
+Download portable Linux x64/AppImage packages from
+[Releases](https://github.com/opteron-x86/PenguTEX/releases). See the
+[installation guide](docs/DISTRIBUTION.md) and [PenguLOD handoff](docs/PENGULOD-HANDOFF.md).
+
 The native desktop and CLI analyze profiles/folders, reduce existing DDS mip chains,
 reuse verified cached work and publish removable output mods. The desktop adds
 editable policies, a searchable review table and before/after channel inspection.

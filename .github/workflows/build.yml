@@ -1,30 +1,55 @@
-name: Build and test
+name: Build and release
 on:
   push:
     branches: ['**']
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
   group: build-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 jobs:
   linux:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           dotnet-version: '10.0.x'
+      - name: Check version
+        env:
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if [[ "$RELEASE_REF" == refs/tags/* ]]; then
+            python3 tools/version.py --check-tag "$RELEASE_TAG"
+          else
+            python3 tools/version.py
+          fi
+      - run: sudo apt-get update && sudo apt-get install -y xvfb libice6 libsm6 libfontconfig1 appstream
       - run: bash tools/test.sh
         env:
           PENGUTEX_SCREENSHOTS: ${{ github.workspace }}/.artifacts/screenshots
       - run: dotnet build src/PenguTEX.Cli -c Release --no-restore
       - run: python3 tools/cli-smoke.py dotnet src/PenguTEX.Cli/bin/Release/net10.0/PenguTEX.dll
-      - run: sudo apt-get update && sudo apt-get install -y xvfb libice6 libsm6 libfontconfig1
-      - run: timeout 30s xvfb-run -a dotnet src/PenguTEX.Desktop/bin/Release/net10.0/PenguTEX.Desktop.dll --settings "$PWD/.artifacts/native-settings.json" --smoke
+      - run: bash tools/build.sh
+      - run: timeout 30s xvfb-run -a dist/linux-x64/PenguTEX.Desktop --settings "$PWD/.artifacts/native-settings.json" --smoke
+      - run: python3 tools/benchmark.py --binary dist/linux-x64/PenguTEX --report .artifacts/benchmarks/synthetic.json
+      - run: bash tools/package-appimage.sh
+      - run: bash tools/package-release.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: PenguTEX-linux-x64
+          if-no-files-found: error
+          compression-level: 0
+          path: |
+            dist/PenguTEX-*.tar.gz
+            dist/PenguTEX-*.AppImage
+            dist/SHA256SUMS
+            dist/RELEASE-NOTES.md
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         with:
@@ -33,3 +58,84 @@ jobs:
           path: |
             .artifacts/tests
             .artifacts/screenshots
+            .artifacts/benchmarks
+  compatibility:
+    name: Package compatibility (${{ matrix.image }})
+    needs: linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: ubuntu:24.04
+            manager: apt
+          - image: debian:13
+            manager: apt
+          - image: fedora:43
+            manager: dnf
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Runtime dependencies
+        env:
+          PACKAGE_MANAGER: ${{ matrix.manager }}
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          if [ "$PACKAGE_MANAGER" = apt ]; then
+            apt-get update
+            apt-get install -y python3 libfontconfig1 libx11-6 libice6 libsm6 libicu-dev libssl3 libxrandr2 libxi6 libxrender1 libxcursor1 libgl1 libglib2.0-0t64 xvfb xauth tar gzip libstdc++6
+          else
+            dnf install -y python3 fontconfig libX11 libICE libSM libicu openssl-libs libXrandr libXi libXrender libXcursor mesa-libGL glib2 xorg-x11-server-Xvfb xorg-x11-xauth tar gzip libstdc++
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: PenguTEX-linux-x64
+          path: artifacts
+      - name: Extracted portable and AppImage checks
+        shell: bash
+        run: |
+          (cd artifacts && sha256sum -c SHA256SUMS)
+          mkdir 'Extracted package forêt'
+          tar -xzf artifacts/PenguTEX-*-linux-x64.tar.gz -C 'Extracted package forêt'
+          portable="$PWD/Extracted package forêt/linux-x64"
+          "$portable/PenguTEX" --version
+          python3 tools/cli-smoke.py "$portable/PenguTEX"
+          Xvfb :99 -screen 0 1280x900x24 -nolisten tcp > xvfb.log 2>&1 &
+          display_pid=$!
+          trap 'kill "$display_pid" 2>/dev/null || true' EXIT
+          export DISPLAY=:99
+          for attempt in {1..30}; do
+            test -S /tmp/.X11-unix/X99 && break
+            kill -0 "$display_pid"
+            sleep 0.1
+          done
+          timeout 30s "$portable/PenguTEX.Desktop" --settings "$PWD/smoke-settings.json" --smoke
+          chmod +x artifacts/*.AppImage
+          image=(artifacts/*.AppImage)
+          python3 tools/cli-smoke.py "${image[0]}" --appimage-extract-and-run --cli
+          timeout 30s "${image[0]}" --appimage-extract-and-run --settings "$PWD/appimage-settings.json" --smoke
+  release:
+    if: startsWith(github.ref, 'refs/tags/v') && github.repository == 'opteron-x86/PenguTEX'
+    needs: [linux, compatibility]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: PenguTEX-linux-x64
+          path: release
+      - name: Publish verified tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        working-directory: release
+        run: |
+          sha256sum -c SHA256SUMS
+          options=()
+          if [[ "$RELEASE_TAG" == *-* ]]; then options+=(--prerelease); fi
+          gh release create "$RELEASE_TAG" --verify-tag --title "PenguTEX ${RELEASE_TAG#v}" --notes-file RELEASE-NOTES.md "${options[@]}" PenguTEX-*.tar.gz PenguTEX-*.AppImage SHA256SUMS

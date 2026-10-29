@@ -1,12 +1,12 @@
 # Provenance
 
-PenguTEX is GPL-3.0-only. Selected path/profile components will be adapted from
+PenguTEX is GPL-3.0-only. Selected path/profile components are adapted from
 [PenguLOD](https://github.com/opteron-x86/PenguLOD), based on
 [AnvilLOD](https://github.com/CageTV/AnvilLOD). Record exact revisions, files and
-changes here upon incorporation. No neighboring checkout is required at runtime.
+changes below. No neighboring checkout is required at runtime.
 
-Planned dependencies: Avalonia, Mutagen and BCnEncoder.NET. Pin package versions and
-include dependency notices in distributions. No VRAMr code, binaries, exclusion
+Dependencies include Avalonia, Mutagen and BCnEncoder.NET. Package versions are pinned;
+distributions include dependency notices. No VRAMr code, binaries, exclusion
 databases, or proprietary game/mod assets are redistributed.
 
 References: [DDS layout](https://learn.microsoft.com/en-us/windows/win32/direct3ddds/dds-file-layout-for-textures),
@@ -20,3 +20,10 @@ Profile/path/archive selection files under `src/PenguTEX.Assets/Paths`,
 `Profiles`, and `SkyrimArchives.cs` are adapted from PenguLOD commit
 `1eb7882ee44387bda80de237783fedce650e131d` (GPL-3.0-only), based on CageTV’s AnvilLOD.
 Namespaces and subsequent robustness/diagnostic changes are local to PenguTEX.
+
+Linux AppImage/desktop-install packaging conventions, dependency-license collection
+and copied upstream license texts also derive from that PenguLOD revision. The
+PenguTEX scripts simplify its workflow to the texture application. The pinned
+AppImage tool/runtime is 1.9.1, SHA-256
+`ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0`.
+The vector application icon and application metadata are original PenguTEX assets.
