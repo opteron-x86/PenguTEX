@@ -1,0 +1,7 @@
+**/bin/
+**/obj/
+.tools/
+.artifacts/
+dist/
+*.user
+.DS_Store

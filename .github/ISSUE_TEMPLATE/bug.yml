@@ -1,0 +1,21 @@
+name: Bug report
+description: Report incorrect analysis, processing or application behavior
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and expected result
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps, version and environment
+      description: Include app version, distribution, source mode and preset. Do not upload proprietary textures.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Relevant diagnostics
+      description: Remove personal paths before sharing logs.
