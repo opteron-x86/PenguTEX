@@ -5,6 +5,7 @@ namespace PenguTEX.Core;
 public sealed record DdsInfo(int Width, int Height, int MipCount, int BlockBytes, string Format,
     int Dxgi, int HeaderBytes, long PayloadBytes, bool Srgb, bool Signed)
 {
+    public bool Premultiplied { get; init; }
     public long MipBytes(int mip) => checked((long)((Math.Max(1, Width >> mip) + 3) / 4)
         * ((Math.Max(1, Height >> mip) + 3) / 4) * BlockBytes);
     public long RemovedBytes(int drop) => Enumerable.Range(0, drop).Sum(MipBytes);
@@ -62,7 +63,8 @@ public static class Dds
             };
             signed = cc is "BC4S" or "BC5S";
         }
-        var info = new DdsInfo((int)width, (int)height, mips, block, format, dxgi, header.Length, 0, srgb, signed);
+        var info = new DdsInfo((int)width, (int)height, mips, block, format, dxgi, header.Length, 0, srgb, signed)
+        { Premultiplied = cc is "DXT2" or "DXT4" || (cc == "DX10" && (U(144) & 7) == 2) };
         long payload = Enumerable.Range(0, mips).Sum(info.MipBytes);
         long? actualLength = length ?? (input.CanSeek ? input.Length : null);
         if (actualLength.HasValue && actualLength.Value != header.Length + payload)
@@ -75,19 +77,24 @@ public static class Dds
         var (info, header) = Inspect(source, length);
         if (expected is not null && info != expected) throw new IOException("Source metadata changed; analyze again.");
         if (drop <= 0 || drop >= info.MipCount) throw new ArgumentOutOfRangeException(nameof(drop));
-        void Set(int at, uint n) => BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(at), n);
-        uint flags = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(8));
-        uint caps = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(108));
-        Set(12, (uint)Math.Max(1, info.Height >> drop)); Set(16, (uint)Math.Max(1, info.Width >> drop));
-        Set(20, checked((uint)info.MipBytes(drop))); Set(28, (uint)(info.MipCount - drop));
-        Set(8, (flags & ~8u) | 0x80000u | (info.MipCount - drop > 1 ? 0x20000u : 0u));
-        if (info.MipCount - drop == 1) { Set(8, ((flags & ~(8u | 0x20000u)) | 0x80000u)); caps &= ~(0x8u | 0x400000u); }
-        else caps |= 0x8 | 0x400000;
-        Set(108, caps);
+        ResizeHeader(header, info, Math.Max(1, info.Width >> drop), Math.Max(1, info.Height >> drop), info.MipCount - drop);
         target.Write(header);
         Transfer(source, Stream.Null, info.RemovedBytes(drop), ct);
         Transfer(source, target, info.PayloadBytes - info.RemovedBytes(drop), ct);
         if (source.ReadByte() != -1) throw new InvalidDataException("Unexpected trailing DDS payload.");
+    }
+
+    public static void ResizeHeader(byte[] header, DdsInfo info, int width, int height, int mips)
+    {
+        if (width < 1 || height < 1 || width > 16384 || height > 16384 || mips < 1 || mips > 1 + (int)Math.Log2(Math.Max(width, height)))
+            throw new ArgumentException("Invalid output dimensions/mip count.");
+        void Set(int at, uint n) => BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(at), n);
+        uint flags = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(8));
+        uint caps = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(108));
+        var output = info with { Width = width, Height = height };
+        Set(12, (uint)height); Set(16, (uint)width); Set(20, checked((uint)output.MipBytes(0))); Set(28, (uint)mips);
+        Set(8, (flags & ~(8u | 0x20000u)) | 0x80000u | (mips > 1 ? 0x20000u : 0u));
+        Set(108, mips > 1 ? caps | 0x8u | 0x400000u : caps & ~(0x8u | 0x400000u));
     }
 
     public static void Transfer(Stream from, Stream to, long bytes, CancellationToken ct)

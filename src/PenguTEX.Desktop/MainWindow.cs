@@ -9,6 +9,7 @@ using Avalonia.Platform.Storage;
 using PenguTEX.Assets;
 using PenguTEX.Assets.Profiles;
 using PenguTEX.Core;
+using PenguTEX.Imaging;
 
 namespace PenguTEX.Desktop;
 
@@ -134,12 +135,12 @@ public sealed class MainWindow : Window
             Columns(PathField("Output mod folder", _output), PathField("Reusable work cache", _cache)),
             Field("Workers (1–32)", _workers),
             new Expander { Header = "Locations and custom rules", Content = advanced, HorizontalAlignment = HorizontalAlignment.Stretch },
-            Text("Existing mip levels are copied without recompression. Original textures stay in their mods. Estimates describe texture payload, not live VRAM. A fresh profile baseline requires an unmounted original Data directory.") } };
+            Text("Default policies copy existing mip levels without recompression. CPU rebuilding requires an explicit semantic in a custom path rule. Estimates describe texture payload, not live VRAM. A fresh profile baseline requires an unmounted original Data directory.") } };
     }
     private Control Review()
     {
         foreach (var (label, path, width) in new[] { ("Texture", "Path", 380d), ("Source", "Origin", 200d), ("Decision", "Decision", 100d),
-            ("Format", "Format", 90d), ("Dimensions", "Dimensions", 170d), ("Saved MiB", "Saved", 90d) })
+            ("Format", "Format", 90d), ("Dimensions", "Dimensions", 170d), ("Saved MiB", "Saved", 110d) })
             _table.Columns.Add(new DataGridTextColumn { Header = label, Binding = new Binding(path), Width = new DataGridLength(width) });
         var toolbar = new DockPanel(); DockPanel.SetDock(_filter, Dock.Right); toolbar.Children.Add(_filter); toolbar.Children.Add(_search);
         var bottom = new StackPanel { Spacing = 10, Children = { _detail, _preview } };
@@ -180,7 +181,7 @@ public sealed class MainWindow : Window
     private void Filter()
     {
         if (_plan is null) return; string query = _search.Text ?? "", filter = _filter.SelectedItem as string ?? "Changed";
-        var rows = _plan.Items.Where(i => filter == "All" || (filter == "Changed" ? i.Decision == Decision.Reduce : i.Decision.ToString() == filter))
+        var rows = _plan.Items.Where(i => filter == "All" || (filter == "Changed" ? i.Decision is Decision.Reduce or Decision.Rebuild : i.Decision.ToString() == filter))
             .Where(i => (i.Path + " " + i.Origin + " " + i.Reason).Contains(query, StringComparison.OrdinalIgnoreCase)).Select(i => new PlanRow(i)).ToArray();
         VisibleCount = rows.Length; _table.ItemsSource = rows;
     }
@@ -188,7 +189,7 @@ public sealed class MainWindow : Window
     {
         var analyzed = await Task.Run(() => { var catalog = CatalogLoader.Load(settings.Source, progress, ct); return (catalog, Planner.Analyze(catalog, settings.Policy, progress, ct)); }, ct);
         (_catalog, _plan) = analyzed; LastBuild = null; Filter(); _tabs.SelectedIndex = 1;
-        _summary.Text = $"{_plan.Items.Count:N0} textures • {_plan.ChangedCount:N0} reductions • {_plan.SavedPayloadBytes / 1048576d:N1} MiB less texture payload";
+        _summary.Text = $"{_plan.Items.Count:N0} textures • {_plan.ChangedCount:N0} changes • {_plan.SavedPayloadBytes / 1048576d:N1} MiB less texture payload";
         foreach (var diagnostic in _plan.Diagnostics) AppendLog(diagnostic.Severity + ": " + diagnostic.Message);
         _status.Text = _plan.CompleteSource ? "Analysis complete. Review changes, then build a separate output mod." : "Analysis incomplete. Resolve source errors in the log before building.";
     });
@@ -202,7 +203,7 @@ public sealed class MainWindow : Window
             var catalog = CatalogLoader.Load(settings.Source, progress, ct); var fresh = Planner.Analyze(catalog, settings.Policy, progress, ct);
             string Signature(OptimizationPlan p) => JsonSerializer.Serialize(p.Items, JsonFiles.Options);
             if (Signature(fresh) != Signature(previous)) throw new IOException("Source winners or texture metadata changed. Analyze again to review the new plan.");
-            return JobRunner.Build(catalog, fresh, settings.Output, settings.Cache, settings.Workers, progress, ct);
+            return JobRunner.Build(catalog, fresh, settings.Output, settings.Cache, settings.Workers, progress, ct, new CpuMipProcessor());
         }, ct);
         _status.Text = $"Complete: {LastBuild.Files:N0} verified textures ({LastBuild.Reused:N0} reused). Install {LastBuild.Output} as a separate high-priority mod.";
         AppendLog(_status.Text); _summary.Text = $"Output ready • {LastBuild.Bytes / 1048576d:N1} MiB • {LastBuild.Seconds:F1} seconds • originals preserved";

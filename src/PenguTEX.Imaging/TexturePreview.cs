@@ -20,6 +20,10 @@ public static class TexturePreview
     public static PixelImage Decode(Stream source, int mip = 0, long? length = null, CancellationToken ct = default)
     {
         var (info, _) = Dds.Inspect(source, length);
+        return DecodePayload(source, info, mip, ct);
+    }
+    public static PixelImage DecodePayload(Stream source, DdsInfo info, int mip = 0, CancellationToken ct = default)
+    {
         if (mip < 0 || mip >= info.MipCount) throw new ArgumentOutOfRangeException(nameof(mip));
         int width = Math.Max(1, info.Width >> mip), height = Math.Max(1, info.Height >> mip);
         if ((long)width * height > 4096L * 4096) throw new NotSupportedException("Preview is limited to 16 million pixels; select a smaller mip level.");

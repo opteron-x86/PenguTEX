@@ -7,7 +7,8 @@ a separate texture override mod. It does not need Wine or a running game.
 The native desktop and CLI analyze profiles/folders, reduce existing DDS mip chains,
 reuse verified cached work and publish removable output mods. The desktop adds
 editable policies, a searchable review table and before/after channel inspection.
-Material-aware CPU conversion is next. The [roadmap](docs/ROADMAP.md) distinguishes
+Explicit per-path rules can also [rebuild mips on the CPU](docs/CPU-PROCESSING.md)
+with declared color/normal/data semantics. The [roadmap](docs/ROADMAP.md) distinguishes
 implementation from planned work and in-game validation.
 
 - Resolve winning textures, including loaded BSAs and loose files.

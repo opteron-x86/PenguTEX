@@ -4,7 +4,12 @@ using System.Security.Cryptography;
 namespace PenguTEX.Core;
 
 public sealed record OutputEntry(string Path, string Source, string SourceHash, string OutputHash,
-    int Width, int Height, int DropMips, long Bytes, string Recipe);
+    int Width, int Height, int DropMips, long Bytes, string Recipe)
+{
+    public string Operation { get; init; } = "MipCopy";
+    public TextureSemantic? Semantic { get; init; }
+    public string Processor { get; init; } = "mip-copy-v1";
+}
 public sealed record OutputManifest(string Product, int Schema, string Version, DateTimeOffset Created,
     string PolicyHash, IReadOnlyList<OutputEntry> Files, int Unchanged, int Protected, int Unsupported, int Invalid);
 public sealed record BuildResult(string Output, int Files, int Reused, long Bytes, double Seconds, OutputManifest Manifest);
@@ -51,7 +56,7 @@ public static class JobRunner
     private static string HashFile(string file, CancellationToken ct) { using var f = File.OpenRead(file); return Hash(f, ct); }
 
     public static BuildResult Build(Catalog catalog, OptimizationPlan plan, string output, string cache,
-        int workers = 2, IProgress<JobProgress>? progress = null, CancellationToken ct = default)
+        int workers = 2, IProgress<JobProgress>? progress = null, CancellationToken ct = default, ITextureProcessor? processor = null)
     {
         if (plan.Schema != 1 || !plan.CompleteSource || catalog.Diagnostics.Any(d => d.Severity == "Error"))
             throw new InvalidDataException("Resolve source errors before building an output mod.");
@@ -77,7 +82,8 @@ public static class JobRunner
         Directory.CreateDirectory(stage); File.WriteAllText(Path.Combine(stage, ".pengutex-stage"), Product);
         var watch = Stopwatch.StartNew(); string policyHash = JsonFiles.Hash(System.Text.Json.JsonSerializer.Serialize(plan.Policy, JsonFiles.Options));
         var lookup = catalog.Assets.ToDictionary(a => a.Path, StringComparer.Ordinal);
-        var changed = plan.Items.Where(i => i.Decision == Decision.Reduce).ToArray();
+        var changed = plan.Items.Where(i => i.Decision is Decision.Reduce or Decision.Rebuild).ToArray();
+        if (changed.Any(i => i.Decision == Decision.Rebuild) && processor is null) throw new InvalidOperationException("This plan requires a CPU texture processor.");
         var entries = new OutputEntry[changed.Length]; int done = 0, reused = 0;
         var stateGate = new object(); var completed = new Dictionary<string, OutputEntry>();
         string journal = Path.Combine(cache, "job-" + identity + ".json");
@@ -88,7 +94,8 @@ public static class JobRunner
                 throw new IOException("Source winner changed; analyze again: " + item.Path);
             string hash;
             using (var stream = asset.Open()) hash = Hash(stream, ct);
-            string recipe = JsonFiles.Hash(hash + "|" + RecipeVersion + "|" + item.DropMips + "|" + policyHash);
+            string processorIdentity = item.Decision == Decision.Rebuild ? processor!.Identity : RecipeVersion;
+            string recipe = JsonFiles.Hash(hash + "|" + processorIdentity + "|" + item.DropMips + "|" + item.Semantic + "|" + policyHash);
             string cached = Path.Combine(cache, recipe + ".dds"), metadata = cached + ".json";
             string dest = Resolve(stage, item.Path); Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
             OutputEntry? entry = null;
@@ -104,6 +111,7 @@ public static class JobRunner
                 }
                 catch (Exception e) when (e is IOException or InvalidDataException or System.Text.Json.JsonException or NotSupportedException) { }
             }
+            bool generated = entry is null;
             if (entry is not null)
             {
                 File.Copy(cached, dest); Interlocked.Increment(ref reused);
@@ -118,18 +126,25 @@ public static class JobRunner
                         if (current != item.Input) throw new IOException("Source metadata changed; analyze again: " + item.Path);
                         source.Position = 0;
                     }
-                    using var target = File.Create(dest); Dds.Reduce(source, target, item.DropMips, asset.Length, ct, item.Input);
+                    using var target = File.Create(dest);
+                    if (item.Decision == Decision.Rebuild) processor!.Process(source, target, item, asset.Length, ct);
+                    else Dds.Reduce(source, target, item.DropMips, asset.Length, ct, item.Input);
                 }
                 using var verify = File.OpenRead(dest); var info = Dds.Inspect(verify).Info;
-                if (info.Width != item.TargetWidth || info.Height != item.TargetHeight || info.PayloadBytes != item.OutputPayload)
+                if (info.Width != item.TargetWidth || info.Height != item.TargetHeight || info.PayloadBytes != item.OutputPayload
+                    || info.Format != item.Input!.Format || info.Dxgi != item.Input.Dxgi || info.Signed != item.Input.Signed || info.Premultiplied != item.Input.Premultiplied)
                     throw new InvalidDataException("Generated texture does not match the plan: " + item.Path);
-                entry = new(item.Path, item.Origin, hash, HashFile(dest, ct), info.Width, info.Height, item.DropMips, verify.Length, recipe);
+                entry = new(item.Path, item.Origin, hash, HashFile(dest, ct), info.Width, info.Height, item.DropMips, verify.Length, recipe)
+                { Operation = item.Decision == Decision.Rebuild ? "Rebuild" : "MipCopy", Semantic = item.Semantic, Processor = processorIdentity };
+            }
+            using (var source = asset.Open())
+                if (Hash(source, ct) != hash) throw new IOException("Source changed during processing: " + item.Path);
+            if (generated)
+            {
                 string temporary = cached + "." + Guid.NewGuid().ToString("N") + ".tmp";
                 try { File.Copy(dest, temporary); File.Move(temporary, cached, true); JsonFiles.Write(metadata, entry); }
                 finally { if (File.Exists(temporary)) File.Delete(temporary); }
             }
-            using (var source = asset.Open())
-                if (Hash(source, ct) != hash) throw new IOException("Source changed during processing: " + item.Path);
             entries[i] = entry;
             lock (stateGate)
             {
