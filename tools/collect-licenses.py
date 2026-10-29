@@ -25,7 +25,11 @@ for name, item in sorted(assets['libraries'].items()):
     spec = ET.parse(next(folder.glob('*.nuspec')))
     def value(tag):
         return next((e.text or '' for e in spec.iter() if e.tag.split('}')[-1] == tag), '')
-    lines += [name, 'License: ' + (value('license') or value('licenseUrl')), 'Copyright: ' + value('copyright'), 'Project: ' + value('projectUrl')]
+    repository = next((e.attrib for e in spec.iter() if e.tag.split('}')[-1] == 'repository'), {})
+    lines += [name, 'License: ' + (value('license') or value('licenseUrl') or 'See upstream license text in licenses/'),
+              'Copyright: ' + (value('copyright') or 'See upstream license text'),
+              'Project: ' + (value('projectUrl') or repository.get('url', '') or 'See licenses/UPSTREAM-SOURCES.json'),
+              'Source revision: ' + repository.get('commit', 'See licenses/UPSTREAM-SOURCES.json')]
     for file in folder.rglob('*'):
         if file.is_file() and file.name.lower().startswith(('license', 'licence', 'thirdpartynotice', 'ofl.')):
             dest = licenses / name.replace('/', '-') / file.relative_to(folder)

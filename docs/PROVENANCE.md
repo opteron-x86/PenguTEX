@@ -27,3 +27,9 @@ PenguTEX scripts simplify its workflow to the texture application. The pinned
 AppImage tool/runtime is 1.9.1, SHA-256
 `ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0`.
 The vector application icon and application metadata are original PenguTEX assets.
+
+Where NuGet packages omit license text, `packaging/licenses/UPSTREAM-SOURCES.json`
+records the original repository, revision, file and blob used to retain that text.
+Package-declared revisions are used where available; packages without revision
+metadata use a recorded upstream revision. The distribution inventory also records
+the package repository/revision rather than silently leaving missing metadata blank.
