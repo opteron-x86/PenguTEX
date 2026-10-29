@@ -13,3 +13,10 @@ References: [DDS layout](https://learn.microsoft.com/en-us/windows/win32/direct3
 [BC7](https://learn.microsoft.com/en-us/windows/win32/direct3d11/bc7-format),
 [BCnEncoder.NET](https://github.com/Nominom/BCnEncoder.NET),
 [Community Shaders](https://github.com/community-shaders/skyrim-community-shaders).
+
+## Imported source
+
+Profile/path/archive selection files under `src/PenguTEX.Assets/Paths`,
+`Profiles`, and `SkyrimArchives.cs` are adapted from PenguLOD commit
+`1eb7882ee44387bda80de237783fedce650e131d` (GPL-3.0-only), based on CageTV’s AnvilLOD.
+Namespaces and subsequent robustness/diagnostic changes are local to PenguTEX.
