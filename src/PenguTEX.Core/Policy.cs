@@ -2,7 +2,9 @@ using System.Text.RegularExpressions;
 
 namespace PenguTEX.Core;
 
-public sealed record PathRule(string Pattern, int? Maximum = null, bool Protect = false);
+public enum TextureSemantic { SrgbColor, LinearColor, LinearData, NormalRgb, NormalRg, OpacitySrgb }
+public sealed record PathRule(string Pattern, int? Maximum = null, bool Protect = false,
+    bool RebuildMips = false, TextureSemantic? Semantic = null);
 public sealed record Policy
 {
     public int Schema { get; init; } = 1;
@@ -20,7 +22,12 @@ public sealed record Policy
         foreach (int value in new[] { Maximum, NormalMaximum, MaterialMaximum }.Concat(Rules.Where(r => r.Maximum.HasValue).Select(r => r.Maximum!.Value)))
             if (value < 4 || value > 16384 || (value & (value - 1)) != 0)
                 throw new ArgumentException("Maximum dimensions must be powers of two from 4 to 16384.");
-        foreach (var rule in Rules) if (string.IsNullOrWhiteSpace(rule.Pattern)) throw new ArgumentException("Empty path rule.");
+        foreach (var rule in Rules)
+        {
+            if (string.IsNullOrWhiteSpace(rule.Pattern)) throw new ArgumentException("Empty path rule.");
+            if (rule.RebuildMips && (rule.Semantic is null || !Enum.IsDefined(rule.Semantic.Value)))
+                throw new ArgumentException("Mip rebuilding requires an explicit, supported Semantic in each rebuild rule.");
+        }
     }
     public static Policy Preset(string name) => name.ToLowerInvariant() switch
     {
@@ -31,6 +38,18 @@ public sealed record Policy
     };
     public static bool Matches(string path, string pattern) => Regex.IsMatch(path.Replace('\\', '/'),
         "^" + Regex.Escape(pattern.Replace('\\', '/')).Replace("\\*", ".*").Replace("\\?", ".") + "$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+
+    public PathRule? ProcessingRule(string path) => Rules.LastOrDefault(r => Matches(path, r.Pattern));
+
+    public static string? RebuildRestriction(DdsInfo info, TextureSemantic semantic)
+    {
+        if (info.Signed || info.Premultiplied) return "CPU rebuilding does not support signed channels or premultiplied alpha; use existing-mip copying.";
+        if ((long)info.Width * info.Height > 4096L * 4096) return "CPU rebuilding is limited to 16 million source pixels to bound decoded memory.";
+        if (info.Srgb && semantic is not (TextureSemantic.SrgbColor or TextureSemantic.OpacitySrgb)) return "sRGB headers require an sRGB color semantic; changing the format is not supported.";
+        if (semantic == TextureSemantic.NormalRg && info.Format != "BC5") return "NormalRg requires unsigned BC5; swizzled normal layouts are not inferred.";
+        if (semantic != TextureSemantic.LinearData && semantic != TextureSemantic.NormalRg && info.Format is "BC4" or "BC5") return "Single/two-channel textures require LinearData or BC5 NormalRg semantics.";
+        return null;
+    }
 
     public (string Category, int Maximum, string? Protection) Classify(string path)
     {
@@ -65,8 +84,26 @@ public static class Planner
             {
                 using var stream = asset.Open(); var (info, _) = Dds.Inspect(stream, asset.Length);
                 int drop = info.DropFor(maximum); int width = Math.Max(1, info.Width >> drop), height = Math.Max(1, info.Height >> drop);
-                Decision decision; string reason;
+                Decision decision; string reason; var rebuild = policy.ProcessingRule(asset.Path);
                 if (protection is not null) { decision = Decision.Protected; reason = protection; drop = 0; }
+                else if (rebuild?.RebuildMips == true)
+                {
+                    if (Policy.RebuildRestriction(info, rebuild.Semantic!.Value) is { } restriction)
+                    { decision = Decision.Unsupported; reason = restriction; drop = 0; }
+                    else
+                    {
+                        drop = 0;
+                        while (Math.Max(Math.Max(1, info.Width >> drop), Math.Max(1, info.Height >> drop)) > maximum) drop++;
+                        width = Math.Max(1, info.Width >> drop); height = Math.Max(1, info.Height >> drop);
+                        var target = info with { Width = width, Height = height, MipCount = 1 + (int)Math.Log2(Math.Max(width, height)) };
+                        items.Add(new(asset.Path, asset.Origin, asset.Container, category, Decision.Rebuild,
+                            $"Explicit CPU rebuild from the top mip; {rebuild.Semantic}; original {info.Format} format retained.", info, drop, width, height,
+                            Enumerable.Range(0, target.MipCount).Sum(target.MipBytes)) { Semantic = rebuild.Semantic });
+                        if (items.Count % 100 == 0 || items.Count == catalog.Assets.Count)
+                            progress?.Report(new("Analyze", items.Count, catalog.Assets.Count, asset.Path, "Planning explicit mip rebuilds"));
+                        continue;
+                    }
+                }
                 else if (Math.Max(width, height) > maximum) { decision = Decision.Keep; reason = "No existing mip reaches the selected maximum; use explicit mip rebuilding when available."; drop = 0; }
                 else if (drop > 0) { decision = Decision.Reduce; reason = $"Retain existing mip {drop} and its smaller levels; {category.ToLowerInvariant()} cap {maximum}."; }
                 else { decision = Decision.Keep; reason = "Already within the selected maximum."; }

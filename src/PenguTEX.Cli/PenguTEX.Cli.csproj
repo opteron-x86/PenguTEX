@@ -1,1 +1,1 @@
-<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><AssemblyName>PenguTEX</AssemblyName></PropertyGroup><ItemGroup><ProjectReference Include="../PenguTEX.Assets/PenguTEX.Assets.csproj" /></ItemGroup></Project>
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><AssemblyName>PenguTEX</AssemblyName></PropertyGroup><ItemGroup><ProjectReference Include="../PenguTEX.Assets/PenguTEX.Assets.csproj" /><ProjectReference Include="../PenguTEX.Imaging/PenguTEX.Imaging.csproj" /></ItemGroup></Project>

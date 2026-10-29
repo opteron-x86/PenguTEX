@@ -28,7 +28,7 @@ public sealed class PreviewWindow : Window
             Children = { new TextBlock { Text = "Source mip", VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center }, _mip, load, _channel } };
         var images = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 16 };
         images.Children.Add(new DockPanel { Children = { Label("Source", _before), _before } });
-        var right = new DockPanel { Children = { Label($"Proposed: mip {item.DropMips}", _after), _after } }; Grid.SetColumn(right, 1); images.Children.Add(right);
+        var right = new DockPanel { Children = { Label(item.Decision == Decision.Rebuild ? "Proposed: CPU rebuild" : $"Proposed: mip {item.DropMips}", _after), _after } }; Grid.SetColumn(right, 1); images.Children.Add(right);
         var root = new Grid { Margin = new Thickness(20), RowDefinitions = new RowDefinitions("Auto,*,Auto"), RowSpacing = 14 };
         root.Children.Add(toolbar); Grid.SetRow(images, 1); root.Children.Add(images); Grid.SetRow(_status, 2); root.Children.Add(_status); Content = root;
         _channel.SelectionChanged += (_, _) => Display(); Opened += async (_, _) => await LoadAsync();
@@ -44,10 +44,17 @@ public sealed class PreviewWindow : Window
             var pair = await Task.Run(() =>
             {
                 using var source = _asset.Open(); var left = TexturePreview.Decode(source, mip, _asset.Length, cancel.Token);
-                using var target = _asset.Open(); var right = TexturePreview.Decode(target, _item.DropMips, _asset.Length, cancel.Token); return (left, right);
+                using var target = _asset.Open(); PixelImage right;
+                if (_item.Decision == Decision.Rebuild)
+                {
+                    using var rebuilt = new MemoryStream(); new CpuMipProcessor().Process(target, rebuilt, _item, _asset.Length, cancel.Token);
+                    rebuilt.Position = 0; right = TexturePreview.Decode(rebuilt, ct: cancel.Token);
+                }
+                else right = TexturePreview.Decode(target, _item.DropMips, _asset.Length, cancel.Token);
+                return (left, right);
             }, cancel.Token);
             if (cancel.IsCancellationRequested) return; (_left, _right) = pair; Display();
-            _status.Text = $"Source {_left.Width}×{_left.Height} • Proposed {_right.Width}×{_right.Height} • {_item.Input?.Format} • {_item.Reason}\nRGB is shown independently of alpha. Alpha may contain material data. This preview uses existing mips.";
+            _status.Text = $"Source {_left.Width}×{_left.Height} • Proposed {_right.Width}×{_right.Height} • {_item.Input?.Format} • {_item.Reason}\nRGB is shown independently of alpha. Alpha may contain material data. Proposed pixels use the selected processing operation.";
         }
         catch (OperationCanceledException) { }
         catch (Exception e) { if (!cancel.IsCancellationRequested) _status.Text = e.GetBaseException().Message; }

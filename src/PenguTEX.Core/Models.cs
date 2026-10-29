@@ -32,17 +32,24 @@ public sealed record Asset(string Path, string Origin, string Container, long Le
 public sealed record Catalog(SourceOptions Source, IReadOnlyList<string> Roots,
     IReadOnlyList<Asset> Assets, IReadOnlyList<Diagnostic> Diagnostics);
 public sealed record JobProgress(string Phase, int Done, int Total, string Path, string Message);
-public enum Decision { Keep, Reduce, Protected, Unsupported, Invalid }
+public enum Decision { Keep, Reduce, Rebuild, Protected, Unsupported, Invalid }
 public sealed record PlanItem(string Path, string Origin, string Container, string Category, Decision Decision,
     string Reason, DdsInfo? Input, int DropMips, int TargetWidth, int TargetHeight, long OutputPayload)
 {
+    public TextureSemantic? Semantic { get; init; }
     public long SavedBytes => Input is null ? 0 : Input.PayloadBytes - OutputPayload;
 }
 public sealed record OptimizationPlan(int Schema, SourceOptions Source, Policy Policy, DateTimeOffset Created,
     IReadOnlyList<PlanItem> Items, IReadOnlyList<Diagnostic> Diagnostics)
 {
-    public int ChangedCount => Items.Count(x => x.Decision == Decision.Reduce);
+    public int ChangedCount => Items.Count(x => x.Decision is Decision.Reduce or Decision.Rebuild);
     public long SavedPayloadBytes => Items.Sum(x => x.SavedBytes);
     public long InputPayloadBytes => Items.Sum(x => x.Input?.PayloadBytes ?? 0);
     public bool CompleteSource => Diagnostics.All(d => d.Severity != "Error");
+}
+
+public interface ITextureProcessor
+{
+    string Identity { get; }
+    void Process(Stream source, Stream target, PlanItem item, long length, CancellationToken ct);
 }

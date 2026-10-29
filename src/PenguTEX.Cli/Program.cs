@@ -2,6 +2,7 @@ using System.Text.Json;
 using PenguTEX.Assets;
 using PenguTEX.Assets.Profiles;
 using PenguTEX.Core;
+using PenguTEX.Imaging;
 
 namespace PenguTEX.Cli;
 
@@ -51,7 +52,7 @@ public static class Program
         var result = JobRunner.Build(catalog, plan,
             Get("output") ?? throw new ArgumentException("--output is required."),
             Get("cache") ?? throw new ArgumentException("--cache is required."),
-            int.Parse(Get("workers") ?? "2"), progress, ct);
+            int.Parse(Get("workers") ?? "2"), progress, ct, new CpuMipProcessor());
         Print(result); return 0;
     }
     private static Dictionary<string, string> Parse(string[] args)

@@ -97,6 +97,21 @@ public sealed class DesktopTests
         Assert.Equal(new byte[] {20, 40, 60, 255}, TexturePreview.Channel(pixel, "RGB").Rgba);
         Assert.Equal(new byte[] {0, 0, 0, 255}, TexturePreview.Channel(pixel, "Alpha / data").Rgba);
     }
+    [AvaloniaFact]
+    public async Task DesktopBuildsExplicitCpuPolicyAndPreview()
+    {
+        using var f = new Fixture(); f.File("source/test.dds", Fixture.Dds(dxgi: 77, mipCount: 1));
+        var settings = Settings(f) with { Policy = new() { Rules = [new("*", 8, RebuildMips: true, Semantic: TextureSemantic.LinearData)] } };
+        var window = new MainWindow(new SettingsStore(Path.Combine(f.Root, "settings.json"))); window.SetSettings(settings); window.Show();
+        try
+        {
+            await window.AnalyzeAsync(); Assert.Equal(Decision.Rebuild, Assert.Single(window.CurrentPlan!.Items).Decision); Assert.Equal(1, window.VisibleCount);
+            await window.BuildAsync(); Assert.Equal("Rebuild", Assert.Single(window.LastBuild!.Manifest.Files).Operation);
+            var catalog = CatalogLoader.Load(settings.Source); var preview = new PreviewWindow(catalog.Assets[0], window.CurrentPlan.Items[0]); preview.Show();
+            try { await preview.LoadAsync(); Assert.Contains("Proposed 8×8", preview.Status); } finally { preview.Close(); }
+        }
+        finally { window.Close(); }
+    }
     [Fact]
     public void DecoderRejectsSignedFormatsAndCancelledWork()
     {
