@@ -1,0 +1,253 @@
+[
+  {
+    "packages": [
+      "Avalonia.BuildServices/11.3.2"
+    ],
+    "repository": "https://github.com/AvaloniaUI/Avalonia.BuildServices",
+    "revision": "777f975b0a0cecf0311273711d56697212c558c0",
+    "source": "https://github.com/AvaloniaUI/Avalonia.BuildServices/blob/777f975b0a0cecf0311273711d56697212c558c0/LICENSE",
+    "file": "AvaloniaUI-Avalonia.BuildServices-LICENSE",
+    "blob": "4a02b0b2ea96f3a8b9cb88af64a3c061c6ef4426"
+  },
+  {
+    "packages": [
+      "Avalonia.Controls.DataGrid/12.1.2"
+    ],
+    "repository": "https://github.com/AvaloniaUI/Avalonia.Controls.DataGrid",
+    "revision": "1e12211eb0c52a09e314ca57a344147c37d0a26c",
+    "source": "https://github.com/AvaloniaUI/Avalonia.Controls.DataGrid/blob/1e12211eb0c52a09e314ca57a344147c37d0a26c/licence.md",
+    "file": "AvaloniaUI-Avalonia.Controls.DataGrid-licence.md",
+    "blob": "41951805ac6a5cdb91373db7725fbaa9c004d912"
+  },
+  {
+    "packages": [
+      "Avalonia.Desktop/12.1.4",
+      "Avalonia.Fonts.Inter/12.1.4",
+      "Avalonia.FreeDesktop.AtSpi/12.1.4",
+      "Avalonia.FreeDesktop/12.1.4",
+      "Avalonia.HarfBuzz/12.1.4",
+      "Avalonia.Native/12.1.4",
+      "Avalonia.Remote.Protocol/12.1.4",
+      "Avalonia.Skia/12.1.4",
+      "Avalonia.Themes.Fluent/12.1.4",
+      "Avalonia.Win32/12.1.4",
+      "Avalonia.X11/12.1.4",
+      "Avalonia/12.1.4"
+    ],
+    "repository": "https://github.com/AvaloniaUI/Avalonia",
+    "revision": "2d79ba55fae1b1e71c69f93a668080c9029e6a31",
+    "source": "https://github.com/AvaloniaUI/Avalonia/blob/2d79ba55fae1b1e71c69f93a668080c9029e6a31/licence.md",
+    "file": "AvaloniaUI-Avalonia-licence.md",
+    "blob": "41951805ac6a5cdb91373db7725fbaa9c004d912"
+  },
+  {
+    "packages": [
+      "BCnEncoder.Net/2.3.0"
+    ],
+    "repository": "https://github.com/Nominom/BCnEncoder.NET",
+    "revision": "74eda8a330759d81e6307f19aefc547e40687825",
+    "source": "https://github.com/Nominom/BCnEncoder.NET/blob/74eda8a330759d81e6307f19aefc547e40687825/LICENSE-MIT",
+    "file": "Nominom-BCnEncoder.NET-LICENSE-MIT",
+    "blob": "d17a843704c07a51d0dada79029dcfd240a16382"
+  },
+  {
+    "packages": [
+      "FluentResults/3.15.2"
+    ],
+    "repository": "https://github.com/altmann/FluentResults",
+    "revision": "8b675de7e8b6e4c0921e95138c99e15fd52cde40",
+    "source": "https://github.com/altmann/FluentResults/blob/8b675de7e8b6e4c0921e95138c99e15fd52cde40/LICENSE",
+    "file": "altmann-FluentResults-LICENSE",
+    "blob": "ef022361127c2a98a7a2fe0866daf033819c271a"
+  },
+  {
+    "packages": [
+      "GameFinder.Common/4.9.0",
+      "GameFinder.RegistryUtils/4.9.0",
+      "GameFinder.StoreHandlers.GOG/4.9.0",
+      "GameFinder.StoreHandlers.Steam/4.9.0",
+      "GameFinder.StoreHandlers.Xbox/4.9.0",
+      "GameFinder.Wine/4.9.0"
+    ],
+    "repository": "https://github.com/erri120/GameFinder",
+    "revision": "efa23bd6d02ec07aa9fb1abe1025efafe3190d9f",
+    "source": "https://github.com/erri120/GameFinder/blob/efa23bd6d02ec07aa9fb1abe1025efafe3190d9f/LICENSE",
+    "file": "erri120-GameFinder-LICENSE",
+    "blob": "f288702d2fa16d3cdf0035b15a9fcbc552cd88e7"
+  },
+  {
+    "packages": [
+      "K4os.Compression.LZ4.Streams/1.3.8",
+      "K4os.Compression.LZ4/1.3.8"
+    ],
+    "repository": "https://github.com/MiloszKrajewski/K4os.Compression.LZ4",
+    "revision": "67701f7ce624564dad5df0fe87c573e339f96a33",
+    "source": "https://github.com/MiloszKrajewski/K4os.Compression.LZ4/blob/67701f7ce624564dad5df0fe87c573e339f96a33/LICENSE",
+    "file": "MiloszKrajewski-K4os.Compression.LZ4-LICENSE",
+    "blob": "f691b2ae5cac0811207960864f6dba12bbafc6e3"
+  },
+  {
+    "packages": [
+      "K4os.Hash.xxHash/1.0.8"
+    ],
+    "repository": "https://github.com/MiloszKrajewski/K4os.Hash.xxHash",
+    "revision": "c36ef54edbd778c082cab04df7e42cb72a22d887",
+    "source": "https://github.com/MiloszKrajewski/K4os.Hash.xxHash/blob/c36ef54edbd778c082cab04df7e42cb72a22d887/LICENSE",
+    "file": "MiloszKrajewski-K4os.Hash.xxHash-LICENSE",
+    "blob": "f691b2ae5cac0811207960864f6dba12bbafc6e3"
+  },
+  {
+    "packages": [
+      "Loqui/3.7.0"
+    ],
+    "repository": "https://github.com/Noggog/Loqui",
+    "revision": "da23e9867105c91e855edf791a35386ef038f063",
+    "source": "https://github.com/Noggog/Loqui/blob/da23e9867105c91e855edf791a35386ef038f063/LICENSE.txt",
+    "file": "Noggog-Loqui-LICENSE.txt",
+    "blob": "3877ae0a7ff6f94ac222fd704e112723db776114"
+  },
+  {
+    "packages": [
+      "MicroCom.Runtime/0.11.6"
+    ],
+    "repository": "https://github.com/kekekeks/MicroCom",
+    "revision": "76785efcafd91b5902fd19dd11145f6dd655b7b4",
+    "source": "https://github.com/kekekeks/MicroCom/blob/76785efcafd91b5902fd19dd11145f6dd655b7b4/LICENSE",
+    "file": "kekekeks-MicroCom-LICENSE",
+    "blob": "6bcf96f0b4029b873c3d9b55d4c1117bbd157e28"
+  },
+  {
+    "packages": [
+      "Mutagen.Bethesda.Core/0.54.2",
+      "Mutagen.Bethesda.Kernel/0.54.2",
+      "Mutagen.Bethesda.Skyrim/0.54.2"
+    ],
+    "repository": "https://github.com/Mutagen-Modding/Mutagen",
+    "revision": "282bb99a77b2df7f1b092b06270e8e3c8fb55463",
+    "source": "https://github.com/Mutagen-Modding/Mutagen/blob/282bb99a77b2df7f1b092b06270e8e3c8fb55463/LICENSE.txt",
+    "file": "Mutagen-Modding-Mutagen-LICENSE.txt",
+    "blob": "3877ae0a7ff6f94ac222fd704e112723db776114"
+  },
+  {
+    "packages": [
+      "NexusMods.Paths/0.19.1"
+    ],
+    "repository": "https://github.com/Nexus-Mods/NexusMods.Paths",
+    "revision": "99b62efd5af88b83a0bc9eba8b3607afe802bbed",
+    "source": "https://github.com/Nexus-Mods/NexusMods.Paths/blob/99b62efd5af88b83a0bc9eba8b3607afe802bbed/LICENSE.md",
+    "file": "Nexus-Mods-NexusMods.Paths-LICENSE.md",
+    "blob": "840e2a45adacaa257c466befc9abd744a5758fe0"
+  },
+  {
+    "packages": [
+      "Noggog.CSharpExt/4.3.0"
+    ],
+    "repository": "https://github.com/Noggog/CSharpExt",
+    "revision": "dc1558f85e7595bdbae20a18a57905c3a07add9d",
+    "source": "https://github.com/Noggog/CSharpExt/blob/dc1558f85e7595bdbae20a18a57905c3a07add9d/LICENSE.txt",
+    "file": "Noggog-CSharpExt-LICENSE.txt",
+    "blob": "3877ae0a7ff6f94ac222fd704e112723db776114"
+  },
+  {
+    "packages": [
+      "OneOf/3.0.271"
+    ],
+    "repository": "https://github.com/mcintyre321/OneOf",
+    "revision": "6e02dbe75d0f20f198c640d4c04190a85c5ac9e6",
+    "source": "https://github.com/mcintyre321/OneOf/blob/6e02dbe75d0f20f198c640d4c04190a85c5ac9e6/licence.md",
+    "file": "mcintyre321-OneOf-licence.md",
+    "blob": "874b04565457f9a05c35b4b9631347f1a2b198b3"
+  },
+  {
+    "packages": [
+      "SharpZipLib/1.4.2"
+    ],
+    "repository": "https://github.com/icsharpcode/SharpZipLib",
+    "revision": "33f64eb0f28cdd2b084cb822fcc224c7c5aba553",
+    "source": "https://github.com/icsharpcode/SharpZipLib/blob/33f64eb0f28cdd2b084cb822fcc224c7c5aba553/LICENSE.txt",
+    "file": "icsharpcode-SharpZipLib-LICENSE.txt",
+    "blob": "f4597ac929a3206971bb0f8549cf937916082266"
+  },
+  {
+    "packages": [
+      "StrongInject/1.4.4"
+    ],
+    "repository": "https://github.com/YairHalberstadt/stronginject",
+    "revision": "6f3077c68b1ebd9c56663456efb67ef90886942e",
+    "source": "https://github.com/YairHalberstadt/stronginject/blob/6f3077c68b1ebd9c56663456efb67ef90886942e/LICENSE",
+    "file": "YairHalberstadt-stronginject-LICENSE",
+    "blob": "3d2481aa9f12cf8bb6d87deb1a8b73292fec75a5"
+  },
+  {
+    "packages": [
+      "System.IO.Abstractions/22.1.1",
+      "TestableIO.System.IO.Abstractions.Wrappers/22.1.1",
+      "TestableIO.System.IO.Abstractions/22.1.1"
+    ],
+    "repository": "https://github.com/TestableIO/System.IO.Abstractions",
+    "revision": "a091ac7f9655f61aeaeb28baf452c1a96c546ba8",
+    "source": "https://github.com/TestableIO/System.IO.Abstractions/blob/a091ac7f9655f61aeaeb28baf452c1a96c546ba8/LICENSE",
+    "file": "TestableIO-System.IO.Abstractions-LICENSE",
+    "blob": "64c7af08be001f0e338dcea519613da3ce6c370b"
+  },
+  {
+    "packages": [
+      "System.Reactive/6.1.0"
+    ],
+    "repository": "https://github.com/dotnet/reactive",
+    "revision": "f4da16f15a3cde97f178396ea6e3489cc893651f",
+    "source": "https://github.com/dotnet/reactive/blob/f4da16f15a3cde97f178396ea6e3489cc893651f/LICENSE",
+    "file": "dotnet-reactive-LICENSE",
+    "blob": "984713a49622a96da110443c15477613bc12656b"
+  },
+  {
+    "packages": [
+      "Testably.Abstractions.FileSystem.Interface/10.1.0"
+    ],
+    "repository": "https://github.com/Testably/Testably.Abstractions",
+    "revision": "1253c6bd6309cb15623fac09bd841e782bbca626",
+    "source": "https://github.com/Testably/Testably.Abstractions/blob/1253c6bd6309cb15623fac09bd841e782bbca626/LICENSE",
+    "file": "Testably-Testably.Abstractions-LICENSE",
+    "blob": "ed9abe46d76ffab09aa9f29656bacdcc4a9eb7a1"
+  },
+  {
+    "packages": [
+      "Tmds.DBus.Protocol/0.94.1"
+    ],
+    "repository": "https://github.com/tmds/Tmds.DBus",
+    "revision": "b4a7fed0b878f74cb54f7cca84d2889af4e596ba",
+    "source": "https://github.com/tmds/Tmds.DBus/blob/b4a7fed0b878f74cb54f7cca84d2889af4e596ba/COPYING",
+    "file": "tmds-Tmds.DBus-COPYING",
+    "blob": "d1060c2f634ad623ba500dff09ac3044c9747c82"
+  },
+  {
+    "packages": [
+      "TransparentValueObjects.Abstractions/1.1.0"
+    ],
+    "repository": "https://github.com/erri120/TransparentValueObjects",
+    "revision": "ff32127019b0f53480f5e9c1867924b14138999c",
+    "source": "https://github.com/erri120/TransparentValueObjects/blob/ff32127019b0f53480f5e9c1867924b14138999c/LICENSE",
+    "file": "erri120-TransparentValueObjects-LICENSE",
+    "blob": "73033b37a46eec2dc0a11b62734de8a293fe03d0"
+  },
+  {
+    "packages": [
+      "ValveKeyValue/0.13.1.398"
+    ],
+    "repository": "https://github.com/ValveResourceFormat/ValveKeyValue",
+    "revision": "c7d0dcce45a32123e376c30c6fb9a016d6ebf294",
+    "source": "https://github.com/ValveResourceFormat/ValveKeyValue/blob/c7d0dcce45a32123e376c30c6fb9a016d6ebf294/LICENSE",
+    "file": "ValveResourceFormat-ValveKeyValue-LICENSE",
+    "blob": "a6e7d171795312cbf92313aa03adbc4b5d945ad7"
+  },
+  {
+    "packages": [
+      "ini-parser-netstandard/2.5.3"
+    ],
+    "repository": "https://github.com/rickyah/ini-parser",
+    "revision": "d300241a75bec4dcabc0751c8690f3b12b3eaf43",
+    "source": "https://github.com/rickyah/ini-parser/blob/d300241a75bec4dcabc0751c8690f3b12b3eaf43/LICENSE",
+    "file": "rickyah-ini-parser-LICENSE",
+    "blob": "67901943c6e1cc007675caaad525981121decb11"
+  }
+]

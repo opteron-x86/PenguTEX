@@ -85,7 +85,9 @@ public static class CatalogLoader
         {
             var iniArchives = profile.IniArchives(options.Ini);
             foreach (var missing in iniArchives.Where(n => !rootFiles.ContainsKey(n)))
-                diagnostics.Add(new("Warning", "INI archive not found (some default entries are optional): " + missing));
+                diagnostics.Add(missing.Equals("Skyrim - Patch.bsa", StringComparison.OrdinalIgnoreCase)
+                    ? new("Warning", "Optional legacy patch archive is absent: " + missing)
+                    : new("Error", "Active INI archive is missing; restore it or correct the archive list: " + missing));
             var archives = SkyrimArchives.Select(GameRelease.SkyrimSE, rootFiles.Values, profile.EnabledPlugins, iniArchives);
             for (int i = 0; i < archives.Count; i++)
             {
@@ -124,7 +126,9 @@ public static class CatalogLoader
             string[] fields = line.Split(' '); int separator = Array.IndexOf(fields, "-");
             if (fields.Length < 6 || separator < 0 || fields.Length <= separator + 2) continue;
             string mount = fields[4].Replace("\\040", " ").Replace("\\011", "\t").Replace("\\134", "\\");
-            if (Path.TrimEndingDirectorySeparator(mount) == target && fields[separator + 2] == "mo2linux") return true;
+            mount = Path.TrimEndingDirectorySeparator(mount);
+            if ((mount == target || target.StartsWith(mount + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                && fields[separator + 2] == "mo2linux") return true;
         }
         return false;
     }

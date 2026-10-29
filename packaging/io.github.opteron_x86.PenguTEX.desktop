@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=PenguTEX
+Comment=Optimize Skyrim textures on Linux
+Exec=PenguTEX.Desktop
+Icon=pengutex
+Terminal=false
+Categories=Utility;
+StartupWMClass=PenguTEX.Desktop

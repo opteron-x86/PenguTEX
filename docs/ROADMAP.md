@@ -15,6 +15,7 @@ acceptance remain separate from implementation. No unmeasured performance claims
 M1–M2 form the first useful alpha. M3 is opt-in; format-preserving mip reduction stays
 the default. M4 makes the application distributable. M5 remains open until evidence
 exists; CI alone cannot close in-game or physical-GPU validation.
+The [game acceptance protocol](GAME-VALIDATION.md) defines the evidence required for M5.
 
 ## Work breakdown
 

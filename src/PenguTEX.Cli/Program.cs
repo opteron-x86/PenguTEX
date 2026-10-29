@@ -21,7 +21,7 @@ public static class Program
     private static int Run(string[] args, CancellationToken ct)
     {
         if (args.Length == 0 || args[0] is "help" or "--help" or "-h") { Console.WriteLine(Help); return 0; }
-        if (args[0] == "--version") { Console.WriteLine("PenguTEX " + typeof(Program).Assembly.GetName().Version); return 0; }
+        if (args[0] == "--version") { Console.WriteLine("PenguTEX " + JobRunner.Version); return 0; }
         if (args[0] == "inspect")
         {
             if (args.Length != 2) throw new ArgumentException("Usage: PenguTEX inspect texture.dds");

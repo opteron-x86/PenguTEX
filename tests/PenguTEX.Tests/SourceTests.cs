@@ -85,6 +85,7 @@ public class SourceTests
     {
         using var f = new Fixture(); var data = f.Dir("game data"); string escaped = data.Replace(" ", "\\040");
         Assert.True(CatalogLoader.IsFluorineMount(data, [$"100 90 0:99 / {escaped} ro - fuse mo2linux rw"]));
+        Assert.True(CatalogLoader.IsFluorineMount(Path.Combine(data, "child"), [$"100 90 0:99 / {escaped} ro - fuse mo2linux rw"]));
         Assert.False(CatalogLoader.IsFluorineMount(data, [$"100 90 0:99 / {escaped} ro - ext4 /dev/sda1 rw"]));
     }
     [Fact] public void ExplicitBaseDataOverridesGameFolder()
@@ -92,5 +93,14 @@ public class SourceTests
         using var f = new Fixture(); var options = Setup(f); var data = f.Dir("original-data");
         f.File("original-data/textures/base.dds", Fixture.Dds());
         Assert.Single(CatalogLoader.Load(options with { Data = data }).Assets);
+    }
+    [Fact] public void MissingActiveIniArchiveBlocksPublicationButOptionalPatchDoesNot()
+    {
+        using var f = new Fixture(); var options = Setup(f);
+        f.Text("instance/profiles/Example/skyrim.ini", "[Archive]\nsResourceArchiveList=Required.bsa, Skyrim - Patch.bsa\nsResourceArchiveList2=\n");
+        var catalog = CatalogLoader.Load(options);
+        Assert.Contains(catalog.Diagnostics, d => d.Severity == "Error" && d.Message.Contains("Required.bsa"));
+        Assert.Contains(catalog.Diagnostics, d => d.Severity == "Warning" && d.Message.Contains("Patch.bsa"));
+        Assert.False(Planner.Analyze(catalog, new()).CompleteSource);
     }
 }
