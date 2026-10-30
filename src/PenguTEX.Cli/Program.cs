@@ -55,7 +55,7 @@ public static class Program
         var progress = new ConsoleProgress();
         var catalog = CatalogLoader.Load(source, progress, ct); var plan = Planner.Analyze(catalog, policy, progress, ct);
         if (Get("report") is { } report) JsonFiles.Write(report, plan);
-        if (plan.Comparison is { } comparison) Console.Error.WriteLine($"Replacement: {comparison.LargerCount} larger, {comparison.UnknownCount} unassessed. {comparison.Assessment}");
+        if (plan.Comparison is { } comparison) Console.Error.WriteLine($"Replacement: {comparison.LargerCount} larger, {comparison.UnknownCount} unassessed, {comparison.IncompleteMipCount} incomplete mip chains. {comparison.Assessment}");
         if (args[0] == "analyze") { Print(plan); return !plan.CompleteSource ? 2 : requireParity && plan.Comparison!.HasUnresolved ? 3 : 0; }
         if (requireParity && plan.Comparison!.HasUnresolved) { Print(plan.Comparison); return 3; }
         var result = JobRunner.Build(catalog, plan,

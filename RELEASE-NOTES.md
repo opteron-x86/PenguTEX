@@ -1,4 +1,9 @@
-# PenguTEX 0.1.0-alpha.4
+# PenguTEX 0.1.0-alpha.5
+
+This release fixes the alpha.4 comparison gate: smaller files can still lack the
+reference's smallest mip levels. Incomplete chains now fail strict parity, appear
+explicitly in the desktop, and can be carried unchanged from the reference when
+that option is selected. Re-analyze alpha.4 candidates before installing them.
 
 Check a replacement against the previous optimizer's effective output before
 installing it. Smaller files than the originals alone do not establish replacement

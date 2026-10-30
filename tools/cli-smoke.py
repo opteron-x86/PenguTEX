@@ -63,6 +63,13 @@ with tempfile.TemporaryDirectory(prefix="pengutex-cli-") as temporary:
     assert carried["Manifest"]["Comparison"]["CarriedCount"] == 1
     assert carried["Manifest"]["Files"][0]["Operation"] == "ReferenceCopy"
     assert target.read_bytes() == (root / "carried" / "textures" / "armor" / "example.dds").read_bytes()
+    partial = bytearray(target.read_bytes()[:148 + 64]); struct.pack_into("<I", partial, 28, 1)
+    (root / "partial").mkdir(); (root / "partial/example.dds").write_bytes(partial)
+    (root / "reference").mkdir(); (root / "reference/example.dds").write_bytes(target.read_bytes())
+    mip_gap = run("analyze", "--folder", root / "partial", "--reference", root / "reference", "--require-parity", "true", expected=3)
+    assert mip_gap["Comparison"]["IncompleteMipCount"] == 1
+    mip_fixed = run("analyze", "--folder", root / "partial", "--reference", root / "reference", "--carry-reference", "true", "--require-parity", "true")
+    assert mip_fixed["Comparison"]["CarriedCount"] == 1 and not mip_fixed["Comparison"]["HasUnresolved"]
     target.write_bytes(target.read_bytes()[:-1])
     run("verify", root / "output", expected=1)
     (root / "foreign").mkdir()

@@ -38,6 +38,25 @@ public sealed class ReferenceTests
         var report = Planner.Analyze(Catalog(f), Small).Comparison!;
         Assert.Equal(1, report.LargerCount); Assert.Equal(0, report.KnownPayloadChange);
     }
+    [Fact] public void MissingTailMipsAreAGapEvenWhenPayloadAndDimensionsAreSmaller()
+    {
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds(8, 8, mipCount: 2));
+        f.File("reference/a.dds", Fixture.Dds(16, 16)); var catalog = Catalog(f);
+        var plain = Planner.Analyze(catalog, Small);
+        Assert.Equal(0, plain.Comparison!.LargerCount); Assert.Equal(1, plain.Comparison.IncompleteMipCount); Assert.True(plain.Comparison.HasUnresolved);
+        Assert.False(ReferenceComparison.Fits(plain.Items[0].Input!, 1, false, plain.Comparison.Items[0].Previous!));
+        Assert.True(ReferenceComparison.Fits(plain.Items[0].Input!, 1, true, plain.Comparison.Items[0].Previous!));
+        var carried = Planner.Analyze(catalog, Small with { FitReference = true, CarryReference = true });
+        Assert.Equal(1, carried.Comparison!.CarriedCount); Assert.False(carried.Comparison.HasUnresolved);
+        Assert.Equal(Decision.ReferenceCopy, carried.Items[0].Decision);
+    }
+    [Fact] public void SmallerCompleteChainsAndEquivalentPartialTailsAreNotFalseGaps()
+    {
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds(8, 8)); f.File("reference/a.dds", Fixture.Dds(16, 16));
+        f.File("source/b.dds", Fixture.Dds(8, 4, mipCount: 2)); f.File("reference/b.dds", Fixture.Dds(16, 8, mipCount: 3));
+        var plan = Planner.Analyze(Catalog(f), Small); Assert.False(plan.Comparison!.HasUnresolved);
+        Assert.Equal(0, plan.Comparison.IncompleteMipCount);
+    }
     [Fact] public void ProtectedReferenceFitNeedsOptInAndKeepsHardOrExplicitProtections()
     {
         using var f = new Fixture();

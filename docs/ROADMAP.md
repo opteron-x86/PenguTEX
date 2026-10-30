@@ -84,6 +84,7 @@ Track execution in [issues](https://github.com/opteron-x86/PenguTEX/issues) and
 - [#26 — Extend native DDS mip copying to verified uncompressed layouts and BC6H](https://github.com/opteron-x86/PenguTEX/issues/26)
 - [#29 — Bound CPU mip rebuilding and preserve uncompressed byte channels](https://github.com/opteron-x86/PenguTEX/issues/29)
 - [#31 — Retain unresolved reference textures with explicit provenance](https://github.com/opteron-x86/PenguTEX/issues/31)
+- [#34 — Require replacement mip chains to retain reference coverage](https://github.com/opteron-x86/PenguTEX/issues/34)
 
 Use original assets for processing and a prior optimizer output as a comparison
 reference. Opt-in carry-forward may preserve valid reference files byte for byte;

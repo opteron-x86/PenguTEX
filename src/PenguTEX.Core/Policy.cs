@@ -133,7 +133,7 @@ public static class Planner
                     }
                 }
                 else if (policy.FitReference && reference?.Info is { } previousCopy && !ReferenceComparison.Fits(info, drop, false, previousCopy))
-                { decision = Decision.Keep; reason = "No existing mip fits the reference dimensions and payload; an explicit rebuild or a reviewed format change is needed."; drop = 0; }
+                { decision = Decision.Keep; reason = "No existing mip fits the reference dimensions, payload and mip coverage; an explicit rebuild or reviewed reference carry-forward is needed."; drop = 0; }
                 else if (Math.Max(width, height) > maximum) { decision = Decision.Keep; reason = "No existing mip reaches the selected maximum; use explicit mip rebuilding when available."; drop = 0; }
                 else if (drop > 0) { decision = Decision.Reduce; reason = $"Retain existing mip {drop} and its smaller levels; {category.ToLowerInvariant()} cap {maximum}." + (policy.FitReference && reference?.Info is not null ? " Also fits reference dimensions and payload without changing format." : ""); }
                 else { decision = Decision.Keep; reason = "Already within the selected maximum."; }
