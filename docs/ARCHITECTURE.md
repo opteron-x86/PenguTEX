@@ -53,9 +53,10 @@ containing “output.” Protect generated LOD/atlases, interface and shader res
 ## DDS processing
 
 Validate magic, header sizes/flags, dimensions, surface type, format, mip count and
-payload bounds with checked arithmetic. Initially transform ordinary 2D BC1/2/3/4/5/7
-textures, including sRGB and signed variants for mip copying. Report cube maps,
+payload bounds with checked arithmetic. Transform ordinary 2D BC1/2/3/4/5/6H/7
+textures and defined uncompressed layouts, including sRGB and signed variants for mip copying. Report cube maps,
 arrays, volumes and unsupported formats without flattening or guessing.
+The [DDS capability matrix](DDS-FORMATS.md) separates copying from decoding/rebuilding.
 
 Select an existing mip at/below the maximum dimension, retain aspect ratio and all
 smaller levels, update width/height/count/top-level size/flags, and copy compressed

@@ -11,6 +11,7 @@ acceptance remain separate from implementation. No unmeasured performance claims
 | M3 — Material-aware CPU processing | Explicit re-encoding, color/data handling, mip repair | Format/channel-preserving fixtures and independently decoded results |
 | M4 — Integration and distribution | Portable/AppImage, distro compatibility, manifests, PenguLOD workflow | Extracted packages run; reproducible benchmarks; source/licenses/checksums |
 | M5 — Measured compatibility | Game visuals/frame times and optional physical GPU acceleration | Repeatable shader/hardware evidence; measured benefit before automatic GPU selection |
+| M6 — Optimizer replacement parity | Baseline comparison, explicit limits, broader DDS processing and bounded rebuilding | No unexplained replacement growth; independent file checks; game acceptance tracked under M5 |
 
 M1–M2 form the first useful alpha. M3 is opt-in; format-preserving mip reduction stays
 the default. M4 makes the application distributable. M5 remains open until evidence
@@ -76,4 +77,15 @@ Track execution in [issues](https://github.com/opteron-x86/PenguTEX/issues) and
 
 - [#14 — Validate in-game texture quality and performance](https://github.com/opteron-x86/PenguTEX/issues/14)
 - [#15 — Evaluate optional GPU acceleration on physical devices](https://github.com/opteron-x86/PenguTEX/issues/15)
+
+### [M6 — Optimizer replacement parity](https://github.com/opteron-x86/PenguTEX/milestone/7)
+
+- [#25 — Compare optimizer baselines to prevent larger replacement textures](https://github.com/opteron-x86/PenguTEX/issues/25)
+- [#26 — Extend native DDS mip copying to verified uncompressed layouts and BC6H](https://github.com/opteron-x86/PenguTEX/issues/26)
+
+Use original assets for processing and a prior optimizer output only as a comparison
+reference. Account for installation priority, missing overrides, protected paths and
+unsupported formats. Keep all comparisons and detailed source reports local unless
+the user explicitly chooses to share them. File verification and game validation
+are distinct acceptance stages; preserve the previous playable setup until both pass.
 
