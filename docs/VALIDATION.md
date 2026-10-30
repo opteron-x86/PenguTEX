@@ -25,3 +25,13 @@ workers, memory and cache hits. Compare complete GPU/CPU jobs, with encoder sett
 and quality differences recorded. For game comparisons hold modlist/settings/driver,
 save/route/weather/camera fixed and repeat. Record frame-time percentiles, stutters,
 VRAM telemetry and screenshots. Disk totals do not establish FPS or resident VRAM gains.
+# Independent DDS decoding
+
+Run `PENGUTEX_ORACLE_FIXTURES="$PWD/.artifacts/oracle" bash tools/test.sh`, then
+`python3 tools/independent-dds.py .artifacts/oracle` with Pillow 13.0.0 installed.
+The synthetic rebuild fixtures cover BC1/2/3/4/5/7 and raw RGBA, including DX10,
+legacy headers and zero-alpha data. The separate Pillow decoder checks all 51 mip
+levels, channel values and exact payload lengths. BC1 sRGB payload uses Pillow's
+UNORM alias because Pillow lacks that DDS header alias; the .NET tests separately
+check preservation of the original DXGI value. No game assets are needed.
+

@@ -17,7 +17,8 @@ public class WorkflowTests
         Assert.Equal(2, JobRunner.Verify(output).Files.Count);
         Assert.Equal(2, JobRunner.Build(catalog, plan, output, cache).Reused);
         var rebuild = Planner.Analyze(catalog, Small with { Rules = [new("*", 8, RebuildMips: true, Semantic: TextureSemantic.LinearData)] });
-        Assert.All(rebuild.Items, item => Assert.Equal(Decision.Unsupported, item.Decision));
+        Assert.Equal(Decision.Unsupported, rebuild.Items.Single(i => i.Input!.Format == "BC6H").Decision);
+        Assert.Equal(Decision.Rebuild, rebuild.Items.Single(i => !i.Input!.IsBlockCompressed).Decision);
     }
     [Fact] public void FirstBuildAcceptsAnExistingEmptyDirectory()
     {

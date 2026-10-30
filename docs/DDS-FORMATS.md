@@ -6,8 +6,8 @@ Inspection and existing-mip copying support ordinary single-surface 2D textures:
 | --- | --- | --- |
 | BC1/2/3/4/5/7 | Yes, including existing signed/sRGB/premultiplied data | Existing byte-channel capabilities; signed and premultiplied rebuilds excluded |
 | BC6H unsigned/signed float | Yes; HDR blocks remain unchanged | Not yet available; requires HDR filtering/display |
-| Legacy 8/16/24/32-bit RGB, luminance and alpha masks | Yes, contiguous nonoverlapping masks | Not yet available |
-| Explicit DXGI uncompressed formats listed below | Yes | Not yet available |
+| Legacy 8/16/24/32-bit RGB, luminance and alpha masks | Yes, contiguous nonoverlapping masks | Unsigned channels of at most eight bits; explicit semantics for rebuilding |
+| Explicit DXGI uncompressed formats listed below | Yes | Byte layouts 28/29, 49, 61, 65, 85/86/87/88/91/93/115; other precision remains copy-only |
 | Cubemaps, arrays and volumes | Explicitly excluded | Explicitly excluded |
 
 DXGI uncompressed support: 2, 10, 11, 16, 24, 26, 28, 29, 31, 34, 35, 37, 41,
