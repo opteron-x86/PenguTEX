@@ -18,9 +18,9 @@ public static class TexturePreview
             _ => throw new NotSupportedException("Unsupported preview format."),
         };
     }
-    public static PixelImage Decode(Stream source, int mip = 0, long? length = null, CancellationToken ct = default)
+    public static PixelImage Decode(Stream source, int mip = 0, long? length = null, CancellationToken ct = default, bool recoverMipCount = false)
     {
-        var (info, _) = Dds.Inspect(source, length);
+        var (info, _) = Dds.Inspect(source, length, recoverMipCount);
         return DecodePayload(source, info, mip, ct);
     }
     public static PixelImage DecodePayload(Stream source, DdsInfo info, int mip = 0, CancellationToken ct = default,

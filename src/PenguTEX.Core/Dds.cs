@@ -13,6 +13,7 @@ public sealed record DdsInfo(int Width, int Height, int MipCount, int BlockBytes
     public uint BlueMask { get; init; }
     public uint AlphaMask { get; init; }
     public bool Luminance { get; init; }
+    public int? DeclaredMipCount { get; init; }
     public bool IsBlockCompressed => BlockBytes != 0;
     public bool HasByteChannels => !IsBlockCompressed && !Signed && (RedMask | GreenMask | BlueMask | AlphaMask) != 0
         && new[] { RedMask, GreenMask, BlueMask, AlphaMask }.All(m => System.Numerics.BitOperations.PopCount(m) <= 8);
@@ -32,7 +33,7 @@ public sealed record DdsInfo(int Width, int Height, int MipCount, int BlockBytes
 
 public static class Dds
 {
-    public static (DdsInfo Info, byte[] Header) Inspect(Stream input, long? length = null)
+    public static (DdsInfo Info, byte[] Header) Inspect(Stream input, long? length = null, bool recoverMipCount = false)
     {
         var header = new byte[128]; input.ReadExactly(header);
         uint U(int at) => BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(at));
@@ -125,6 +126,13 @@ public static class Dds
             BitsPerPixel = bits, RedMask = red, GreenMask = green, BlueMask = blue, AlphaMask = alpha, Luminance = luminance };
         long payload = Enumerable.Range(0, mips).Sum(info.MipBytes);
         long? actualLength = length ?? (input.CanSeek ? input.Length : null);
+        if (recoverMipCount && info.IsBlockCompressed && actualLength.HasValue && actualLength.Value != header.Length + payload)
+        {
+            int fullCount = 1 + (int)Math.Log2(Math.Max(width, height));
+            long fullPayload = Enumerable.Range(0, fullCount).Sum(info.MipBytes);
+            if (mips < fullCount && actualLength.Value == header.Length + fullPayload)
+            { info = info with { MipCount = fullCount, DeclaredMipCount = mips }; payload = fullPayload; }
+        }
         if (!info.IsBlockCompressed)
         {
             // Legacy writers use either tight rows or DWORD-aligned rows, including mip tails.
@@ -144,9 +152,9 @@ public static class Dds
 
     public static void Reduce(Stream source, Stream target, int drop, long length, CancellationToken ct = default, DdsInfo? expected = null)
     {
-        var (info, header) = Inspect(source, length);
+        var (info, header) = Inspect(source, length, expected?.DeclaredMipCount is not null);
         if (expected is not null && info != expected) throw new IOException("Source metadata changed; analyze again.");
-        if (drop <= 0 || drop >= info.MipCount) throw new ArgumentOutOfRangeException(nameof(drop));
+        if (drop < 0 || drop >= info.MipCount || drop == 0 && info.DeclaredMipCount is null) throw new ArgumentOutOfRangeException(nameof(drop));
         ResizeHeader(header, info, Math.Max(1, info.Width >> drop), Math.Max(1, info.Height >> drop), info.MipCount - drop);
         target.Write(header);
         Transfer(source, Stream.Null, info.RemovedBytes(drop), ct);

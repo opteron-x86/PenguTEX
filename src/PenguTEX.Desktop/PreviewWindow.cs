@@ -43,14 +43,14 @@ public sealed class PreviewWindow : Window
             _status.Text = "Decoding selected mip levels…";
             var pair = await Task.Run(() =>
             {
-                using var source = _asset.Open(); var left = TexturePreview.Decode(source, mip, _asset.Length, cancel.Token);
+                using var source = _asset.Open(); var left = TexturePreview.Decode(source, mip, _asset.Length, cancel.Token, _item.Input?.DeclaredMipCount is not null);
                 using var target = _asset.Open(); PixelImage right;
                 if (_item.Decision == Decision.Rebuild)
                 {
                     using var rebuilt = new MemoryStream(); new CpuMipProcessor().Process(target, rebuilt, _item, _asset.Length, cancel.Token);
                     rebuilt.Position = 0; right = TexturePreview.Decode(rebuilt, ct: cancel.Token);
                 }
-                else right = TexturePreview.Decode(target, _item.DropMips, _asset.Length, cancel.Token);
+                else right = TexturePreview.Decode(target, _item.DropMips, _asset.Length, cancel.Token, _item.Input?.DeclaredMipCount is not null);
                 return (left, right);
             }, cancel.Token);
             if (cancel.IsCancellationRequested) return; (_left, _right) = pair; Display();

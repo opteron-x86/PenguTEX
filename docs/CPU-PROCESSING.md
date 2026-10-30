@@ -4,6 +4,15 @@ All presets default to copying existing mip levels. Rebuilding compressed textur
 introduces another lossy encoding pass and can increase payload when repairing missing mips.
 Choose it only for known texture sets; inspect output before installation.
 
+`RecoverMipCounts: true` (CLI `--recover-mip-counts true`) permits a narrow header
+repair: a single-surface block-compressed original declares too few mips, and its
+exact payload length matches the full standard chain. The output header is fixed;
+retained blocks are copied unchanged. Plans record the original declared count,
+and manifests retain that count plus the original source hash. Header-only work is
+labeled `RepairHeader`. Source files stay unchanged. Protections still apply, and
+unrelated trailers, partial payloads, raw layouts and other malformed data remain
+rejected. This option is off by default and does not infer channel semantics.
+
 Add a path rule to a JSON policy (or the desktop's custom-rule editor):
 
 ```json
