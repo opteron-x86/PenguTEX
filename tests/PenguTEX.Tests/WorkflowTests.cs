@@ -17,6 +17,58 @@ public class WorkflowTests
     }
     private sealed class CallbackProgress(Action<JobProgress> callback) : IProgress<JobProgress>
     { public void Report(JobProgress value) => callback(value); }
+    [Theory] [InlineData(0)] [InlineData(1)] [InlineData(24)]
+    public void ProgressReachesEveryPhaseBeforeOutputIsReady(int count)
+    {
+        using var f = new Fixture();
+        for (int i = 0; i < count; i++) f.File($"source/texture{i}.dds", Fixture.Dds());
+        var catalog = CatalogLoader.Load(new(Folder: f.Dir("source"))); var plan = Planner.Analyze(catalog, Small);
+        string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
+        var events = new List<JobProgress>();
+        var progress = new CallbackProgress(p =>
+        {
+            events.Add(p);
+            if (p.Phase == "Verify") Assert.False(Directory.Exists(output));
+            if (p.Phase == "Publish" && p.Done == 1) Assert.Equal(count, JobRunner.Verify(output).Files.Count);
+        });
+        JobRunner.Build(catalog, plan, output, cache, workers: 8, progress: progress);
+        Assert.Equal(Enumerable.Range(0, count + 1), events.Where(p => p.Phase == "Build").Select(p => p.Done));
+        var verification = events.Where(p => p.Phase == "Verify").ToArray();
+        Assert.Equal(count, verification[^1].Done); Assert.All(verification, p => Assert.Equal(count, p.Total));
+        Assert.Equal(count, verification.Where(p => p.Path.Length > 0).Select(p => p.Path).Distinct().Count());
+        Assert.Equal(new[] { "Build", "Verify", "Publish" }, events.Select(p => p.Phase).Distinct());
+        Assert.Equal(1, events[^1].Done);
+        events.Clear();
+        Assert.Equal(count, JobRunner.Build(catalog, plan, output, cache, workers: 8, progress: new CallbackProgress(events.Add)).Reused);
+        Assert.Equal(new[] { "Build", "Verify", "Publish", "Cleanup" }, events.Select(p => p.Phase).Distinct());
+        Assert.Equal(1, events[^1].Done);
+    }
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public void InterruptedVerificationDoesNotPublishOrReportSuccess(bool cancelVerification)
+    {
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds());
+        var catalog = CatalogLoader.Load(new(Folder: f.Dir("source"))); var plan = Planner.Analyze(catalog, Small);
+        string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
+        var previous = JobRunner.Build(catalog, plan, output, cache);
+        string stage = Path.Combine(f.Root, ".pengutex-stage-" + JsonFiles.Hash(output)[..20]);
+        using var cancel = new CancellationTokenSource(); var events = new List<JobProgress>();
+        var progress = new CallbackProgress(p =>
+        {
+            events.Add(p);
+            if (p.Phase != "Verify" || p.Done != 0 || p.Path.Length == 0) return;
+            if (cancelVerification) cancel.Cancel();
+            else
+            {
+                string file = Path.Combine(stage, p.Path); byte[] corrupt = File.ReadAllBytes(file);
+                corrupt[^1] ^= 31; File.WriteAllBytes(file, corrupt);
+            }
+        });
+        var error = Record.Exception(() => JobRunner.Build(catalog, plan, output, cache, progress: progress, ct: cancel.Token));
+        if (cancelVerification) Assert.IsAssignableFrom<OperationCanceledException>(error);
+        else Assert.IsType<InvalidDataException>(error);
+        Assert.DoesNotContain(events, p => p.Phase is "Publish" or "Cleanup" || (p.Phase == "Verify" && p.Done == 1));
+        Assert.Equal(previous.Manifest.Files[0].OutputHash, JobRunner.Verify(output).Files[0].OutputHash);
+    }
     [Theory] [InlineData(false)] [InlineData(true)]
     public void PublicationPreservesFilesAddedDuringGeneration(bool previousBuild)
     {

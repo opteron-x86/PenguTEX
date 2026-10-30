@@ -30,7 +30,7 @@ public static class Program
         if (args[0] == "verify")
         {
             if (args.Length != 2) throw new ArgumentException("Usage: PenguTEX verify output-folder");
-            Print(JobRunner.Verify(args[1], ct)); return 0;
+            Print(JobRunner.Verify(args[1], ct, new ConsoleProgress())); return 0;
         }
         var options = Parse(args.Skip(1).ToArray());
         string? Get(string name) => options.GetValueOrDefault(name);
@@ -72,11 +72,12 @@ public static class Program
     private static void Print<T>(T value) => Console.WriteLine(JsonSerializer.Serialize(value, JsonFiles.Options));
     private sealed class ConsoleProgress : IProgress<JobProgress>
     {
-        private DateTime _last;
+        private DateTime _last; private string _phase = "";
         public void Report(JobProgress p)
         {
-            if (p.Done != p.Total && DateTime.UtcNow - _last < TimeSpan.FromSeconds(2)) return;
-            _last = DateTime.UtcNow; Console.Error.WriteLine($"{p.Phase} {p.Done}/{p.Total}: {p.Path}");
+            if (p.Phase == _phase && p.Done != p.Total && DateTime.UtcNow - _last < TimeSpan.FromSeconds(2)) return;
+            _last = DateTime.UtcNow; _phase = p.Phase;
+            Console.Error.WriteLine($"{p.Phase} {p.Done}/{p.Total}: {(p.Path.Length == 0 ? p.Message : p.Path)}");
         }
     }
     private const string Help = """

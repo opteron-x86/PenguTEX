@@ -216,14 +216,16 @@ public sealed class MainWindow : Window
         if (IsWorking) return;
         IsWorking = true; _cancel = new(); _analyze.IsEnabled = _build.IsEnabled = _preview.IsEnabled = _export.IsEnabled = false;
         _cancelButton.IsEnabled = true; _setup!.IsEnabled = false; _progress.Value = 0;
+        _lastPhase = ""; _lastLog = default; bool acceptingProgress = true;
         try
         {
             var settings = ReadSettings(); _store.Save(settings);
             var progress = new Progress<JobProgress>(p =>
             {
-                _status.Text = $"{p.Phase}: {p.Done:N0} / {p.Total:N0} — {p.Path}";
+                if (!acceptingProgress) return;
+                _status.Text = $"{p.Phase}: {p.Done:N0} / {p.Total:N0} — {(p.Path.Length == 0 ? p.Message : p.Path)}";
                 _progress.Value = p.Total == 0 ? 0 : 100d * p.Done / p.Total;
-                if (p.Phase != _lastPhase || DateTime.UtcNow - _lastLog > TimeSpan.FromSeconds(2))
+                if (p.Phase != _lastPhase || p.Done == p.Total || DateTime.UtcNow - _lastLog > TimeSpan.FromSeconds(2))
                 { AppendLog(_status.Text); _lastLog = DateTime.UtcNow; _lastPhase = p.Phase; }
             });
             await run(settings, progress, _cancel.Token); _progress.Value = 100;
@@ -232,6 +234,7 @@ public sealed class MainWindow : Window
         catch (Exception e) { _status.Text = "Failed: " + e.GetBaseException().Message; AppendLog(_status.Text); }
         finally
         {
+            acceptingProgress = false;
             IsWorking = false; _setup.IsEnabled = true; _cancelButton.IsEnabled = false; _analyze.IsEnabled = true;
             _build.IsEnabled = _plan?.CompleteSource == true; _export.IsEnabled = _plan is not null; _preview.IsEnabled = (_table.SelectedItem as PlanRow)?.Item.Input is not null;
             _cancel.Dispose(); _cancel = null;

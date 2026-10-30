@@ -1,16 +1,19 @@
-# PenguTEX 0.1.0-alpha.2
+# PenguTEX 0.1.0-alpha.3
 
-Fix first-run builds into a folder created through a file picker or file manager.
-An empty output folder is accepted and receives its manifest after successful
-validation. Nonempty folders without a PenguTEX manifest remain protected.
+Show what happens after texture generation. Large builds previously appeared stuck
+near the final texture while PenguTEX silently verified the staged output.
 
-- Check the destination before a large source rescan in desktop and CLI Build.
-- Label Build’s source refresh as Recheck textures/sources/archives.
-- Recheck output ownership before publication, preserving files added during a job.
-- Recover interrupted publication when the original destination was empty.
+- Report Verify counts and texture paths, followed by Publish and Cleanup phases.
+- Always log phase changes and final counts, even within the log throttle interval.
+- Keep parallel Build counts ordered and prevent queued desktop progress from
+  overwriting completion, failure or cancellation status.
+- Report progress for standalone CLI verification and check cancellation while
+  traversing the output tree.
 
-Policies, texture processing, source files and saved preferences are unchanged.
-Close and reopen the application to load the fix; the same empty output path works.
+Wait for Complete, then install the chosen output folder. The temporary
+`.pengutex-stage-*` folder holds work pending verification and publication.
+Existing successful outputs remain usable and do not need rebuilding. Reopen the
+application after the current job finishes to load this progress update.
 
 Portable Linux x64 and AppImage packages include source, dependency notices and
 checksums. In-game appearance, resident VRAM/frame-time benefits and GPU acceleration
