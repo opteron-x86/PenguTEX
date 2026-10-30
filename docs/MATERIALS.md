@@ -40,7 +40,7 @@ uses XY reconstruction only for tangent normals. sRGB normal/data declarations,
 signed channels, unsupported precision and swizzles are not silently reinterpreted.
 Color uses linear-light filtering. Standard straight-alpha blends use alpha-weighted
 color without coverage scaling. Cutout alpha uses the material's greater/greater-equal
-threshold; coverage is approximate in tiny mips. Animated, externally controlled,
+threshold; BC1 output explicitly encodes the resulting binary mask. Coverage is approximate in tiny mips. Animated, externally controlled,
 vertex-dependent or nonstandard alpha tests remain unresolved.
 
 Available original mip levels are retained byte-for-byte. Only absent levels are

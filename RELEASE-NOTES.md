@@ -10,7 +10,7 @@ completion. No game profile or installed texture output is changed automatically
 - Complete missing mips for supported lighting and declared TruePBR color, normal,
   height and packed RMAOS bindings. Preserve every available original mip block.
 - Distinguish straight-alpha blending from cutout coverage at the material's actual
-  supported threshold. Keep conflicting, unbound, unsupported and unreadable uses
+  supported threshold, including BC1's binary-alpha encoding. Keep conflicting, unbound, unsupported and unreadable uses
   explicit; never guess channel swizzles or reinterpret sRGB normals.
 - New presets apply limits to ordinary characters and landscapes. Generated LOD,
   interface and shader resources retain protection; saved custom choices persist.
@@ -29,7 +29,7 @@ reference path. Explicit policy settings stay intact. Use unmounted original Dat
 for a profile scan. A working earlier output is not converted in place.
 
 Validation: synthetic engine and rendered desktop tests; CLI workflows; independent
-Pillow decoding of 21 DDS fixtures / 83 mip levels; native GUI startup and
+Pillow decoding of 22 DDS fixtures / 87 mip levels; native GUI startup and
 portable/AppImage compatibility checks in CI. Runtime shader overrides, visual
 quality and measured VRAM/frame-time benefits require game validation. See
 [material coverage](docs/MATERIALS.md) and [input recovery](docs/INPUT-RECOVERY.md).

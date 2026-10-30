@@ -39,7 +39,14 @@ def verify(path):
         with Image.open(io.BytesIO(header + data[offset:offset + size])) as image:
             image.load()
             assert image.size == (w, h)
-            for pixel in image.convert("RGBA").get_flattened_data():
+            decoded = list(image.convert("RGBA").get_flattened_data())
+            if path.name == "cutout-bc1.dds":
+                assert all(pixel[3] in (0, 255) for pixel in decoded)
+                if mip == 0: assert sum(pixel[3] == 255 for pixel in decoded) == 32
+                if mip == 1: assert [pixel[3] for pixel in decoded] == [0, 255, 255, 255] * 4
+                offset += size
+                continue
+            for pixel in decoded:
                 channels = [] if kind == 1 else [0] if kind == 4 else [0, 1] if kind == 5 else [0, 1, 2]
                 for channel in channels:
                     assert abs(pixel[channel] - (64, 128, 192)[channel]) <= (0 if kind == 0 else 8), (path, mip, pixel)
@@ -51,6 +58,6 @@ def verify(path):
 
 
 paths = sorted(Path(sys.argv[1]).glob("*.dds"))
-assert len(paths) == 21, f"Expected 21 synthetic fixtures, found {len(paths)}"
+assert len(paths) == 22, f"Expected 22 synthetic fixtures, found {len(paths)}"
 levels = sum(verify(path) for path in paths)
 print(f"Pillow {__version__}: independently decoded {len(paths)} DDS files / {levels} mip levels; channels and lengths match.")

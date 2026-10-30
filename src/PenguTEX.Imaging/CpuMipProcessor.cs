@@ -7,7 +7,7 @@ namespace PenguTEX.Imaging;
 
 public sealed class CpuMipProcessor : ITextureProcessor
 {
-    public string Identity => "bcn-2.3.0-strips-raw-area-complete-alpha-v4";
+    public string Identity => "bcn-2.3.0-strips-raw-area-complete-alpha-bc1-v5";
     // One decoded texture per process; other workers can continue streaming mip copies.
     private static readonly SemaphoreSlim MemorySlot = new(1, 1);
     public void Process(Stream source, Stream target, PlanItem item, long length, CancellationToken ct)
@@ -55,6 +55,14 @@ public sealed class CpuMipProcessor : ITextureProcessor
                 {
                     ct.ThrowIfCancellationRequested(); int rows = Math.Min(4, pixels.Height - y);
                     var strip = pixels.Rgba.AsSpan(y * pixels.Width * 4, pixels.Width * rows * 4);
+                    if (info.Format == "BC1" && semantic == TextureSemantic.OpacitySrgb)
+                    {
+                        // BC1's encoder uses a fixed binary-alpha threshold. Quantize the planned
+                        // material mask in a strip copy; keep continuous alpha for the next filter.
+                        byte[] mask = strip.ToArray();
+                        for (int a = 3; a < mask.Length; a += 4) mask[a] = mask[a] >= item.AlphaCutoff ? (byte)255 : (byte)0;
+                        strip = mask;
+                    }
                     var blocks = encoder.EncodeToRawBytes(strip, pixels.Width, rows, PixelFormat.Rgba32)[0];
                     long expected = (long)((pixels.Width + 3) / 4) * info.BlockBytes;
                     if (blocks.Length != expected) throw new InvalidDataException("Encoder returned an unexpected block count.");
