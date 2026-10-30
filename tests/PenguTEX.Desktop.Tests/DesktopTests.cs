@@ -31,6 +31,8 @@ public sealed class DesktopTests
     {
         Dispatcher.UIThread.RunJobs();
         if (Environment.GetEnvironmentVariable("PENGUTEX_SCREENSHOTS") is not { } folder) return;
+        foreach (var visual in window.GetVisualDescendants()) visual.InvalidateVisual();
+        window.InvalidateVisual(); Dispatcher.UIThread.RunJobs();
         Directory.CreateDirectory(folder); using var image = window.CaptureRenderedFrame();
         Assert.NotNull(image); image.Save(Path.Combine(folder, name + ".png"), Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
     }
@@ -55,6 +57,10 @@ public sealed class DesktopTests
         try
         {
             Assert.False(Control<CheckBox>(window, "CompareReference").IsChecked);
+            Assert.False(Control<StackPanel>(window, "ComparisonOptions").IsVisible);
+            Assert.Equal("Ready to analyze the selected source.", Control<TextBlock>(window, "Summary").Text);
+            window.Width = 980; window.Height = 700; Capture(window, "fresh-source-compact");
+            window.Width = 1280; window.Height = 900; Capture(window, "fresh-source");
             await window.AnalyzeAsync(); Assert.NotNull(window.CurrentPlan); Assert.Null(window.CurrentPlan.Source.ReferenceFolder);
             Assert.Null(window.CurrentPlan.Comparison); Assert.True(window.CurrentPlan.Coverage.MeetsPolicy);
             Assert.Equal(Decision.Rebuild, window.CurrentPlan.Items[0].Decision);
@@ -62,6 +68,7 @@ public sealed class DesktopTests
             Control<DataGrid>(window, "TextureTable").SelectedIndex = 0; Capture(window, "material-review");
             window.GetVisualDescendants().OfType<TabControl>().Single().SelectedIndex = 2; Capture(window, "fresh-coverage");
             await window.BuildAsync(); Assert.NotNull(window.LastBuild); Assert.True(window.LastBuild.Manifest.OriginalsOnly);
+            Assert.True(Control<Button>(window, "OpenOutput").IsEnabled);
         }
         finally { window.Close(); }
     }
@@ -124,6 +131,12 @@ public sealed class DesktopTests
         var window = new MainWindow(new SettingsStore(Path.Combine(f.Root, "settings.json"))); window.SetSettings(settings); window.Show();
         try
         {
+            var comparisonOptions = Control<StackPanel>(window, "ComparisonOptions");
+            Assert.True(comparisonOptions.IsVisible); comparisonOptions.BringIntoView(); Capture(window, "comparison-options");
+            Control<CheckBox>(window, "CompareReference").IsChecked = false;
+            Assert.False(Control<StackPanel>(window, "ComparisonOptions").IsVisible);
+            Assert.Equal(f.Dir("reference"), Control<TextBox>(window, "ReferencePath").Text);
+            Control<CheckBox>(window, "CompareReference").IsChecked = true;
             await window.AnalyzeAsync(); Assert.Equal(1, window.CurrentPlan!.Comparison!.LargerCount);
             Assert.Single(Control<DataGrid>(window, "ReferenceTable").ItemsSource.Cast<object>()); Capture(window, "replacement");
             window.GetVisualDescendants().OfType<TabControl>().Single().SelectedIndex = 0;
@@ -171,9 +184,38 @@ public sealed class DesktopTests
             await window.AnalyzeAsync(); Assert.NotNull(window.CurrentPlan);
             window.GetVisualDescendants().OfType<TabControl>().Single().SelectedIndex = 0;
             Control<TextBox>(window, "Maximum").Text = "4"; Assert.Null(window.CurrentPlan); Assert.False(Control<Button>(window, "Build").IsEnabled);
+            Assert.Contains("Source or policy changed", Control<TextBlock>(window, "Summary").Text);
             Control<TextBox>(window, "SourcePath").Text = Path.Combine(f.Root, "missing"); await window.AnalyzeAsync();
             Assert.Contains("Failed:", window.Status); Assert.False(window.IsWorking); Assert.True(Control<Button>(window, "Analyze").IsEnabled);
             window.SetSettings(settings); await window.AnalyzeAsync(); Assert.NotNull(window.CurrentPlan);
+        }
+        finally { window.Close(); }
+    }
+    [AvaloniaFact]
+    public async Task OutputFolderOpeningUsesCurrentPathAndHandlesMissingFoldersAndLauncherFailures()
+    {
+        using var f = new Fixture(); string first = f.Dir("output forêt #1"), second = f.Dir("second output");
+        var pending = new TaskCompletionSource<bool>(); var opened = new List<string>();
+        Func<Task<bool>> response = () => pending.Task;
+        var window = new MainWindow(new SettingsStore(Path.Combine(f.Root, "settings.json")), folder =>
+        { opened.Add(folder.FullName); return response(); });
+        window.Show();
+        try
+        {
+            Assert.Equal("Choose a source and analyze its textures.", Control<TextBlock>(window, "Summary").Text);
+            var button = Control<Button>(window, "OpenOutput"); Assert.False(button.IsEnabled);
+            window.SetSettings(Settings(f) with { Output = first }); Assert.True(button.IsEnabled);
+            var opening = window.OpenOutputFolderAsync(); Assert.False(button.IsEnabled);
+            Control<TextBox>(window, "OutputPath").Text = second; Assert.False(button.IsEnabled);
+            await window.OpenOutputFolderAsync(); Assert.Equal(first, Assert.Single(opened));
+            pending.SetResult(true); await opening; Assert.True(button.IsEnabled);
+            await window.OpenOutputFolderAsync(); Assert.Equal(new[] { first, second }, opened);
+            Directory.Delete(second); await window.OpenOutputFolderAsync();
+            Assert.Equal(2, opened.Count); Assert.False(button.IsEnabled); Assert.Contains("existing output folder", window.Status);
+            Control<TextBox>(window, "OutputPath").Text = first; response = () => Task.FromResult(false);
+            await window.OpenOutputFolderAsync(); Assert.True(button.IsEnabled); Assert.Contains("Open it manually: " + first, window.Status);
+            response = () => throw new IOException("Launcher unavailable");
+            await window.OpenOutputFolderAsync(); Assert.True(button.IsEnabled); Assert.Contains("Launcher unavailable", window.Status);
         }
         finally { window.Close(); }
     }

@@ -1,16 +1,14 @@
-# PenguTEX 0.1.0-alpha.8
+# PenguTEX 0.1.0-alpha.9
 
-The desktop now describes a successful build as finished output. The previous
-"game validation pending" message appeared after every build without tracking any
-in-game check.
+The desktop now keeps optional settings out of the way and makes build information
+and generated output easier to find.
 
-- Remove the introductory subheading under the application title.
-- Rename the build action to "Build output mod" and the result to "Output built".
-- Show the verified texture count, output size and build time in the result summary.
-- Keep protected/unresolved source coverage and optional comparison assessments
-  available for review.
-- Update the desktop guide to match the current Coverage tab and optional
-  comparison controls.
+- Use shorter mipmap/recovery labels with explanations on hover.
+- Hide previous-output comparison controls until comparison is enabled.
+- Show a neutral readiness message when opening fresh or saved settings.
+- Display the application version beside the title, with the full build on hover.
+- Add Open output folder through the desktop file manager, with missing-folder and
+  launcher-failure feedback.
 
 Texture processing, presets, cache recipes and output manifests are unchanged.
 Existing generated output does not need to be rebuilt for this interface update.
