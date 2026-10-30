@@ -58,18 +58,23 @@ with tempfile.TemporaryDirectory(prefix="pengutex-cli-") as temporary:
                     "--fit-reference", "true", "--require-parity", "true", "--output", root / "candidate", "--cache", root / "cache")
     assert not candidate["Manifest"]["Comparison"]["HasUnresolved"]
     assert target.read_bytes() == (root / "candidate" / "textures" / "armor" / "example.dds").read_bytes()
-    carried = run("build", "--folder", root / "input", "--max", 16, "--reference", root / "output",
-                  "--carry-reference", "true", "--require-parity", "true", "--output", root / "carried", "--cache", root / "cache")
-    assert carried["Manifest"]["Comparison"]["CarriedCount"] == 1
-    assert carried["Manifest"]["Files"][0]["Operation"] == "ReferenceCopy"
-    assert target.read_bytes() == (root / "carried" / "textures" / "armor" / "example.dds").read_bytes()
+    run("build", "--folder", root / "input", "--reference", root / "output",
+        "--carry-reference", "true", "--output", root / "carried", "--cache", root / "cache", expected=1)
+    assert not (root / "carried").exists()
+    assert candidate["Manifest"]["OriginalsOnly"]
+    assert candidate["Manifest"]["Files"][0]["SourceContainer"] == str(source / "example.dds")
+    legacy_manifest = root / "candidate" / "pengutex-manifest.json"
+    legacy = json.loads(legacy_manifest.read_text())
+    legacy["Files"][0]["Operation"] = "ReferenceCopy"
+    legacy_manifest.write_text(json.dumps(legacy))
+    assert not run("verify", root / "candidate", expected=3)["OriginalsOnly"]
     partial = bytearray(target.read_bytes()[:148 + 64]); struct.pack_into("<I", partial, 28, 1)
     (root / "partial").mkdir(); (root / "partial/example.dds").write_bytes(partial)
     (root / "reference").mkdir(); (root / "reference/example.dds").write_bytes(target.read_bytes())
     mip_gap = run("analyze", "--folder", root / "partial", "--reference", root / "reference", "--require-parity", "true", expected=3)
     assert mip_gap["Comparison"]["IncompleteMipCount"] == 1
-    mip_fixed = run("analyze", "--folder", root / "partial", "--reference", root / "reference", "--carry-reference", "true", "--require-parity", "true")
-    assert mip_fixed["Comparison"]["CarriedCount"] == 1 and not mip_fixed["Comparison"]["HasUnresolved"]
+    run("analyze", "--folder", root / "partial", "--reference", root / "reference",
+        "--carry-reference", "true", expected=1)
     target.write_bytes(target.read_bytes()[:-1])
     run("verify", root / "output", expected=1)
     (root / "foreign").mkdir()

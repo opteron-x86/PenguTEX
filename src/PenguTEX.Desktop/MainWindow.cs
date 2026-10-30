@@ -26,14 +26,13 @@ public sealed class MainWindow : Window
         _reference = Box("ReferencePath"), _replaceMod = Box("ReplaceMod");
     private readonly CheckBox _fitReference = new() { Name = "FitReference", Content = "Fit previous dimensions and texture payload", IsChecked = false };
     private readonly CheckBox _fitProtected = new() { Name = "FitProtectedReference", Content = "Allow this fit for protected landscapes and characters", IsChecked = false };
-    private readonly CheckBox _carryReference = new() { Name = "CarryReference", Content = "Carry unresolved reference files unchanged (reported separately)", IsChecked = false };
     private readonly DataGrid _comparisonTable = new() { Name = "ReferenceTable", AutoGenerateColumns = false, IsReadOnly = true, CanUserSortColumns = true };
     private readonly TextBlock _comparisonSummary = Text("Choose a previous optimizer output to compare replacements.");
     private readonly CheckBox _large = new() { Content = "Protect landscapes and large surfaces", IsChecked = true };
     private readonly CheckBox _characters = new() { Content = "Protect characters and faces", IsChecked = true };
     private readonly TextBox _rules = new() { Name = "PathRules", AcceptsReturn = true, MinHeight = 90, Text = "[]", TextWrapping = TextWrapping.Wrap };
     private readonly TextBox _search = new() { Name = "TextureSearch", PlaceholderText = "Search path, source mod, or reason…", MinWidth = 260 };
-    private readonly ComboBox _filter = new() { Name = "DecisionFilter", ItemsSource = new[] { "Changed", "All", "ReferenceCopy", "Protected", "Unsupported", "Invalid", "Keep" }, SelectedIndex = 0, Width = 150 };
+    private readonly ComboBox _filter = new() { Name = "DecisionFilter", ItemsSource = new[] { "Changed", "All", "Protected", "Unsupported", "Invalid", "Keep" }, SelectedIndex = 0, Width = 150 };
     private readonly DataGrid _table = new() { Name = "TextureTable", AutoGenerateColumns = false, IsReadOnly = true, CanUserSortColumns = true, SelectionMode = DataGridSelectionMode.Single };
     private readonly TextBox _log = new() { Name = "JobLog", IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _summary = Text("Choose a source and analyze its textures.", 17), _detail = Text("Select a texture to inspect its decision."), _status = Text("Ready");
@@ -70,7 +69,7 @@ public sealed class MainWindow : Window
         {
             if (_table.SelectedItem is PlanRow row && _catalog is not null)
             {
-                var sources = row.Item.Decision == Decision.ReferenceCopy ? _catalog.Reference?.Assets : _catalog.Assets;
+                var sources = _catalog.Assets;
                 if (sources?.FirstOrDefault(a => a.Path == row.Item.Path) is { } asset)
                     await new PreviewWindow(asset with { Origin = row.Item.Origin }, row.Item).ShowDialog(this);
             }
@@ -89,7 +88,6 @@ public sealed class MainWindow : Window
         _characters.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
         _fitReference.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
         _fitProtected.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
-        _carryReference.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
         _preset.SelectionChanged += (_, _) => { if (!_loading && _preset.SelectedItem is string name && name != "Custom / saved limits") SetPolicy(Policy.Preset(name)); };
         _profiles.SelectionChanged += (_, _) => { if (_profiles.SelectedItem is string name) _profile.Text = name; };
         Closing += (_, e) => { if (IsWorking) { e.Cancel = true; _cancel?.Cancel(); _status.Text = "Cancelling… close again when the job stops."; } };
@@ -149,7 +147,6 @@ public sealed class MainWindow : Window
             Columns(PathField("Output mod folder", _output), PathField("Reusable work cache", _cache)),
             Columns(PathField("Previous optimized output (optional comparison)", _reference), Field("Mod to replace (auto-detected for installed reference)", _replaceMod)),
             Columns(_fitReference, _fitProtected),
-            _carryReference,
             Field("Workers (1–32)", _workers),
             new Expander { Header = "Locations and custom rules", Content = advanced, HorizontalAlignment = HorizontalAlignment.Stretch },
             Text("Quality: color 2K, normal/material/height 1K. Balanced: color 2K, normal 1K, material/height 512. Compact: color 1K, normal/material 512, height 256. Saved custom limits are preserved."),
@@ -180,7 +177,6 @@ public sealed class MainWindow : Window
             MaterialMaximum = int.Parse(_material.Text ?? ""), HeightMaximum = int.Parse(_height.Text ?? ""), ProtectLargeSurfaces = _large.IsChecked == true,
             ProtectCharacters = _characters.IsChecked == true, FitReference = _fitReference.IsChecked == true,
             FitProtectedReference = _fitReference.IsChecked == true && _fitProtected.IsChecked == true,
-            CarryReference = _carryReference.IsChecked == true,
             Rules = JsonSerializer.Deserialize<PathRule[]>(_rules.Text ?? "[]", JsonFiles.Options) ?? [] };
         policy.Validate();
         var source = new SourceOptions(_mode.SelectedIndex == 0 ? Value(_source) : null, _mode.SelectedIndex == 1 ? Value(_source) : null,
@@ -196,6 +192,7 @@ public sealed class MainWindow : Window
         _reference.Text = s.ReferenceFolder; _replaceMod.Text = s.ReplaceMod;
         _output.Text = settings.Output; _cache.Text = settings.Cache; _workers.Text = settings.Workers.ToString();
         SetPolicy(settings.Policy); _loading = false; InvalidatePlan();
+        if (settings.Policy.CarryReference) _status.Text = "Legacy reference copying was disabled. Analyze again to build from original textures only.";
     }
     private void SetPolicy(Policy policy)
     {
@@ -206,7 +203,6 @@ public sealed class MainWindow : Window
         _preset.SelectedItem = known?.Name ?? "Custom / saved limits"; _maximum.Text = policy.Maximum.ToString(); _normal.Text = policy.NormalMaximum.ToString();
         _material.Text = policy.MaterialMaximum.ToString(); _large.IsChecked = policy.ProtectLargeSurfaces; _characters.IsChecked = policy.ProtectCharacters;
         _height.Text = (policy.HeightMaximum ?? policy.MaterialMaximum).ToString(); _fitReference.IsChecked = policy.FitReference; _fitProtected.IsChecked = policy.FitProtectedReference;
-        _carryReference.IsChecked = policy.CarryReference;
         _rules.Text = JsonSerializer.Serialize(policy.Rules, JsonFiles.Options); _loading = wasLoading; InvalidatePlan();
     }
     private void InvalidatePlan()
@@ -218,7 +214,7 @@ public sealed class MainWindow : Window
     private void Filter()
     {
         if (_plan is null) return; string query = _search.Text ?? "", filter = _filter.SelectedItem as string ?? "Changed";
-        var rows = _plan.Items.Where(i => filter == "All" || (filter == "Changed" ? i.Decision is Decision.Reduce or Decision.Rebuild or Decision.ReferenceCopy : i.Decision.ToString() == filter))
+        var rows = _plan.Items.Where(i => filter == "All" || (filter == "Changed" ? i.Decision is Decision.Reduce or Decision.Rebuild : i.Decision.ToString() == filter))
             .Where(i => (i.Path + " " + i.Origin + " " + i.Reason).Contains(query, StringComparison.OrdinalIgnoreCase)).Select(i => new PlanRow(i)).ToArray();
         VisibleCount = rows.Length; _table.ItemsSource = rows;
     }
@@ -230,7 +226,7 @@ public sealed class MainWindow : Window
         foreach (var diagnostic in _plan.Diagnostics) AppendLog(diagnostic.Severity + ": " + diagnostic.Message);
         if (_plan.Comparison is { } comparison)
         {
-            _comparisonSummary.Text = $"Replace at: {comparison.Placement} • {comparison.LargerCount:N0} larger • {comparison.UnknownCount:N0} unassessed • {comparison.IncompleteMipCount:N0} incomplete mip chains • {comparison.CarriedCount:N0} carried unchanged\n{comparison.Assessment}\nOnly this installation priority is compared. Keep other settings fixed for the in-game test.";
+            _comparisonSummary.Text = $"Replace at: {comparison.Placement} • {comparison.LargerCount:N0} larger • {comparison.UnknownCount:N0} unassessed • {comparison.IncompleteMipCount:N0} incomplete mip chains\n{comparison.Assessment}\nOnly this installation priority is compared. Keep other settings fixed for the in-game test.";
             _comparisonTable.ItemsSource = comparison.Items.OrderByDescending(i => i.ChangeBytes ?? long.MaxValue).Select(i => new ReferenceRow(i)).ToArray();
             AppendLog(_comparisonSummary.Text);
         }

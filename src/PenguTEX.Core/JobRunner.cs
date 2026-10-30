@@ -7,6 +7,7 @@ namespace PenguTEX.Core;
 public sealed record OutputEntry(string Path, string Source, string SourceHash, string OutputHash,
     int Width, int Height, int DropMips, long Bytes, string Recipe)
 {
+    public string? SourceContainer { get; init; }
     public string Operation { get; init; } = "MipCopy";
     public TextureSemantic? Semantic { get; init; }
     public string Processor { get; init; } = "mip-copy-v1";
@@ -15,6 +16,7 @@ public sealed record OutputManifest(string Product, int Schema, string Version, 
     string PolicyHash, IReadOnlyList<OutputEntry> Files, int Unchanged, int Protected, int Unsupported, int Invalid)
 {
     public ReferenceReport? Comparison { get; init; }
+    public bool OriginalsOnly => Files.All(f => f.Operation is "MipCopy" or "Rebuild");
 }
 public sealed record BuildResult(string Output, int Files, int Reused, long Bytes, double Seconds, OutputManifest Manifest);
 
@@ -76,6 +78,11 @@ public static class JobRunner
     {
         if (plan.Schema != 1 || !plan.CompleteSource || catalog.Diagnostics.Any(d => d.Severity == "Error"))
             throw new InvalidDataException("Resolve source errors before building an output mod.");
+        plan.Policy.Validate();
+        if (plan.Items.Any(i => i.Decision == Decision.ReferenceCopy) || plan.Comparison?.CarriedCount > 0)
+            throw new InvalidDataException("This saved plan contains reference copies. Analyze again using original textures only.");
+        if (catalog.Reference is { } baseline && catalog.Assets.Any(a => Within(a.Container, baseline.Folder)))
+            throw new InvalidDataException("Reference files cannot be used as original texture sources.");
         if (workers is < 1 or > 32) throw new ArgumentException("Workers must be between 1 and 32.");
         ReferenceComparison.VerifyUnchanged(catalog, plan, ct);
         if (new DirectoryInfo(Path.TrimEndingDirectorySeparator(Path.GetFullPath(output))).LinkTarget is not null
@@ -100,8 +107,7 @@ public static class JobRunner
         Directory.CreateDirectory(stage); File.WriteAllText(Path.Combine(stage, ".pengutex-stage"), Product);
         var watch = Stopwatch.StartNew(); string policyHash = JsonFiles.Hash(System.Text.Json.JsonSerializer.Serialize(plan.Policy, JsonFiles.Options));
         var lookup = catalog.Assets.ToDictionary(a => a.Path, StringComparer.Ordinal);
-        var referenceLookup = catalog.Reference?.Assets.ToDictionary(a => a.Path, StringComparer.Ordinal) ?? new();
-        var changed = plan.Items.Where(i => i.Decision is Decision.Reduce or Decision.Rebuild or Decision.ReferenceCopy).ToArray();
+        var changed = plan.Items.Where(i => i.Decision is Decision.Reduce or Decision.Rebuild).ToArray();
         if (changed.Any(i => i.Decision == Decision.Rebuild) && processor is null) throw new InvalidOperationException("This plan requires a CPU texture processor.");
         var entries = new OutputEntry[changed.Length]; int done = 0, reused = 0;
         var stateGate = new object(); var completed = new Dictionary<string, OutputEntry>();
@@ -110,12 +116,11 @@ public static class JobRunner
         Parallel.For(0, changed.Length, new ParallelOptions { MaxDegreeOfParallelism = workers, CancellationToken = ct }, i =>
         {
             var item = changed[i]; ct.ThrowIfCancellationRequested();
-            var sources = item.Decision == Decision.ReferenceCopy ? referenceLookup : lookup;
-            if (!sources.TryGetValue(item.Path, out var asset) || asset.Container != item.Container)
+            if (!lookup.TryGetValue(item.Path, out var asset) || asset.Container != item.Container)
                 throw new IOException("Source winner changed; analyze again: " + item.Path);
             string hash;
             using (var stream = asset.Open()) hash = Hash(stream, ct);
-            string processorIdentity = item.Decision == Decision.Rebuild ? processor!.Identity : item.Decision == Decision.ReferenceCopy ? "reference-copy-v1" : RecipeVersion;
+            string processorIdentity = item.Decision == Decision.Rebuild ? processor!.Identity : RecipeVersion;
             string recipe = JsonFiles.Hash(hash + "|" + processorIdentity + "|" + item.DropMips + "|" + item.Semantic + "|" + policyHash);
             string cached = Path.Combine(cache, recipe + ".dds"), metadata = cached + ".json";
             string dest = Resolve(stage, item.Path); Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
@@ -126,9 +131,11 @@ public static class JobRunner
                 {
                     var candidate = JsonFiles.Read<OutputEntry>(metadata);
                     using var check = File.OpenRead(cached); var info = Dds.Inspect(check).Info;
-                    if (candidate.Recipe == recipe && candidate.SourceHash == hash && info.Width == item.TargetWidth
+                    if (candidate.Recipe == recipe && candidate.SourceHash == hash && candidate.Processor == processorIdentity
+                        && candidate.Operation == (item.Decision == Decision.Rebuild ? "Rebuild" : "MipCopy")
+                        && candidate.Semantic == item.Semantic && info.Width == item.TargetWidth
                         && info.Height == item.TargetHeight && HashFile(cached, ct) == candidate.OutputHash)
-                        entry = candidate with { Path = item.Path, Source = item.Origin };
+                        entry = candidate with { Path = item.Path, Source = item.Origin, SourceContainer = asset.Container };
                 }
                 catch (Exception e) when (e is IOException or InvalidDataException or System.Text.Json.JsonException or NotSupportedException) { }
             }
@@ -149,7 +156,6 @@ public static class JobRunner
                     }
                     using var target = File.Create(dest);
                     if (item.Decision == Decision.Rebuild) processor!.Process(source, target, item, asset.Length, ct);
-                    else if (item.Decision == Decision.ReferenceCopy) Dds.Transfer(source, target, asset.Length, ct);
                     else Dds.Reduce(source, target, item.DropMips, asset.Length, ct, item.Input);
                 }
                 using var verify = File.OpenRead(dest); var info = Dds.Inspect(verify).Info;
@@ -157,7 +163,7 @@ public static class JobRunner
                     || info.Format != item.Input!.Format || info.Dxgi != item.Input.Dxgi || info.Signed != item.Input.Signed || info.Premultiplied != item.Input.Premultiplied)
                     throw new InvalidDataException("Generated texture does not match the plan: " + item.Path);
                 entry = new(item.Path, item.Origin, hash, HashFile(dest, ct), info.Width, info.Height, item.DropMips, verify.Length, recipe)
-                { Operation = item.Decision == Decision.Rebuild ? "Rebuild" : item.Decision == Decision.ReferenceCopy ? "ReferenceCopy" : "MipCopy", Semantic = item.Semantic, Processor = processorIdentity };
+                { SourceContainer = asset.Container, Operation = item.Decision == Decision.Rebuild ? "Rebuild" : "MipCopy", Semantic = item.Semantic, Processor = processorIdentity };
             }
             using (var source = asset.Open())
                 if (Hash(source, ct) != hash) throw new IOException("Source changed during processing: " + item.Path);

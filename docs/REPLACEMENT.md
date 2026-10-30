@@ -43,22 +43,20 @@ landscape and character paths already covered by the reference. It does not bypa
 explicit Protect rules or generated LOD/interface/shader protection. Missing mips,
 unsupported layouts and explicit protections remain visible gaps.
 
-## Carry-forward compatibility mode
+## Original sources only
 
-Carry unresolved reference files unchanged is optional and off by default. It can
-retain a valid previous file when the original is larger, unreadable or missing.
-This makes the candidate self-contained without inventing channel semantics or
-discarding paths found only in the previous output. Each retained file is copied
-byte for byte, source/output hashes are recorded, and it is labeled ReferenceCopy
-in the texture review and ReferenceRetained in the comparison. A separate carried
-count remains visible in the report and manifest. These files are not native
-PenguTEX optimizations; keep their provenance and relevant mod redistribution terms.
+Every replacement is generated from an original winner. Reference DDS headers and
+lengths guide comparison; reference pixels never enter a new output or its cache.
+Missing originals, invalid inputs and missing mip levels remain unresolved until
+they can be recovered or rebuilt from the original data.
 
-This option never imports an unreadable reference file or bypasses a protection
-rule. Such gaps still fail the required-parity gate. Use `--carry-reference true`
-in the CLI. Native coverage can improve later by restoring missing originals or
-adding reviewed rebuild rules with known semantics. Turning carry-forward off
-shows those remaining native gaps again.
+Legacy CarryReference policies and saved ReferenceCopy plans are rejected before
+building. The desktop disables the retired option when loading saved preferences
+and requires a fresh analysis. Existing mixed outputs remain readable for integrity
+checks and safe replacement, but their manifest reports OriginalsOnly as false;
+CLI verify returns exit 3 even when their file hashes pass. They are not eligible
+as originals-only replacements. New manifests record each original container and
+source hash, including on a cache hit.
 
 ## Acceptance
 

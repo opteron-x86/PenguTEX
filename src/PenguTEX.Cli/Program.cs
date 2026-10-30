@@ -30,7 +30,9 @@ public static class Program
         if (args[0] == "verify")
         {
             if (args.Length != 2) throw new ArgumentException("Usage: PenguTEX verify output-folder");
-            Print(JobRunner.Verify(args[1], ct, new ConsoleProgress())); return 0;
+            var verified = JobRunner.Verify(args[1], ct, new ConsoleProgress()); Print(verified);
+            if (!verified.OriginalsOnly) Console.Error.WriteLine("File integrity passed, but this legacy output contains reference copies. Rebuild from original textures only.");
+            return verified.OriginalsOnly ? 0 : 3;
         }
         var options = Parse(args.Skip(1).ToArray());
         string? Get(string name) => options.GetValueOrDefault(name);
@@ -49,6 +51,7 @@ public static class Program
         if (Get("fit-reference") is { } fit) policy = policy with { FitReference = bool.Parse(fit) };
         if (Get("fit-protected") is { } fitProtected) policy = policy with { FitProtectedReference = bool.Parse(fitProtected) };
         if (Get("carry-reference") is { } carry) policy = policy with { CarryReference = bool.Parse(carry) };
+        policy.Validate();
         bool requireParity = bool.Parse(Get("require-parity") ?? "false");
         if (requireParity && source.ReferenceFolder is null) throw new ArgumentException("--require-parity needs --reference.");
         if (args[0] == "build") JobRunner.ValidateOutputDirectory(Get("output") ?? throw new ArgumentException("--output is required."));
@@ -102,7 +105,6 @@ public static class Program
 
         Options: --preset NAME, --policy FILE, --max N, --report FILE, --workers N
         Comparison: --reference PATH, --replace-mod NAME (profile slot when needed),
-                    --fit-reference true, --fit-protected true, --carry-reference true,
                     --require-parity true
         Profile overrides: --game PATH, --mods PATH, --profiles PATH, --overwrite PATH,
                            --wine-prefix PATH, --data PATH, --ini FILE, --exclude-mods 'Mod A|Mod B'

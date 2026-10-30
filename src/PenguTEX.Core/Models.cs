@@ -46,6 +46,7 @@ public sealed record ReferenceCatalog(string Folder, string Placement, int Prior
     public Func<CancellationToken, ReferenceCatalog>? Refresh { get; init; }
 }
 public sealed record JobProgress(string Phase, int Done, int Total, string Path, string Message);
+// ReferenceCopy is a legacy value: readable for reports, rejected by every build.
 public enum Decision { Keep, Reduce, Rebuild, Protected, Unsupported, Invalid, ReferenceCopy }
 public sealed record PlanItem(string Path, string Origin, string Container, string Category, Decision Decision,
     string Reason, DdsInfo? Input, int DropMips, int TargetWidth, int TargetHeight, long OutputPayload)
@@ -57,7 +58,7 @@ public sealed record OptimizationPlan(int Schema, SourceOptions Source, Policy P
     IReadOnlyList<PlanItem> Items, IReadOnlyList<Diagnostic> Diagnostics)
 {
     public ReferenceReport? Comparison { get; init; }
-    public int ChangedCount => Items.Count(x => x.Decision is Decision.Reduce or Decision.Rebuild or Decision.ReferenceCopy);
+    public int ChangedCount => Items.Count(x => x.Decision is Decision.Reduce or Decision.Rebuild);
     public long SavedPayloadBytes => Items.Sum(x => x.SavedBytes);
     public long InputPayloadBytes => Items.Sum(x => x.Input?.PayloadBytes ?? 0);
     public bool CompleteSource => Diagnostics.All(d => d.Severity != "Error");
