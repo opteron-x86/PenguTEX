@@ -18,6 +18,7 @@ public sealed record Policy
     public bool ProtectCharacters { get; init; } = true;
     public bool FitReference { get; init; }
     public bool FitProtectedReference { get; init; }
+    public bool CarryReference { get; init; }
     public PathRule[] Rules { get; init; } = [];
 
     public void Validate()
@@ -92,7 +93,7 @@ public static class Planner
     public static OptimizationPlan Analyze(Catalog catalog, Policy policy, IProgress<JobProgress>? progress = null, CancellationToken ct = default)
     {
         policy.Validate(); var items = new List<PlanItem>();
-        if (policy.FitReference && catalog.Reference is null) throw new ArgumentException("Choose a reference output before enabling reference fitting.");
+        if ((policy.FitReference || policy.CarryReference) && catalog.Reference is null) throw new ArgumentException("Choose a reference output before enabling reference fitting or carry-forward.");
         var references = ReferenceComparison.Read(catalog.Reference, progress, ct);
         foreach (var asset in catalog.Assets.OrderBy(a => a.Path, StringComparer.Ordinal))
         {
@@ -145,6 +146,7 @@ public static class Planner
             if (items.Count % 100 == 0 || items.Count == catalog.Assets.Count)
                 progress?.Report(new("Analyze", items.Count, catalog.Assets.Count, asset.Path, "Inspecting winning textures"));
         }
+        if (policy.CarryReference) ReferenceComparison.CarryForward(catalog, items, references, policy);
         return new(1, catalog.Source, policy, DateTimeOffset.UtcNow, items, catalog.Diagnostics)
         { Comparison = ReferenceComparison.Compare(catalog, items, references) };
     }

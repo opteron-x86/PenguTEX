@@ -12,14 +12,35 @@ public sealed record ReferenceReport(string Folder, string Placement, string Fin
 {
     public int LargerCount => Items.Count(i => i.Status == "Larger");
     public int UnknownCount => Items.Count(i => i.Status is "UnknownReference" or "UnknownSource" or "MissingSource");
+    public int CarriedCount => Items.Count(i => i.Status == "ReferenceRetained");
     public long KnownPayloadChange => Items.Sum(i => i.ChangeBytes ?? 0);
     public bool HasUnresolved => LargerCount != 0 || UnknownCount != 0;
     public string Assessment => HasUnresolved ? "Replacement has larger or unassessed textures. Keep the prior output until reviewed."
-        : "No larger texture payload found in this comparison. In-game appearance and performance still require validation.";
+        : $"No larger dimensions or texture payload found in this comparison. {CarriedCount:N0} reference files carried unchanged; these are not native optimizations. In-game appearance and performance still require validation.";
 }
 
 public static class ReferenceComparison
 {
+    public static void CarryForward(Catalog catalog, List<PlanItem> items, IReadOnlyDictionary<string, ReferenceTexture> references, Policy policy)
+    {
+        var report = Compare(catalog, items, references)!;
+        var referenceAssets = catalog.Reference!.Assets.ToDictionary(a => a.Path, StringComparer.Ordinal);
+        var positions = items.Select((item, index) => (item.Path, index)).ToDictionary(x => x.Path, x => x.index, StringComparer.Ordinal);
+        foreach (var gap in report.Items.Where(i => i.Status is "Larger" or "UnknownSource" or "MissingSource"))
+        {
+            if (references[gap.Path].Info is not { } info) continue;
+            bool exists = positions.TryGetValue(gap.Path, out int position);
+            // Copying an old override must not silently bypass a deliberate protection.
+            var protection = policy.Classify(gap.Path).Protection;
+            bool softFit = policy.FitProtectedReference && protection is "Character and face protection." or "Large surface protection.";
+            if (exists && items[position].Decision == Decision.Protected || protection is not null && !softFit) continue;
+            var asset = referenceAssets[gap.Path];
+            var copy = new PlanItem(gap.Path, "Reference: " + catalog.Reference.Placement, asset.Container, "Reference", Decision.ReferenceCopy,
+                $"Carry previous file byte-for-byte ({gap.Status}): {gap.Reason}", info, 0, info.Width, info.Height, info.PayloadBytes);
+            if (exists) items[position] = copy; else items.Add(copy);
+        }
+        items.Sort((a, b) => StringComparer.Ordinal.Compare(a.Path, b.Path));
+    }
     public static IReadOnlyDictionary<string, ReferenceTexture> Read(ReferenceCatalog? reference,
         IProgress<JobProgress>? progress, CancellationToken ct)
     {
@@ -73,6 +94,8 @@ public static class ReferenceComparison
         {
             if (!items.TryGetValue(old.Path, out var item))
             { differences.Add(new(old.Path, "", "MissingSource", "No original winner found for a path supplied by the previous output; its removal needs review.", old.Info, null, old.Info?.PayloadBytes, null)); continue; }
+            if (item.Decision == Decision.ReferenceCopy)
+            { differences.Add(new(item.Path, item.Origin, "ReferenceRetained", item.Reason, old.Info, old.Info, old.Info?.PayloadBytes, old.Info?.PayloadBytes)); continue; }
             if (assets[item.Path].Priority > reference.Priority)
             { differences.Add(new(item.Path, item.Origin, "HigherPriority", "An unchanged higher-priority source wins over both outputs.", item.Input, item.Input, item.Input?.PayloadBytes, item.Input?.PayloadBytes)); continue; }
             DdsInfo? proposed = item.Input is null ? null : ReferenceComparison.Target(item.Input, item.DropMips, item.Decision == Decision.Rebuild);

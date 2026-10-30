@@ -45,7 +45,8 @@ folder is outside the instance, `--replace-mod 'Previous Output'`. The compariso
 uses that mod's profile priority, even if disabled. `--fit-reference true` selects
 existing mips that fit the reference dimensions and payload while preserving format.
 `--fit-protected true` also permits fitting reference-covered landscape/character
-textures. `--require-parity true` refuses publication if larger or unassessed paths
+textures. Optional `--carry-reference true` retains valid reference files unchanged
+for unresolved paths and reports them separately. `--require-parity true` refuses publication if larger or unassessed paths
 remain. See [replacement checks](REPLACEMENT.md) for assumptions and acceptance.
 
 JSON goes to stdout and progress/errors to stderr. Exit codes: 0 file operation

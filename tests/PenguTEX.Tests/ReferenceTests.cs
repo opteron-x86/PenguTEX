@@ -114,4 +114,40 @@ public sealed class ReferenceTests
         Assert.Throws<ArgumentException>(() => (quality with { FitProtectedReference = true }).Validate());
         using var f = new Fixture(); Assert.Throws<ArgumentException>(() => Planner.Analyze(CatalogLoader.Load(new(Folder: f.Root)), quality with { FitReference = true }));
     }
+    [Theory] [InlineData("missing")] [InlineData("invalid")] [InlineData("missing-mips")]
+    public void CarryForwardIsOptInAndCopiesOnlyValidatedReferenceFilesExactly(string kind)
+    {
+        using var f = new Fixture(); var previous = Fixture.Dds(4, 4); f.File("reference/a.dds", previous);
+        f.Dir("source");
+        if (kind != "missing") f.File("source/a.dds", kind == "invalid" ? [1, 2, 3] : Fixture.Dds(mipCount: 1));
+        var catalog = Catalog(f); var policy = Small with { FitReference = true };
+        Assert.True(Planner.Analyze(catalog, policy).Comparison!.HasUnresolved);
+        var plan = Planner.Analyze(catalog, policy with { CarryReference = true });
+        Assert.Equal(1, plan.Comparison!.CarriedCount); Assert.False(plan.Comparison.HasUnresolved);
+        Assert.Equal(Decision.ReferenceCopy, Assert.Single(plan.Items).Decision);
+        string output = f.Dir("output"), cache = f.Dir("cache"); var result = JobRunner.Build(catalog, plan, output, cache);
+        Assert.Equal(previous, System.IO.File.ReadAllBytes(Path.Combine(output, "textures/a.dds")));
+        Assert.Equal(previous, System.IO.File.ReadAllBytes(Path.Combine(f.Root, "reference/a.dds")));
+        Assert.Equal("ReferenceCopy", Assert.Single(result.Manifest.Files).Operation);
+        Assert.Equal(result.Manifest.Files[0].SourceHash, result.Manifest.Files[0].OutputHash);
+        Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache).Reused);
+    }
+    [Fact] public void CarryForwardKeepsProtectionAndUnreadableReferenceGapsVisible()
+    {
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds()); f.File("reference/a.dds", [1, 2, 3]);
+        f.File("reference/terrain/lod.dds", Fixture.Dds()); f.File("reference/protected.dds", Fixture.Dds());
+        var plan = Planner.Analyze(Catalog(f), Small with { CarryReference = true, Rules = [new("*/protected.dds", Protect: true)] });
+        Assert.Equal(0, plan.Comparison!.CarriedCount); Assert.Equal(3, plan.Comparison.UnknownCount);
+    }
+    [Fact] public void ChangingReferencePixelsDuringCopyNeverPublishesOrPoisonsCache()
+    {
+        using var f = new Fixture(); var original = Fixture.Dds(4, 4); var changed = (byte[])original.Clone(); changed[^1] ^= 33;
+        f.File("reference/a.dds", original); var catalog = Catalog(f);
+        var plan = Planner.Analyze(catalog, Small with { CarryReference = true }); int opens = 0;
+        catalog = catalog with { Reference = catalog.Reference! with { Refresh = null,
+            Assets = [catalog.Reference.Assets[0] with { Open = () => new MemoryStream(++opens <= 2 ? original : changed) }] } };
+        string output = Path.Combine(f.Root, "output"), cache = f.Dir("cache");
+        Assert.ThrowsAny<Exception>(() => JobRunner.Build(catalog, plan, output, cache));
+        Assert.False(Directory.Exists(output)); Assert.Empty(Directory.GetFiles(cache, "*.dds"));
+    }
 }

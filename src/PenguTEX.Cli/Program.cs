@@ -48,6 +48,7 @@ public static class Program
         if (Get("max") is { } max) policy = policy with { Maximum = int.Parse(max), NormalMaximum = int.Parse(max), MaterialMaximum = int.Parse(max), HeightMaximum = int.Parse(max) };
         if (Get("fit-reference") is { } fit) policy = policy with { FitReference = bool.Parse(fit) };
         if (Get("fit-protected") is { } fitProtected) policy = policy with { FitProtectedReference = bool.Parse(fitProtected) };
+        if (Get("carry-reference") is { } carry) policy = policy with { CarryReference = bool.Parse(carry) };
         bool requireParity = bool.Parse(Get("require-parity") ?? "false");
         if (requireParity && source.ReferenceFolder is null) throw new ArgumentException("--require-parity needs --reference.");
         if (args[0] == "build") JobRunner.ValidateOutputDirectory(Get("output") ?? throw new ArgumentException("--output is required."));
@@ -67,7 +68,7 @@ public static class Program
     {
         string[] known = ["folder", "instance", "profile", "game", "mods", "profiles", "overwrite", "wine-prefix",
             "ini", "exclude-mods", "preset", "policy", "max", "report", "output", "cache", "workers", "data",
-            "reference", "replace-mod", "fit-reference", "fit-protected", "require-parity"];
+            "reference", "replace-mod", "fit-reference", "fit-protected", "carry-reference", "require-parity"];
         var options = new Dictionary<string, string>();
         for (int i = 0; i < args.Length; i += 2)
         {
@@ -101,7 +102,8 @@ public static class Program
 
         Options: --preset NAME, --policy FILE, --max N, --report FILE, --workers N
         Comparison: --reference PATH, --replace-mod NAME (profile slot when needed),
-                    --fit-reference true, --fit-protected true, --require-parity true
+                    --fit-reference true, --fit-protected true, --carry-reference true,
+                    --require-parity true
         Profile overrides: --game PATH, --mods PATH, --profiles PATH, --overwrite PATH,
                            --wine-prefix PATH, --data PATH, --ini FILE, --exclude-mods 'Mod A|Mod B'
 
