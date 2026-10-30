@@ -86,6 +86,9 @@ Track execution in [issues](https://github.com/opteron-x86/PenguTEX/issues) and
 - [#36 — Require original-source provenance for replacement outputs](https://github.com/opteron-x86/PenguTEX/issues/36)
 - [#38 — Complete original mip chains without recompressing retained levels](https://github.com/opteron-x86/PenguTEX/issues/38)
 - [#40 — Recover underreported mip counts from complete original payloads](https://github.com/opteron-x86/PenguTEX/issues/40)
+- [#42 — Reject marked optimizer folders as original sources](https://github.com/opteron-x86/PenguTEX/issues/42)
+- [#43 — Derive completion rules from active material bindings](https://github.com/opteron-x86/PenguTEX/issues/43)
+- [#44 — Diagnose nonstandard DDS records and archive member bounds](https://github.com/opteron-x86/PenguTEX/issues/44)
 - [#34 — Require replacement mip chains to retain reference coverage](https://github.com/opteron-x86/PenguTEX/issues/34)
 
 Use original assets for processing and a prior optimizer output as a comparison

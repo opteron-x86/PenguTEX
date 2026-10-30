@@ -47,6 +47,19 @@ public class SourceTests
         Assert.Contains(catalog.Diagnostics, d => d.Severity == "Error" && d.Message.Contains("collision"));
         Assert.False(Planner.Analyze(catalog, new()).CompleteSource);
     }
+    [Theory] [InlineData("pengutex-manifest.json")] [InlineData("VRAMrOutput.tmp")]
+    public void MarkedOptimizerFoldersCanOnlyBeReferences(string marker)
+    {
+        using var f = new Fixture(); f.File("original/textures/a.dds", Fixture.Dds());
+        f.File("previous/textures/a.dds", Fixture.Dds(8, 8)); f.Text("previous/" + marker, "marker");
+        string previous = f.Dir("previous");
+        Assert.Throws<InvalidDataException>(() => CatalogLoader.Load(new(Folder: previous)));
+        var catalog = CatalogLoader.Load(new(Folder: f.Dir("original")) { ReferenceFolder = previous });
+        Assert.Single(catalog.Assets); Assert.Single(catalog.Reference!.Assets);
+        var plan = Planner.Analyze(catalog, new() { FitReference = true });
+        Assert.False(plan.Comparison!.HasUnresolved);
+        Assert.True(JobRunner.Build(catalog, plan, f.Dir("output"), f.Dir("cache")).Manifest.OriginalsOnly);
+    }
     [Fact] public void MissingEnabledModIsExplicit()
     {
         using var f = new Fixture(); var source = Setup(f); f.Text("instance/profiles/Example/modlist.txt", "+Missing\n");
