@@ -40,6 +40,7 @@ public sealed record Catalog(SourceOptions Source, IReadOnlyList<string> Roots,
     IReadOnlyList<Asset> Assets, IReadOnlyList<Diagnostic> Diagnostics)
 {
     public ReferenceCatalog? Reference { get; init; }
+    public MaterialCatalog? Materials { get; init; }
 }
 public sealed record ReferenceCatalog(string Folder, string Placement, int Priority, IReadOnlyList<Asset> Assets)
 {
@@ -53,6 +54,8 @@ public sealed record PlanItem(string Path, string Origin, string Container, stri
 {
     public TextureSemantic? Semantic { get; init; }
     public bool PreserveExistingMips { get; init; }
+    public int AlphaCutoff { get; init; } = 128;
+    public MaterialHint? Material { get; init; }
     public string Operation => Decision == Decision.Rebuild ? PreserveExistingMips ? "CompleteMips" : "Rebuild"
         : Input?.DeclaredMipCount is not null && DropMips == 0 ? "RepairHeader" : "MipCopy";
     public long SavedBytes => Input is null ? 0 : Input.PayloadBytes - OutputPayload;
@@ -61,6 +64,9 @@ public sealed record OptimizationPlan(int Schema, SourceOptions Source, Policy P
     IReadOnlyList<PlanItem> Items, IReadOnlyList<Diagnostic> Diagnostics)
 {
     public ReferenceReport? Comparison { get; init; }
+    public string? MaterialFingerprint { get; init; }
+    public int UnreadableMaterialMeshes { get; init; }
+    public NativeCoverage Coverage => NativeCoverage.Assess(this);
     public int ChangedCount => Items.Count(x => x.Decision is Decision.Reduce or Decision.Rebuild);
     public long SavedPayloadBytes => Items.Sum(x => x.SavedBytes);
     public long InputPayloadBytes => Items.Sum(x => x.Input?.PayloadBytes ?? 0);

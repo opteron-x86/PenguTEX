@@ -1,3 +1,4 @@
+using PenguTEX.Assets.Materials;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Archives;
 using PenguTEX.Assets.Paths;
@@ -8,10 +9,10 @@ namespace PenguTEX.Assets;
 
 public static class CatalogLoader
 {
-    public static Catalog Load(SourceOptions options, IProgress<JobProgress>? progress = null, CancellationToken ct = default)
-        => Load(options, progress, ct, comparisonOnly: false);
+    public static Catalog Load(SourceOptions options, IProgress<JobProgress>? progress = null, CancellationToken ct = default, bool inspectMaterials = false)
+        => Load(options, progress, ct, comparisonOnly: false, inspectMaterials);
 
-    private static Catalog Load(SourceOptions options, IProgress<JobProgress>? progress, CancellationToken ct, bool comparisonOnly)
+    private static Catalog Load(SourceOptions options, IProgress<JobProgress>? progress, CancellationToken ct, bool comparisonOnly, bool inspectMaterials = false)
     {
         if ((options.Folder is null) == (options.Instance is null))
             throw new ArgumentException("Choose exactly one folder or MO2/Fluorine instance.");
@@ -82,23 +83,26 @@ public static class CatalogLoader
                     if (!perRoot.TryAdd(Path.GetFileName(f), f)) diagnostics.Add(new("Error", "Case collision in " + origin + ": " + Path.GetFileName(f)));
                 }
                 foreach (var (key, value) in perRoot) rootFiles[key] = value;
-                string? textureRoot = GamePath.ResolveExisting(root, "textures"); string prefix = "textures/";
-                if (profile is null && textureRoot is null) textureRoot = root;
-                if (textureRoot is null || !Directory.Exists(textureRoot)) continue;
-                var layerFiles = new Dictionary<string, string>(StringComparer.Ordinal);
-                foreach (var file in Walk(textureRoot, skipDirs, diagnostics, ct))
+                foreach (string kind in inspectMaterials ? new[] { "textures", "meshes" } : new[] { "textures" })
                 {
-                    if (!file.EndsWith(".dds", StringComparison.OrdinalIgnoreCase)) continue;
-                    string key = prefix + Path.GetRelativePath(textureRoot, file).Replace('\\', '/').ToLowerInvariant();
-                    GamePath.ValidateRelative(key);
-                    if (!layerFiles.TryAdd(key, file)) diagnostics.Add(new("Error", "Case collision in " + origin + ": " + key));
-                }
-                foreach (var (key, file) in layerFiles)
-                {
-                    var actual = file;
-                    loose[key] = new(key, origin, actual, new FileInfo(actual).Length,
-                        () => new FileStream(actual, FileMode.Open, FileAccess.Read, FileShare.Read, 128 * 1024, FileOptions.SequentialScan))
-                    { Priority = priorities.GetValueOrDefault(root) };
+                    string? contentRoot = GamePath.ResolveExisting(root, kind);
+                    if (profile is null && kind == "textures" && contentRoot is null) contentRoot = root;
+                    if (contentRoot is null || !Directory.Exists(contentRoot)) continue;
+                    var layerFiles = new Dictionary<string, string>(StringComparer.Ordinal);
+                    foreach (var file in Walk(contentRoot, skipDirs, diagnostics, ct))
+                    {
+                        if (!file.EndsWith(kind == "textures" ? ".dds" : ".nif", StringComparison.OrdinalIgnoreCase)) continue;
+                        string key = kind + "/" + Path.GetRelativePath(contentRoot, file).Replace('\\', '/').ToLowerInvariant();
+                        GamePath.ValidateRelative(key);
+                        if (!layerFiles.TryAdd(key, file)) diagnostics.Add(new("Error", "Case collision in " + origin + ": " + key));
+                    }
+                    foreach (var (key, file) in layerFiles)
+                    {
+                        var actual = file;
+                        loose[key] = new(key, origin, actual, new FileInfo(actual).Length,
+                            () => new FileStream(actual, FileMode.Open, FileAccess.Read, FileShare.Read, 128 * 1024, FileOptions.SequentialScan))
+                        { Priority = priorities.GetValueOrDefault(root) };
+                    }
                 }
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
@@ -124,7 +128,8 @@ public static class CatalogLoader
                     foreach (var entry in reader.Files)
                     {
                         ct.ThrowIfCancellationRequested(); var path = entry.Path.Replace('\\', '/').ToLowerInvariant();
-                        if (!path.StartsWith("textures/") || !path.EndsWith(".dds")) continue;
+                        if (!(path.StartsWith("textures/") && path.EndsWith(".dds"))
+                            && !(inspectMaterials && path.StartsWith("meshes/") && path.EndsWith(".nif"))) continue;
                         GamePath.ValidateRelative(path); var file = entry;
                         if (!members.TryAdd(path, new(path, Path.GetFileName(archive), archive, file.Size, () => file.AsStream()) { Priority = -1 }))
                             throw new InvalidDataException("Duplicate archive member: " + path);
@@ -153,7 +158,15 @@ public static class CatalogLoader
             };
             roots.Add(referenceRoot); // Protect comparison inputs from output/cache overlap too.
         }
-        return new(options, roots, assets.Values.OrderBy(a => a.Path, StringComparer.Ordinal).ToArray(), diagnostics) { Reference = reference };
+        MaterialCatalog? materials = null;
+        if (inspectMaterials)
+        {
+            materials = MaterialReader.Read(assets.Values.Where(a => a.Path.StartsWith("meshes/")).ToArray(), diagnostics, progress, ct);
+            var freshOptions = options with { ReferenceFolder = null, ReplaceMod = null };
+            materials = materials with { RefreshFingerprint = token => Load(freshOptions, progress, token, false, true).Materials!.Fingerprint };
+        }
+        return new(options, roots, assets.Values.Where(a => a.Path.StartsWith("textures/")).OrderBy(a => a.Path, StringComparer.Ordinal).ToArray(), diagnostics)
+        { Reference = reference, Materials = materials };
     }
 
     private static bool IsOptimizerOutput(string folder) => GamePath.ResolveExisting(folder, JobRunner.ManifestName) is not null

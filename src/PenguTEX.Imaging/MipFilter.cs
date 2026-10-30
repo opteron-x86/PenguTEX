@@ -4,16 +4,16 @@ namespace PenguTEX.Imaging;
 
 public static class MipFilter
 {
-    public static double Coverage(PixelImage image) => Enumerable.Range(0, image.Width * image.Height).Count(i => image.Rgba[i * 4 + 3] >= 128) / (double)(image.Width * image.Height);
+    public static double Coverage(PixelImage image, int alphaCutoff = 128) => Enumerable.Range(0, image.Width * image.Height).Count(i => image.Rgba[i * 4 + 3] >= alphaCutoff) / (double)(image.Width * image.Height);
     private static double Linear(double value) => value <= .04045 ? value / 12.92 : Math.Pow((value + .055) / 1.055, 2.4);
     private static double Srgb(double value) => value <= .0031308 ? value * 12.92 : 1.055 * Math.Pow(value, 1 / 2.4) - .055;
     private static byte Byte(double value) => (byte)Math.Clamp((int)Math.Round(value * 255), 0, 255);
 
-    public static PixelImage Downsample(PixelImage input, TextureSemantic semantic, double opacityCoverage = 0, CancellationToken ct = default)
+    public static PixelImage Downsample(PixelImage input, TextureSemantic semantic, double opacityCoverage = 0, CancellationToken ct = default, int alphaCutoff = 128)
     {
         int width = Math.Max(1, input.Width / 2), height = Math.Max(1, input.Height / 2); byte[] result = new byte[width * height * 4];
-        bool color = semantic is TextureSemantic.SrgbColor or TextureSemantic.OpacitySrgb;
-        bool opacity = semantic == TextureSemantic.OpacitySrgb;
+        bool color = semantic is TextureSemantic.SrgbColor or TextureSemantic.OpacitySrgb or TextureSemantic.OpacityBlendSrgb;
+        bool opacity = semantic is TextureSemantic.OpacitySrgb or TextureSemantic.OpacityBlendSrgb;
         bool normal = semantic is TextureSemantic.NormalRgb or TextureSemantic.NormalRg;
         // Area-weighted boxes include the final row/column of odd-sized textures.
         for (int y = 0; y < height; y++)
@@ -53,17 +53,17 @@ public static class MipFilter
             }
         }
         var output = new PixelImage(result, width, height);
-        if (opacity) PreserveCoverage(output, opacityCoverage);
+        if (semantic == TextureSemantic.OpacitySrgb) PreserveCoverage(output, opacityCoverage, alphaCutoff);
         return output;
     }
-    private static void PreserveCoverage(PixelImage image, double target)
+    private static void PreserveCoverage(PixelImage image, double target, int alphaCutoff)
     {
         // Quantized alpha can only approximate coverage, especially in the tiny tail mips.
         double lo = 0, hi = 16, best = 1, bestError = double.PositiveInfinity;
         for (int n = 0; n < 18; n++)
         {
             double scale = n == 0 ? 1 : (lo + hi) / 2; int covered = 0;
-            for (int at = 3; at < image.Rgba.Length; at += 4) if (Byte(image.Rgba[at] / 255d * scale) >= 128) covered++;
+            for (int at = 3; at < image.Rgba.Length; at += 4) if (Byte(image.Rgba[at] / 255d * scale) >= alphaCutoff) covered++;
             double actual = covered / (double)(image.Width * image.Height), error = Math.Abs(actual - target);
             if (error < bestError) { best = scale; bestError = error; }
             if (actual < target) lo = scale; else hi = scale;

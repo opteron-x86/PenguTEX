@@ -33,3 +33,5 @@ records the original repository, revision, file and blob used to retain that tex
 Package-declared revisions are used where available; packages without revision
 metadata use a recorded upstream revision. The distribution inventory also records
 the package repository/revision rather than silently leaving missing metadata blank.
+
+The NIF block-table reader and material format sources are recorded in [MATERIALS.md](MATERIALS.md).

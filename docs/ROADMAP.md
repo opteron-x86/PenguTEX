@@ -11,7 +11,7 @@ acceptance remain separate from implementation. No unmeasured performance claims
 | M3 — Material-aware CPU processing | Explicit re-encoding, color/data handling, mip repair | Format/channel-preserving fixtures and independently decoded results |
 | M4 — Integration and distribution | Portable/AppImage, distro compatibility, manifests, PenguLOD workflow | Extracted packages run; reproducible benchmarks; source/licenses/checksums |
 | M5 — Measured compatibility | Game visuals/frame times and optional physical GPU acceleration | Repeatable shader/hardware evidence; measured benefit before automatic GPU selection |
-| M6 — Optimizer replacement parity | Baseline comparison, explicit limits, broader DDS processing and bounded rebuilding | No unexplained replacement growth; independent file checks; game acceptance tracked under M5 |
+| M6 — Native source coverage | Fresh source coverage, material-aware completion, bounded DDS recovery and optional comparison | Enabled originals only; explainable exceptions; independent file checks; game acceptance tracked under M5 |
 
 M1–M2 form the first useful alpha. M3 is opt-in; format-preserving mip reduction stays
 the default. M4 makes the application distributable. M5 remains open until evidence
@@ -36,7 +36,7 @@ The [game acceptance protocol](GAME-VALIDATION.md) defines the evidence required
 13. Repeatable in-game validation across legacy, complex and PBR materials.
 14. Optional GPU backend and physical-device quality/performance acceptance.
 
-Full NIF-driven inference, automated VRAM-budget fitting, runtime hooks, archive
+Runtime-wide material inference, automated VRAM-budget fitting, runtime hooks, archive
 repacking, Windows distribution and other games are later candidates, not hidden
 first-alpha requirements. Every scope expansion needs an issue and acceptance checks.
 
@@ -98,3 +98,5 @@ unsupported formats. Keep all comparisons and detailed source reports local unle
 the user explicitly chooses to share them. File verification and game validation
 are distinct acceptance stages; preserve the previous playable setup until both pass.
 
+
+Fresh-run behavior and bounded material inference are specified in [MATERIALS.md](MATERIALS.md).

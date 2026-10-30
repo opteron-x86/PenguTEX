@@ -2,9 +2,9 @@ using System.Text.RegularExpressions;
 
 namespace PenguTEX.Core;
 
-public enum TextureSemantic { SrgbColor, LinearColor, LinearData, NormalRgb, NormalRg, OpacitySrgb }
+public enum TextureSemantic { SrgbColor, LinearColor, LinearData, NormalRgb, NormalRg, OpacitySrgb, OpacityBlendSrgb }
 public sealed record PathRule(string Pattern, int? Maximum = null, bool Protect = false,
-    bool RebuildMips = false, TextureSemantic? Semantic = null, bool CompleteMipChain = false);
+    bool RebuildMips = false, TextureSemantic? Semantic = null, bool CompleteMipChain = false, int AlphaCutoff = 128);
 public sealed record Policy
 {
     public const long MaximumRebuildPixels = 8192L * 8192;
@@ -18,6 +18,7 @@ public sealed record Policy
     public bool ProtectCharacters { get; init; } = true;
     public bool FitReference { get; init; }
     public bool FitProtectedReference { get; init; }
+    public bool CompleteKnownMaterials { get; init; }
     public bool RecoverMipCounts { get; init; }
     // Retained only to reject legacy policies explicitly, rather than ignore their intent.
     public bool CarryReference { get; init; }
@@ -33,19 +34,20 @@ public sealed record Policy
                 throw new ArgumentException("Maximum dimensions must be powers of two from 4 to 16384.");
         foreach (var rule in Rules)
         {
+            if (rule.AlphaCutoff is < 0 or > 256) throw new ArgumentException("AlphaCutoff must be from 0 to 256.");
             if (string.IsNullOrWhiteSpace(rule.Pattern)) throw new ArgumentException("Empty path rule.");
             if (rule.RebuildMips && rule.CompleteMipChain) throw new ArgumentException("Choose RebuildMips or CompleteMipChain, not both in one rule.");
             if ((rule.RebuildMips || rule.CompleteMipChain) && (rule.Semantic is null || !Enum.IsDefined(rule.Semantic.Value)))
                 throw new ArgumentException("Mip rebuilding/completion requires an explicit, supported Semantic in each processing rule.");
         }
     }
-    public static Policy Preset(string name) => name.ToLowerInvariant() switch
+    public static Policy Preset(string name) => (name.ToLowerInvariant() switch
     {
-        "quality" => new() { Name = "Quality", Maximum = 2048, NormalMaximum = 1024, MaterialMaximum = 1024, HeightMaximum = 1024 },
-        "balanced" => new(),
-        "compact" => new() { Name = "Compact", Maximum = 1024, NormalMaximum = 512, MaterialMaximum = 512, HeightMaximum = 256 },
+        "quality" => new Policy() { Name = "Quality", Maximum = 2048, NormalMaximum = 1024, MaterialMaximum = 1024, HeightMaximum = 1024 },
+        "balanced" => new Policy(),
+        "compact" => new Policy() { Name = "Compact", Maximum = 1024, NormalMaximum = 512, MaterialMaximum = 512, HeightMaximum = 256 },
         _ => throw new ArgumentException("Preset must be Quality, Balanced or Compact."),
-    };
+    }) with { ProtectLargeSurfaces = false, ProtectCharacters = false, CompleteKnownMaterials = true, RecoverMipCounts = true };
     public static bool Matches(string path, string pattern) => Regex.IsMatch(path.Replace('\\', '/'),
         "^" + Regex.Escape(pattern.Replace('\\', '/')).Replace("\\*", ".*").Replace("\\?", ".") + "$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
@@ -58,7 +60,7 @@ public sealed record Policy
         if (info.Signed || info.Premultiplied) return "CPU rebuilding does not support signed channels or premultiplied alpha; use existing-mip copying.";
         int level = preserveExistingMips ? info.MipCount - 1 : 0;
         if ((long)Math.Max(1, info.Width >> level) * Math.Max(1, info.Height >> level) > MaximumRebuildPixels) return "CPU rebuilding is limited to 64 million source pixels, with one decoded texture at a time; use existing-mip copying for larger inputs.";
-        if (info.Srgb && semantic is not (TextureSemantic.SrgbColor or TextureSemantic.OpacitySrgb)) return "sRGB headers require an sRGB color semantic; changing the format is not supported.";
+        if (info.Srgb && semantic is not (TextureSemantic.SrgbColor or TextureSemantic.OpacitySrgb or TextureSemantic.OpacityBlendSrgb)) return "sRGB headers require an sRGB color semantic; changing the format is not supported.";
         bool rawRg = !info.IsBlockCompressed && info.RedMask != 0 && info.GreenMask != 0 && info.BlueMask == 0 && !info.Luminance;
         if (semantic == TextureSemantic.NormalRg && info.Format != "BC5" && !rawRg) return "NormalRg requires unsigned BC5 or raw RG channels; swizzled normal layouts are not inferred.";
         if (semantic != TextureSemantic.LinearData && semantic != TextureSemantic.NormalRg && info.Format is "BC4" or "BC5") return "Single/two-channel textures require LinearData or BC5 NormalRg semantics.";
@@ -66,7 +68,7 @@ public sealed record Policy
         {
             bool rgb = info.RedMask != 0 && info.GreenMask != 0 && info.BlueMask != 0;
             if (!rgb && (!info.Luminance || semantic == TextureSemantic.NormalRgb)) return "This raw channel layout requires LinearData or compatible NormalRg semantics.";
-            if (semantic == TextureSemantic.OpacitySrgb && info.AlphaMask == 0) return "OpacitySrgb requires a stored alpha channel.";
+            if (semantic is (TextureSemantic.OpacitySrgb or TextureSemantic.OpacityBlendSrgb) && info.AlphaMask == 0) return "OpacitySrgb requires a stored alpha channel.";
         }
         return null;
     }
@@ -97,7 +99,9 @@ public static class Planner
 {
     public static OptimizationPlan Analyze(Catalog catalog, Policy policy, IProgress<JobProgress>? progress = null, CancellationToken ct = default)
     {
-        policy.Validate(); var items = new List<PlanItem>();
+        policy.Validate();
+        if (policy.CompleteKnownMaterials && catalog.Materials is null) throw new ArgumentException("Material-aware analysis requires a catalog with mesh bindings enabled.");
+        var items = new List<PlanItem>();
         if (policy.FitReference && catalog.Reference is null) throw new ArgumentException("Choose a reference output before enabling reference fitting.");
         var references = ReferenceComparison.Read(catalog.Reference, progress, ct);
         foreach (var asset in catalog.Assets.OrderBy(a => a.Path, StringComparer.Ordinal))
@@ -111,11 +115,21 @@ public static class Planner
             {
                 using var stream = asset.Open(); var (info, _) = Dds.Inspect(stream, asset.Length,
                     policy.RecoverMipCounts && !higherPriority && protection is null);
+                MaterialHint? hint = null;
+                int fullSourceMips = 1 + (int)Math.Log2(Math.Max(info.Width, info.Height));
+                var rebuild = policy.ProcessingRule(asset.Path);
+                if (policy.CompleteKnownMaterials && info.MipCount < fullSourceMips)
+                {
+                    catalog.Materials!.Textures.TryGetValue(asset.Path, out hint);
+                    hint ??= new("Unbound", MaterialRole.Unknown, 128, 0, []);
+                    if (rebuild is not ({ RebuildMips: true } or { CompleteMipChain: true }) && hint.Semantic(info) is { } inferred)
+                        rebuild = new(asset.Path, CompleteMipChain: true, Semantic: inferred, AlphaCutoff: hint.AlphaCutoff);
+                }
                 int drop = info.DropFor(maximum); int width = Math.Max(1, info.Width >> drop), height = Math.Max(1, info.Height >> drop);
                 if (policy.FitReference && reference?.Info is { } previous)
                     while (drop < info.MipCount - 1 && !ReferenceComparison.Fits(info, drop, false, previous)) drop++;
                 width = Math.Max(1, info.Width >> drop); height = Math.Max(1, info.Height >> drop);
-                Decision decision; string reason; var rebuild = policy.ProcessingRule(asset.Path);
+                Decision decision; string reason;
                 if (higherPriority) { decision = Decision.Keep; reason = "Source is above the selected output priority and will remain unchanged."; drop = 0; }
                 else if (protection is not null) { decision = Decision.Protected; reason = protection; drop = 0; }
                 else if (rebuild is { RebuildMips: true } or { CompleteMipChain: true })
@@ -140,7 +154,7 @@ public static class Planner
                         items.Add(new(asset.Path, asset.Origin, asset.Container, category, Decision.Rebuild,
                             complete ? $"Complete original mip chain; retain available levels byte-for-byte and generate missing levels with {rebuild.Semantic}; original {info.Format} format retained."
                                 : $"Explicit CPU rebuild from the top mip; {rebuild.Semantic}; original {info.Format} format retained.", info, drop, width, height,
-                            Enumerable.Range(0, target.MipCount).Sum(target.MipBytes)) { Semantic = rebuild.Semantic, PreserveExistingMips = complete });
+                            Enumerable.Range(0, target.MipCount).Sum(target.MipBytes)) { Semantic = rebuild.Semantic, PreserveExistingMips = complete, AlphaCutoff = rebuild.AlphaCutoff, Material = hint });
                         if (items.Count % 100 == 0 || items.Count == catalog.Assets.Count)
                             progress?.Report(new("Analyze", items.Count, catalog.Assets.Count, asset.Path, "Planning explicit mip rebuilds"));
                         continue;
@@ -151,13 +165,15 @@ public static class Planner
                 else if (Math.Max(width, height) > maximum) { decision = Decision.Keep; reason = "No existing mip reaches the selected maximum; use explicit mip rebuilding when available."; drop = 0; }
                 else if (drop > 0) { decision = Decision.Reduce; reason = $"Retain existing mip {drop} and its smaller levels; {category.ToLowerInvariant()} cap {maximum}." + (policy.FitReference && reference?.Info is not null ? " Also fits reference dimensions and payload without changing format." : ""); }
                 else { decision = Decision.Keep; reason = "Already within the selected maximum."; }
+                if (hint is not null && (hint.Status != "Resolved" || hint.Semantic(info) is null))
+                    reason += $" Mip completion needs a reviewed rule: {hint.Status}.";
                 if (info.DeclaredMipCount is { } declared)
                 {
                     if (decision == Decision.Keep) decision = Decision.Reduce;
                     reason = $"Recovered source mip count {declared} → {info.MipCount} from the exact full-chain payload length. " + reason;
                 }
                 items.Add(new(asset.Path, asset.Origin, asset.Container, category, decision, reason, info, drop,
-                    Math.Max(1, info.Width >> drop), Math.Max(1, info.Height >> drop), info.PayloadBytes - info.RemovedBytes(drop)));
+                    Math.Max(1, info.Width >> drop), Math.Max(1, info.Height >> drop), info.PayloadBytes - info.RemovedBytes(drop)) { Material = hint });
             }
             catch (NotSupportedException e) { items.Add(new(asset.Path, asset.Origin, asset.Container, category, Decision.Unsupported, e.Message, null, 0, 0, 0, 0)); }
             catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or OverflowException or ArgumentException)
@@ -166,6 +182,6 @@ public static class Planner
                 progress?.Report(new("Analyze", items.Count, catalog.Assets.Count, asset.Path, "Inspecting winning textures"));
         }
         return new(1, catalog.Source, policy, DateTimeOffset.UtcNow, items, catalog.Diagnostics)
-        { Comparison = ReferenceComparison.Compare(catalog, items, references) };
+        { Comparison = ReferenceComparison.Compare(catalog, items, references), MaterialFingerprint = catalog.Materials?.Fingerprint, UnreadableMaterialMeshes = catalog.Materials?.UnreadableMeshes ?? 0 };
     }
 }

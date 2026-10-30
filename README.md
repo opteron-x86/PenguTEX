@@ -36,3 +36,5 @@ the [desktop guide](docs/DESKTOP.md), [design](docs/ARCHITECTURE.md), [roadmap](
 
 GPL-3.0-only. See [LICENSE](LICENSE) and [provenance](docs/PROVENANCE.md).
 Generated textures retain the rights of the installed game and mod assets.
+
+Fresh runs use enabled original sources without a previous optimizer dependency. See [material discovery and coverage](docs/MATERIALS.md) for supported bindings, review and explicit exceptions.
