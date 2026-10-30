@@ -40,7 +40,16 @@ Build reports generation, per-texture verification, publication and previous-out
 cleanup separately. Each phase has its own count; generation reaching its total
 does not mean publication is finished. Standalone `verify` also reports progress.
 
-JSON goes to stdout and progress/errors to stderr. Exit codes: 0 success, 1 failure,
-2 incomplete source analysis, 130 cancellation. Unsupported and invalid textures
+For an optimizer replacement, use `--reference /mods/PreviousOutput` and, when the
+folder is outside the instance, `--replace-mod 'Previous Output'`. The comparison
+uses that mod's profile priority, even if disabled. `--fit-reference true` selects
+existing mips that fit the reference dimensions and payload while preserving format.
+`--fit-protected true` also permits fitting reference-covered landscape/character
+textures. `--require-parity true` refuses publication if larger or unassessed paths
+remain. See [replacement checks](REPLACEMENT.md) for assumptions and acceptance.
+
+JSON goes to stdout and progress/errors to stderr. Exit codes: 0 file operation
+succeeded, 1 failure, 2 incomplete source analysis, 3 required reference parity not
+met, 130 cancellation. Unsupported and invalid textures
 remain unchanged in their original mods and are counted explicitly. Missing or
 ambiguous source layers prevent building. Payload estimates are not measured VRAM.

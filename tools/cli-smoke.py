@@ -49,6 +49,15 @@ with tempfile.TemporaryDirectory(prefix="pengutex-cli-") as temporary:
     assert run("build", "--folder", root / "input", "--max", 8,
                "--output", root / "output", "--cache", root / "cache", progress=("Cleanup 0/1:", "Cleanup 1/1:"))["Reused"] == 1
     assert hashlib.sha256((source / "example.dds").read_bytes()).digest() == hashlib.sha256(original).digest()
+    comparison = run("analyze", "--folder", root / "input", "--max", 16, "--reference", root / "output", "--require-parity", "true", expected=3)
+    assert comparison["Comparison"]["LargerCount"] == 1
+    blocked = run("build", "--folder", root / "input", "--max", 16, "--reference", root / "output",
+                  "--require-parity", "true", "--output", root / "blocked", "--cache", root / "cache", expected=3)
+    assert blocked["HasUnresolved"] and not (root / "blocked").exists()
+    candidate = run("build", "--folder", root / "input", "--max", 16, "--reference", root / "output",
+                    "--fit-reference", "true", "--require-parity", "true", "--output", root / "candidate", "--cache", root / "cache")
+    assert not candidate["Manifest"]["Comparison"]["HasUnresolved"]
+    assert target.read_bytes() == (root / "candidate" / "textures" / "armor" / "example.dds").read_bytes()
     target.write_bytes(target.read_bytes()[:-1])
     run("verify", root / "output", expected=1)
     (root / "foreign").mkdir()

@@ -26,11 +26,25 @@ public static class JsonFiles
 
 public sealed record SourceOptions(string? Folder = null, string? Instance = null, string? Profile = null,
     string? Game = null, string? Mods = null, string? Profiles = null, string? Overwrite = null,
-    string? WinePrefix = null, string? Ini = null, string[]? ExcludeMods = null, string? Data = null);
+    string? WinePrefix = null, string? Ini = null, string[]? ExcludeMods = null, string? Data = null)
+{
+    public string? ReferenceFolder { get; init; }
+    public string? ReplaceMod { get; init; }
+}
 public sealed record Diagnostic(string Severity, string Message);
-public sealed record Asset(string Path, string Origin, string Container, long Length, Func<Stream> Open);
+public sealed record Asset(string Path, string Origin, string Container, long Length, Func<Stream> Open)
+{
+    public int Priority { get; init; }
+}
 public sealed record Catalog(SourceOptions Source, IReadOnlyList<string> Roots,
-    IReadOnlyList<Asset> Assets, IReadOnlyList<Diagnostic> Diagnostics);
+    IReadOnlyList<Asset> Assets, IReadOnlyList<Diagnostic> Diagnostics)
+{
+    public ReferenceCatalog? Reference { get; init; }
+}
+public sealed record ReferenceCatalog(string Folder, string Placement, int Priority, IReadOnlyList<Asset> Assets)
+{
+    public Func<CancellationToken, ReferenceCatalog>? Refresh { get; init; }
+}
 public sealed record JobProgress(string Phase, int Done, int Total, string Path, string Message);
 public enum Decision { Keep, Reduce, Rebuild, Protected, Unsupported, Invalid }
 public sealed record PlanItem(string Path, string Origin, string Container, string Category, Decision Decision,
@@ -42,6 +56,7 @@ public sealed record PlanItem(string Path, string Origin, string Container, stri
 public sealed record OptimizationPlan(int Schema, SourceOptions Source, Policy Policy, DateTimeOffset Created,
     IReadOnlyList<PlanItem> Items, IReadOnlyList<Diagnostic> Diagnostics)
 {
+    public ReferenceReport? Comparison { get; init; }
     public int ChangedCount => Items.Count(x => x.Decision is Decision.Reduce or Decision.Rebuild);
     public long SavedPayloadBytes => Items.Sum(x => x.SavedBytes);
     public long InputPayloadBytes => Items.Sum(x => x.Input?.PayloadBytes ?? 0);

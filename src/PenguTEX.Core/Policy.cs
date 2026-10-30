@@ -10,16 +10,20 @@ public sealed record Policy
     public int Schema { get; init; } = 1;
     public string Name { get; init; } = "Balanced";
     public int Maximum { get; init; } = 2048;
-    public int NormalMaximum { get; init; } = 2048;
-    public int MaterialMaximum { get; init; } = 1024;
+    public int NormalMaximum { get; init; } = 1024;
+    public int MaterialMaximum { get; init; } = 512;
+    public int? HeightMaximum { get; init; }
     public bool ProtectLargeSurfaces { get; init; } = true;
     public bool ProtectCharacters { get; init; } = true;
+    public bool FitReference { get; init; }
+    public bool FitProtectedReference { get; init; }
     public PathRule[] Rules { get; init; } = [];
 
     public void Validate()
     {
         if (Schema != 1) throw new InvalidDataException("Unsupported policy schema.");
-        foreach (int value in new[] { Maximum, NormalMaximum, MaterialMaximum }.Concat(Rules.Where(r => r.Maximum.HasValue).Select(r => r.Maximum!.Value)))
+        if (FitProtectedReference && !FitReference) throw new ArgumentException("Protected reference fitting requires FitReference.");
+        foreach (int value in new[] { Maximum, NormalMaximum, MaterialMaximum, HeightMaximum ?? MaterialMaximum }.Concat(Rules.Where(r => r.Maximum.HasValue).Select(r => r.Maximum!.Value)))
             if (value < 4 || value > 16384 || (value & (value - 1)) != 0)
                 throw new ArgumentException("Maximum dimensions must be powers of two from 4 to 16384.");
         foreach (var rule in Rules)
@@ -31,9 +35,9 @@ public sealed record Policy
     }
     public static Policy Preset(string name) => name.ToLowerInvariant() switch
     {
-        "quality" => new() { Name = "Quality", Maximum = 4096, NormalMaximum = 2048, MaterialMaximum = 2048 },
+        "quality" => new() { Name = "Quality", Maximum = 2048, NormalMaximum = 1024, MaterialMaximum = 1024, HeightMaximum = 1024 },
         "balanced" => new(),
-        "compact" => new() { Name = "Compact", Maximum = 1024, NormalMaximum = 1024, MaterialMaximum = 512 },
+        "compact" => new() { Name = "Compact", Maximum = 1024, NormalMaximum = 512, MaterialMaximum = 512, HeightMaximum = 256 },
         _ => throw new ArgumentException("Preset must be Quality, Balanced or Compact."),
     };
     public static bool Matches(string path, string pattern) => Regex.IsMatch(path.Replace('\\', '/'),
@@ -58,8 +62,9 @@ public sealed record Policy
     {
         string p = path.Replace('\\', '/').ToLowerInvariant(), file = System.IO.Path.GetFileNameWithoutExtension(p);
         string category = file.EndsWith("_n") || file.EndsWith("_msn") || file.EndsWith("_normal") ? "Normal"
-            : file.EndsWith("_p") || file.EndsWith("_m") || file.EndsWith("_rmaos") || file.EndsWith("_s") ? "Material" : "Color";
-        int maximum = category == "Normal" ? NormalMaximum : category == "Material" ? MaterialMaximum : Maximum;
+            : file.EndsWith("_p") ? "Height"
+            : file.EndsWith("_m") || file.EndsWith("_rmaos") || file.EndsWith("_s") || file.EndsWith("_g") || file.EndsWith("_em") ? "Material" : "Color";
+        int maximum = category == "Normal" ? NormalMaximum : category == "Height" ? HeightMaximum ?? MaterialMaximum : category == "Material" ? MaterialMaximum : Maximum;
         string? protect = null;
         if (p.StartsWith("textures/interface/") || p.Contains("/terrain/") || p.Contains("/lod/") || p.Contains("/dyndolod/") || p.Contains("/lodgen/") || p.Contains("/shaders/"))
             protect = "Generated LOD, interface or shader resource.";
@@ -80,15 +85,25 @@ public static class Planner
     public static OptimizationPlan Analyze(Catalog catalog, Policy policy, IProgress<JobProgress>? progress = null, CancellationToken ct = default)
     {
         policy.Validate(); var items = new List<PlanItem>();
+        if (policy.FitReference && catalog.Reference is null) throw new ArgumentException("Choose a reference output before enabling reference fitting.");
+        var references = ReferenceComparison.Read(catalog.Reference, progress, ct);
         foreach (var asset in catalog.Assets.OrderBy(a => a.Path, StringComparer.Ordinal))
         {
             ct.ThrowIfCancellationRequested(); var (category, maximum, protection) = policy.Classify(asset.Path);
+            references.TryGetValue(asset.Path, out var reference);
+            bool higherPriority = catalog.Reference is { } placement && asset.Priority > placement.Priority;
+            if (policy.FitProtectedReference && reference?.Info is not null && protection is "Character and face protection." or "Large surface protection.")
+                protection = null;
             try
             {
                 using var stream = asset.Open(); var (info, _) = Dds.Inspect(stream, asset.Length);
                 int drop = info.DropFor(maximum); int width = Math.Max(1, info.Width >> drop), height = Math.Max(1, info.Height >> drop);
+                if (policy.FitReference && reference?.Info is { } previous)
+                    while (drop < info.MipCount - 1 && !ReferenceComparison.Fits(info, drop, false, previous)) drop++;
+                width = Math.Max(1, info.Width >> drop); height = Math.Max(1, info.Height >> drop);
                 Decision decision; string reason; var rebuild = policy.ProcessingRule(asset.Path);
-                if (protection is not null) { decision = Decision.Protected; reason = protection; drop = 0; }
+                if (higherPriority) { decision = Decision.Keep; reason = "Source is above the selected output priority and will remain unchanged."; drop = 0; }
+                else if (protection is not null) { decision = Decision.Protected; reason = protection; drop = 0; }
                 else if (rebuild?.RebuildMips == true)
                 {
                     if (Policy.RebuildRestriction(info, rebuild.Semantic!.Value) is { } restriction)
@@ -97,6 +112,8 @@ public static class Planner
                     {
                         drop = 0;
                         while (Math.Max(Math.Max(1, info.Width >> drop), Math.Max(1, info.Height >> drop)) > maximum) drop++;
+                        if (policy.FitReference && reference?.Info is { } previousRebuild)
+                            while (Math.Max(info.Width >> drop, info.Height >> drop) > 1 && !ReferenceComparison.Fits(info, drop, true, previousRebuild)) drop++;
                         width = Math.Max(1, info.Width >> drop); height = Math.Max(1, info.Height >> drop);
                         var target = info with { Width = width, Height = height, MipCount = 1 + (int)Math.Log2(Math.Max(width, height)) };
                         items.Add(new(asset.Path, asset.Origin, asset.Container, category, Decision.Rebuild,
@@ -107,8 +124,10 @@ public static class Planner
                         continue;
                     }
                 }
+                else if (policy.FitReference && reference?.Info is { } previousCopy && !ReferenceComparison.Fits(info, drop, false, previousCopy))
+                { decision = Decision.Keep; reason = "No existing mip fits the reference dimensions and payload; an explicit rebuild or a reviewed format change is needed."; drop = 0; }
                 else if (Math.Max(width, height) > maximum) { decision = Decision.Keep; reason = "No existing mip reaches the selected maximum; use explicit mip rebuilding when available."; drop = 0; }
-                else if (drop > 0) { decision = Decision.Reduce; reason = $"Retain existing mip {drop} and its smaller levels; {category.ToLowerInvariant()} cap {maximum}."; }
+                else if (drop > 0) { decision = Decision.Reduce; reason = $"Retain existing mip {drop} and its smaller levels; {category.ToLowerInvariant()} cap {maximum}." + (policy.FitReference && reference?.Info is not null ? " Also fits reference dimensions and payload without changing format." : ""); }
                 else { decision = Decision.Keep; reason = "Already within the selected maximum."; }
                 items.Add(new(asset.Path, asset.Origin, asset.Container, category, decision, reason, info, drop,
                     Math.Max(1, info.Width >> drop), Math.Max(1, info.Height >> drop), info.PayloadBytes - info.RemovedBytes(drop)));
@@ -119,6 +138,7 @@ public static class Planner
             if (items.Count % 100 == 0 || items.Count == catalog.Assets.Count)
                 progress?.Report(new("Analyze", items.Count, catalog.Assets.Count, asset.Path, "Inspecting winning textures"));
         }
-        return new(1, catalog.Source, policy, DateTimeOffset.UtcNow, items, catalog.Diagnostics);
+        return new(1, catalog.Source, policy, DateTimeOffset.UtcNow, items, catalog.Diagnostics)
+        { Comparison = ReferenceComparison.Compare(catalog, items, references) };
     }
 }
