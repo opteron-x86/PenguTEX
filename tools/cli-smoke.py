@@ -35,6 +35,7 @@ with tempfile.TemporaryDirectory(prefix="pengutex-cli-") as temporary:
     (source / "example.dds").write_bytes(original)
     plan = run("analyze", "--folder", root / "input", "--max", 8)
     assert plan["ChangedCount"] == 1
+    (root / "output").mkdir()  # File-picker users commonly create the destination first.
     built = run("build", "--folder", root / "input", "--max", 8,
                 "--output", root / "output", "--cache", root / "cache")
     assert built["Files"] == 1 and built["Reused"] == 0
@@ -47,4 +48,10 @@ with tempfile.TemporaryDirectory(prefix="pengutex-cli-") as temporary:
     assert hashlib.sha256((source / "example.dds").read_bytes()).digest() == hashlib.sha256(original).digest()
     target.write_bytes(target.read_bytes()[:-1])
     run("verify", root / "output", expected=1)
+    (root / "foreign").mkdir()
+    (root / "foreign" / "keep.txt").write_text("keep")
+    rejected = subprocess.run([*command, "build", "--folder", str(root / "missing-source"),
+                               "--output", str(root / "foreign"), "--cache", str(root / "cache")], capture_output=True, text=True)
+    assert rejected.returncode == 1 and "Choose an empty folder" in rejected.stderr
+    assert (root / "foreign" / "keep.txt").read_text() == "keep"
 print("CLI analyze/build/verify/cache/source-preservation smoke passed.")

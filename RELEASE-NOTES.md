@@ -1,19 +1,17 @@
-# PenguTEX 0.1.0-alpha.1
+# PenguTEX 0.1.0-alpha.2
 
-First Linux desktop and CLI alpha for Skyrim SE/AE texture optimization.
+Fix first-run builds into a folder created through a file picker or file manager.
+An empty output folder is accepted and receives its manifest after successful
+validation. Nonempty folders without a PenguTEX manifest remain protected.
 
-- Native MO2/Fluorine profile and loose-folder analysis, including activated BSA members.
-- Explainable policies and protections, searchable review, RGB/alpha channel previews.
-- Format-preserving compressed-mip reduction; explicit material-aware CPU mip rebuilding.
-- Verified content cache, resumable work, cancellation and separate output mods.
-- Portable Linux x64 and AppImage packages, source, license notices and SHA-256 checksums.
+- Check the destination before a large source rescan in desktop and CLI Build.
+- Label Build’s source refresh as Recheck textures/sources/archives.
+- Recheck output ownership before publication, preserving files added during a job.
+- Recover interrupted publication when the original destination was empty.
 
-Use original, unmounted Data for profile scans. A merged Fluorine Data mount is
-refused as an original baseline. Signed BC4/BC5 can be mip-copied but not decoded or
-CPU-rebuilt. CPU rebuilding is explicit and limited to 16 million source pixels;
-cube maps, arrays, volumes and unsupported semantic cases remain unchanged.
+Policies, texture processing, source files and saved preferences are unchanged.
+Close and reopen the application to load the fix; the same empty output path works.
 
-This alpha has automated engine/desktop/package checks. In-game appearance, resident
-VRAM/frame-time improvements and physical GPU acceleration are not yet validated.
-Generated textures retain the rights of their source assets. Install the result as
-a separate mod and inspect representative scenes before adopting it in a modlist.
+Portable Linux x64 and AppImage packages include source, dependency notices and
+checksums. In-game appearance, resident VRAM/frame-time benefits and GPU acceleration
+remain unvalidated. Use an unmounted original Data directory for profile baselines.

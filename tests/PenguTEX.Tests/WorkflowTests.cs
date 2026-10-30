@@ -6,6 +6,39 @@ namespace PenguTEX.Tests;
 public class WorkflowTests
 {
     private static Policy Small => new() { Maximum = 8, NormalMaximum = 8, MaterialMaximum = 8 };
+    [Fact] public void FirstBuildAcceptsAnExistingEmptyDirectory()
+    {
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds());
+        var catalog = CatalogLoader.Load(new(Folder: f.Dir("source"))); var plan = Planner.Analyze(catalog, Small);
+        string output = f.Dir("chosen output"), cache = Path.Combine(f.Root, "cache");
+        var result = JobRunner.Build(catalog, plan, output + Path.DirectorySeparatorChar, cache);
+        Assert.Equal(1, result.Files); Assert.Single(JobRunner.Verify(output).Files);
+        Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache).Reused);
+    }
+    private sealed class CallbackProgress(Action<JobProgress> callback) : IProgress<JobProgress>
+    { public void Report(JobProgress value) => callback(value); }
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public void PublicationPreservesFilesAddedDuringGeneration(bool previousBuild)
+    {
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds());
+        var catalog = CatalogLoader.Load(new(Folder: f.Dir("source"))); var plan = Planner.Analyze(catalog, Small);
+        string output = f.Dir("output"), cache = Path.Combine(f.Root, "cache");
+        if (previousBuild) JobRunner.Build(catalog, plan, output, cache);
+        var progress = new CallbackProgress(p => { if (p.Phase == "Build") f.Text("output/personal.txt", "preserve"); });
+        Assert.Throws<IOException>(() => JobRunner.Build(catalog, plan, output, cache, progress: progress));
+        Assert.Equal("preserve", File.ReadAllText(Path.Combine(output, "personal.txt")));
+        Assert.Equal(previousBuild, File.Exists(Path.Combine(output, JobRunner.ManifestName)));
+    }
+    [Fact] public void EmptyPreviousDirectoryRecoversAfterInterruptedFirstPublication()
+    {
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds());
+        var catalog = CatalogLoader.Load(new(Folder: f.Dir("source"))); var plan = Planner.Analyze(catalog, Small);
+        string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
+        string backup = f.Dir(".pengutex-previous-" + JsonFiles.Hash(output)[..20]);
+        Assert.ThrowsAny<OperationCanceledException>(() => JobRunner.Build(catalog, plan, output, cache, ct: new CancellationToken(true)));
+        Assert.True(Directory.Exists(output)); Assert.Empty(Directory.EnumerateFileSystemEntries(output)); Assert.False(Directory.Exists(backup));
+        Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache).Files);
+    }
     [Fact] public void BuildVerifyResumeAndDetectChangedContent()
     {
         using var f = new Fixture(); var source = f.Dir("source"); string input = f.File("source/textures/armor/test.dds", Fixture.Dds());
@@ -104,6 +137,7 @@ public class WorkflowTests
         Assert.Throws<IOException>(() => JobRunner.Build(catalog, plan, output, cache)); Assert.Equal("preserve", File.ReadAllText(external));
         string linkedOutput = Path.Combine(f.Root, "linked-output"); Directory.CreateSymbolicLink(linkedOutput, output);
         Assert.Throws<IOException>(() => JobRunner.Build(catalog, plan, linkedOutput, cache));
+        Assert.Throws<IOException>(() => JobRunner.Build(catalog, plan, linkedOutput + Path.DirectorySeparatorChar, cache));
     }
     [Fact] public void ProtectionsAndExplicitOverridesAreExplained()
     {

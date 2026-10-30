@@ -197,10 +197,13 @@ public sealed class MainWindow : Window
     {
         if (_plan is null || _catalog is null) throw new InvalidOperationException("Analyze first.");
         if (string.IsNullOrWhiteSpace(settings.Output) || string.IsNullOrWhiteSpace(settings.Cache)) throw new ArgumentException("Choose output and cache folders.");
+        _status.Text = "Build: checking output folder…"; AppendLog(_status.Text);
         var previous = _plan;
         LastBuild = await Task.Run(() =>
         {
-            var catalog = CatalogLoader.Load(settings.Source, progress, ct); var fresh = Planner.Analyze(catalog, settings.Policy, progress, ct);
+            JobRunner.ValidateOutputDirectory(settings.Output);
+            var recheck = new RecheckProgress(progress);
+            var catalog = CatalogLoader.Load(settings.Source, recheck, ct); var fresh = Planner.Analyze(catalog, settings.Policy, recheck, ct);
             string Signature(OptimizationPlan p) => JsonSerializer.Serialize(p.Items, JsonFiles.Options);
             if (Signature(fresh) != Signature(previous)) throw new IOException("Source winners or texture metadata changed. Analyze again to review the new plan.");
             return JobRunner.Build(catalog, fresh, settings.Output, settings.Cache, settings.Workers, progress, ct, new CpuMipProcessor());
@@ -233,6 +236,11 @@ public sealed class MainWindow : Window
             _build.IsEnabled = _plan?.CompleteSource == true; _export.IsEnabled = _plan is not null; _preview.IsEnabled = (_table.SelectedItem as PlanRow)?.Item.Input is not null;
             _cancel.Dispose(); _cancel = null;
         }
+    }
+    private sealed class RecheckProgress(IProgress<JobProgress> target) : IProgress<JobProgress>
+    {
+        public void Report(JobProgress value) => target.Report(value with { Phase = value.Phase switch
+        { "Analyze" => "Recheck textures", "Resolve" => "Recheck sources", "Archives" => "Recheck archives", _ => value.Phase } });
     }
     private void AppendLog(string? message) { _log.Text += message + Environment.NewLine; if (_log.Text.Length > 60000) _log.Text = _log.Text[^50000..]; }
     private async Task<string?> SavePath(string title, string name)

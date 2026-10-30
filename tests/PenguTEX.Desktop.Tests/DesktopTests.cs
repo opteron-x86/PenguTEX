@@ -39,7 +39,8 @@ public sealed class DesktopTests
     {
         using var f = new Fixture(); f.File("source/armor/metal.dds", Fixture.Dds(dxgi: 71));
         f.File("source/actors/character/face.dds", Fixture.Dds(dxgi: 71));
-        var settings = Settings(f); var window = new MainWindow(new SettingsStore(Path.Combine(f.Root, "settings.json")));
+        var settings = Settings(f); Directory.CreateDirectory(settings.Output);
+        var window = new MainWindow(new SettingsStore(Path.Combine(f.Root, "settings.json")));
         window.SetSettings(settings); window.Show();
         try
         {
@@ -54,6 +55,21 @@ public sealed class DesktopTests
             Assert.Single(JobRunner.Verify(settings.Output, TestContext.Current.CancellationToken).Files); Assert.False(window.IsWorking);
             await window.BuildAsync(); Assert.Equal(1, window.LastBuild!.Reused);
             Assert.Equal(settings.Policy, new SettingsStore(Path.Combine(f.Root, "settings.json")).Load().Policy with { Rules = settings.Policy.Rules });
+        }
+        finally { window.Close(); }
+    }
+    [AvaloniaFact]
+    public async Task InvalidOutputIsReportedBeforeSourcesAreScannedAgain()
+    {
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds()); var settings = Settings(f);
+        var window = new MainWindow(new SettingsStore(Path.Combine(f.Root, "settings.json"))); window.SetSettings(settings); window.Show();
+        try
+        {
+            await window.AnalyzeAsync(); Assert.NotNull(window.CurrentPlan);
+            f.Text("output/personal.txt", "keep"); Directory.Delete(settings.Source.Folder!, true);
+            await window.BuildAsync();
+            Assert.Contains("Choose an empty folder", window.Status); Assert.Null(window.LastBuild);
+            Assert.Equal("keep", File.ReadAllText(Path.Combine(settings.Output, "personal.txt")));
         }
         finally { window.Close(); }
     }

@@ -30,8 +30,9 @@ virtual filesystem first, or supply an unmounted original Data directory using
 files hidden by existing optimizer outputs. It does not unmount anything itself.
 
 Analyze is read-only. Build creates an output mod and reusable cache in separate
-directories outside the inputs. Existing output must be owned by PenguTEX; extra
-untracked files prevent replacement. Keep the manifest with the output. Cancel with
+directories outside the inputs. An existing empty output folder is accepted for a first build. A nonempty output
+folder must be owned by PenguTEX; extra untracked files prevent replacement. Build
+checks the output location before scanning sources and again before publication. Keep the manifest with the output. Cancel with
 Ctrl+C and rerun the same command to reuse validated cached textures. Install the
 output as a high-priority mod; disable the old optimizer output to compare results.
 
