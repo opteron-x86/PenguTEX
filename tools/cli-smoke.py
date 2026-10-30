@@ -58,6 +58,11 @@ with tempfile.TemporaryDirectory(prefix="pengutex-cli-") as temporary:
                     "--fit-reference", "true", "--require-parity", "true", "--output", root / "candidate", "--cache", root / "cache")
     assert not candidate["Manifest"]["Comparison"]["HasUnresolved"]
     assert target.read_bytes() == (root / "candidate" / "textures" / "armor" / "example.dds").read_bytes()
+    carried = run("build", "--folder", root / "input", "--max", 16, "--reference", root / "output",
+                  "--carry-reference", "true", "--require-parity", "true", "--output", root / "carried", "--cache", root / "cache")
+    assert carried["Manifest"]["Comparison"]["CarriedCount"] == 1
+    assert carried["Manifest"]["Files"][0]["Operation"] == "ReferenceCopy"
+    assert target.read_bytes() == (root / "carried" / "textures" / "armor" / "example.dds").read_bytes()
     target.write_bytes(target.read_bytes()[:-1])
     run("verify", root / "output", expected=1)
     (root / "foreign").mkdir()

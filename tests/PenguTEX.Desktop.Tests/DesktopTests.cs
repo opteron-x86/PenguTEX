@@ -99,6 +99,13 @@ public sealed class DesktopTests
             await window.AnalyzeAsync(); Assert.False(window.CurrentPlan!.Comparison!.HasUnresolved);
             await window.BuildAsync(); Assert.False(window.LastBuild!.Manifest.Comparison!.HasUnresolved);
             Assert.Contains("In-game", window.Status);
+            f.File("source/a.dds", Fixture.Dds(mipCount: 1));
+            window.GetVisualDescendants().OfType<TabControl>().Single().SelectedIndex = 0;
+            Control<CheckBox>(window, "CarryReference").IsChecked = true;
+            await window.AnalyzeAsync(); Assert.Equal(1, window.CurrentPlan!.Comparison!.CarriedCount);
+            Capture(window, "replacement-carried");
+            await window.BuildAsync(); Assert.Equal("ReferenceCopy", window.LastBuild!.Manifest.Files[0].Operation);
+            Assert.Contains("1 reference files carried unchanged", window.Status);
             f.File("reference/a.dds", Fixture.Dds(8, 8));
             await window.BuildAsync(); Assert.Contains("Analyze again", window.Status);
         }

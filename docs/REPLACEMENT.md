@@ -41,6 +41,23 @@ landscape and character paths already covered by the reference. It does not bypa
 explicit Protect rules or generated LOD/interface/shader protection. Missing mips,
 unsupported layouts and explicit protections remain visible gaps.
 
+## Carry-forward compatibility mode
+
+Carry unresolved reference files unchanged is optional and off by default. It can
+retain a valid previous file when the original is larger, unreadable or missing.
+This makes the candidate self-contained without inventing channel semantics or
+discarding paths found only in the previous output. Each retained file is copied
+byte for byte, source/output hashes are recorded, and it is labeled ReferenceCopy
+in the texture review and ReferenceRetained in the comparison. A separate carried
+count remains visible in the report and manifest. These files are not native
+PenguTEX optimizations; keep their provenance and relevant mod redistribution terms.
+
+This option never imports an unreadable reference file or bypasses a protection
+rule. Such gaps still fail the required-parity gate. Use `--carry-reference true`
+in the CLI. Native coverage can improve later by restoring missing originals or
+adding reviewed rebuild rules with known semantics. Turning carry-forward off
+shows those remaining native gaps again.
+
 ## Acceptance
 
 The report includes format, dimensions, mip count, payload and decision reason.
