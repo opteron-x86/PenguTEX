@@ -15,15 +15,17 @@ Start `PenguTEX.Desktop` in a portable distribution, or run
    must be previous PenguTEX output; personal files prevent replacement.
 4. Analyze. Review changed, protected, unsupported and invalid textures; search by
    path, source mod or decision reason. Source or policy edits invalidate review.
-   When replacing an optimizer, select its Reference output folder first. Review
-   the Replacement check tab for larger, missing and unassessed textures. Optional
-   fitting preserves formats; a separate switch permits reference-covered landscape
-   and character reductions. See [replacement checks](REPLACEMENT.md).
+   The Coverage tab lists protected and unresolved original textures. To compare
+   against an existing output, enable "Compare against a previous output (optional)"
+   and select its folder before analyzing. Coverage then shows larger, missing and
+   unassessed textures relative to that output. Optional fitting preserves formats;
+   a separate switch permits reference-covered landscape and character reductions.
+   See [replacement checks](REPLACEMENT.md).
 5. Inspect a texture to compare existing source/proposed mips. The channel selector
    shows RGB, individual RGB channels or alpha/data. RGB is displayed without alpha
    masking. Signed BC4/BC5 preview is unavailable; mip copying still preserves them.
    Preview decoding is capped at 16 million pixels per image.
-6. Build the candidate mod. Source winners/headers and reference metadata are checked again before work; full
+6. Select Build output mod. Source winners/headers and optional reference metadata are checked again before work; full
    source hashes are checked during processing. Cancellation preserves previously
    published output and verified cache. Re-running reuses verified files.
    After Build reaches its texture count, Verify reads every staged texture and
@@ -31,11 +33,14 @@ Start `PenguTEX.Desktop` in a portable distribution, or run
    removes the previous generated output when replacing it. Each phase has its
    own progress count. The temporary `.pengutex-stage-*` folder is working data;
    wait for Complete and use the chosen output folder for installation.
-7. A completed build is a candidate, not an in-game performance result. When using
-   a reference comparison, install at the compared mod priority and preserve the
-   previous output for rollback. For a new standalone optimization, install/enable
-   the output as a higher-priority mod through your mod manager.
+7. Output built means generation and file verification have finished. The summary
+   shows the verified texture count, output size and build time; protected and
+   unresolved textures remain listed under Coverage. Install/enable the output as
+   a higher-priority mod through your mod manager. When using a reference comparison,
+   install at the compared mod priority and preserve the previous output for rollback.
    Disable/remove it to revert. PenguTEX does not edit profiles or launch the game.
+   Compare visuals and performance in game after installation; the application
+   does not measure gameplay or track an in-game approval step.
 
 Preferences use `$XDG_CONFIG_HOME/PenguTEX/settings.json`, or
 `~/.config/PenguTEX/settings.json`. Cache defaults to `$XDG_CACHE_HOME/PenguTEX`, or

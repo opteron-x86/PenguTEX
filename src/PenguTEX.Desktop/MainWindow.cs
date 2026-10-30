@@ -42,7 +42,7 @@ public sealed class MainWindow : Window
     private readonly TextBlock _summary = Text("Choose a source and analyze its textures.", 17), _detail = Text("Select a texture to inspect its decision."), _status = Text("Ready");
     private readonly ProgressBar _progress = new() { Minimum = 0, Maximum = 100, Height = 5 };
     private readonly Button _analyze = new() { Content = "Analyze textures", Name = "Analyze", Padding = new Thickness(20, 10) },
-        _build = new() { Content = "Build candidate mod", Name = "Build", IsEnabled = false, Padding = new Thickness(20, 10) },
+        _build = new() { Content = "Build output mod", Name = "Build", IsEnabled = false, Padding = new Thickness(20, 10) },
         _cancelButton = new() { Content = "Cancel", Name = "Cancel", IsEnabled = false },
         _preview = new() { Content = "Inspect texture", IsEnabled = false }, _export = new() { Content = "Export analysis", IsEnabled = false };
     private readonly TabControl _tabs = new(); private Control? _setup; private CancellationTokenSource? _cancel;
@@ -57,7 +57,7 @@ public sealed class MainWindow : Window
     public MainWindow(SettingsStore store)
     {
         _store = store; Title = "PenguTEX — Texture optimizer"; Width = 1280; Height = 900; MinWidth = 980; MinHeight = 700;
-        var title = new StackPanel { Spacing = 5, Children = { Text("PenguTEX", 32), Text("Inspect your textures. Choose what changes. Build a removable output mod.") } };
+        var title = Text("PenguTEX", 32);
         _setup = Setup();
         _tabs.ItemsSource = new[] { new TabItem { Header = "1  Source & policy", Content = new ScrollViewer { Content = _setup } },
             new TabItem { Header = "2  Review textures", Content = Review() }, new TabItem { Header = "3  Coverage", Content = ReplacementReview() },
@@ -271,9 +271,9 @@ public sealed class MainWindow : Window
             if (Signature(fresh) != Signature(previous)) throw new IOException("Source or reference winners/metadata changed. Analyze again to review the new plan.");
             return JobRunner.Build(catalog, fresh, settings.Output, settings.Cache, settings.Workers, progress, ct, new CpuMipProcessor());
         }, ct);
-        _status.Text = $"Complete: {LastBuild.Files:N0} verified textures ({LastBuild.Reused:N0} reused). Candidate: {LastBuild.Output}. "
-            + (LastBuild.Manifest.Comparison?.Assessment ?? "Built from selected originals. Review coverage and validate visuals and performance in game.");
-        AppendLog(_status.Text); _summary.Text = $"Candidate built • {LastBuild.Bytes / 1048576d:N1} MiB of overrides • {LastBuild.Seconds:F1} seconds • game validation pending";
+        _status.Text = $"Complete: {LastBuild.Files:N0} verified textures ({LastBuild.Reused:N0} reused). Output: {LastBuild.Output}. "
+            + (LastBuild.Manifest.Comparison?.Assessment ?? "Built from selected originals. Review the Coverage tab for protected or unresolved textures.");
+        AppendLog(_status.Text); _summary.Text = $"Output built • {LastBuild.Files:N0} verified textures • {LastBuild.Bytes / 1048576d:N1} MiB of overrides • {LastBuild.Seconds:F1} seconds";
     });
     private async Task RunAsync(Func<DesktopSettings, IProgress<JobProgress>, CancellationToken, Task> run)
     {
