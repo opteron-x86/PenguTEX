@@ -157,7 +157,7 @@ public sealed class MainWindow : Window
     }
     private Control ReplacementReview()
     {
-        foreach (var (label, path, width) in new[] { ("Texture", "Path", 300d), ("Assessment", "Status", 145d),
+        foreach (var (label, path, width) in new[] { ("Texture", "Path", 300d), ("Assessment", "Status", 185d),
             ("Previous", "Previous", 150d), ("Proposed", "Proposed", 150d), ("Change MiB", "Change", 110d), ("Reason", "Reason", 450d) })
             _comparisonTable.Columns.Add(new DataGridTextColumn { Header = label, Binding = new Binding(path), Width = new DataGridLength(width) });
         var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), RowSpacing = 12, Margin = new Thickness(0, 14, 0, 0) };
@@ -310,7 +310,12 @@ public sealed class MainWindow : Window
     private sealed record ReferenceRow(ReferenceDifference Item)
     {
         public string Path => Item.Path;
-        public string Status => Item.Status;
+        public string Status => Item.Status switch
+        {
+            "ReferenceRetained" => "Carried unchanged", "MissingSource" => "Missing original",
+            "UnknownSource" => "Unreadable original", "UnknownReference" => "Unreadable reference",
+            "HigherPriority" => "Higher priority wins", "SamePayload" => "Same payload", "NewReduction" => "New reduction", _ => Item.Status,
+        };
         public string Previous => Describe(Item.Previous);
         public string Proposed => Describe(Item.Proposed);
         public string Change => Item.ChangeBytes is not { } bytes ? "Unknown" : bytes != 0 && Math.Abs(bytes) < 10485.76
