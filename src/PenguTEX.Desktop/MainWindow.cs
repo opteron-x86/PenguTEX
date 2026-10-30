@@ -298,7 +298,7 @@ public sealed class MainWindow : Window
     }
     private sealed record PlanRow(PlanItem Item)
     {
-        public string Path => Item.Path; public string Origin => Item.Origin; public string Decision => Item.Decision.ToString();
+        public string Path => Item.Path; public string Origin => Item.Origin; public string Decision => Item.PreserveExistingMips ? "Complete mips" : Item.Decision.ToString();
         public string Format => (Item.Input?.Format ?? "—") + (Item.Input?.Srgb == true ? " sRGB" : "");
         public string Dimensions => Item.Input is null ? "—" : $"{Item.Input.Width}×{Item.Input.Height} → {Item.TargetWidth}×{Item.TargetHeight}";
         public string Saved => (Item.SavedBytes / 1048576d).ToString("N2");

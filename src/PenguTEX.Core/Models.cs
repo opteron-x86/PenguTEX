@@ -52,6 +52,8 @@ public sealed record PlanItem(string Path, string Origin, string Container, stri
     string Reason, DdsInfo? Input, int DropMips, int TargetWidth, int TargetHeight, long OutputPayload)
 {
     public TextureSemantic? Semantic { get; init; }
+    public bool PreserveExistingMips { get; init; }
+    public string Operation => Decision == Decision.Rebuild ? PreserveExistingMips ? "CompleteMips" : "Rebuild" : "MipCopy";
     public long SavedBytes => Input is null ? 0 : Input.PayloadBytes - OutputPayload;
 }
 public sealed record OptimizationPlan(int Schema, SourceOptions Source, Policy Policy, DateTimeOffset Created,

@@ -4,7 +4,7 @@ namespace PenguTEX.Core;
 
 public enum TextureSemantic { SrgbColor, LinearColor, LinearData, NormalRgb, NormalRg, OpacitySrgb }
 public sealed record PathRule(string Pattern, int? Maximum = null, bool Protect = false,
-    bool RebuildMips = false, TextureSemantic? Semantic = null);
+    bool RebuildMips = false, TextureSemantic? Semantic = null, bool CompleteMipChain = false);
 public sealed record Policy
 {
     public const long MaximumRebuildPixels = 8192L * 8192;
@@ -33,8 +33,9 @@ public sealed record Policy
         foreach (var rule in Rules)
         {
             if (string.IsNullOrWhiteSpace(rule.Pattern)) throw new ArgumentException("Empty path rule.");
-            if (rule.RebuildMips && (rule.Semantic is null || !Enum.IsDefined(rule.Semantic.Value)))
-                throw new ArgumentException("Mip rebuilding requires an explicit, supported Semantic in each rebuild rule.");
+            if (rule.RebuildMips && rule.CompleteMipChain) throw new ArgumentException("Choose RebuildMips or CompleteMipChain, not both in one rule.");
+            if ((rule.RebuildMips || rule.CompleteMipChain) && (rule.Semantic is null || !Enum.IsDefined(rule.Semantic.Value)))
+                throw new ArgumentException("Mip rebuilding/completion requires an explicit, supported Semantic in each processing rule.");
         }
     }
     public static Policy Preset(string name) => name.ToLowerInvariant() switch
@@ -49,12 +50,13 @@ public sealed record Policy
 
     public PathRule? ProcessingRule(string path) => Rules.LastOrDefault(r => Matches(path, r.Pattern));
 
-    public static string? RebuildRestriction(DdsInfo info, TextureSemantic semantic)
+    public static string? RebuildRestriction(DdsInfo info, TextureSemantic semantic, bool preserveExistingMips = false)
     {
         if (info.Format == "BC6H") return "HDR BC6H currently supports existing-mip copying only; rebuilding requires an HDR filter.";
         if (!info.IsBlockCompressed && !info.HasByteChannels) return "This uncompressed layout supports existing-mip copying only; rebuilding requires a precision-preserving decoder.";
         if (info.Signed || info.Premultiplied) return "CPU rebuilding does not support signed channels or premultiplied alpha; use existing-mip copying.";
-        if ((long)info.Width * info.Height > MaximumRebuildPixels) return "CPU rebuilding is limited to 64 million source pixels, with one decoded texture at a time; use existing-mip copying for larger inputs.";
+        int level = preserveExistingMips ? info.MipCount - 1 : 0;
+        if ((long)Math.Max(1, info.Width >> level) * Math.Max(1, info.Height >> level) > MaximumRebuildPixels) return "CPU rebuilding is limited to 64 million source pixels, with one decoded texture at a time; use existing-mip copying for larger inputs.";
         if (info.Srgb && semantic is not (TextureSemantic.SrgbColor or TextureSemantic.OpacitySrgb)) return "sRGB headers require an sRGB color semantic; changing the format is not supported.";
         bool rawRg = !info.IsBlockCompressed && info.RedMask != 0 && info.GreenMask != 0 && info.BlueMask == 0 && !info.Luminance;
         if (semantic == TextureSemantic.NormalRg && info.Format != "BC5" && !rawRg) return "NormalRg requires unsigned BC5 or raw RG channels; swizzled normal layouts are not inferred.";
@@ -114,9 +116,16 @@ public static class Planner
                 Decision decision; string reason; var rebuild = policy.ProcessingRule(asset.Path);
                 if (higherPriority) { decision = Decision.Keep; reason = "Source is above the selected output priority and will remain unchanged."; drop = 0; }
                 else if (protection is not null) { decision = Decision.Protected; reason = protection; drop = 0; }
-                else if (rebuild?.RebuildMips == true)
+                else if (rebuild is { RebuildMips: true } or { CompleteMipChain: true })
                 {
-                    if (Policy.RebuildRestriction(info, rebuild.Semantic!.Value) is { } restriction)
+                    bool complete = rebuild.CompleteMipChain;
+                    int fullCount = 1 + (int)Math.Log2(Math.Max(info.Width, info.Height));
+                    if (complete && info.MipCount == fullCount)
+                    {
+                        decision = drop > 0 ? Decision.Reduce : Decision.Keep;
+                        reason = "Original mip chain is complete; retain its existing levels without recompression.";
+                    }
+                    else if (Policy.RebuildRestriction(info, rebuild.Semantic!.Value, complete) is { } restriction)
                     { decision = Decision.Unsupported; reason = restriction; drop = 0; }
                     else
                     {
@@ -127,8 +136,9 @@ public static class Planner
                         width = Math.Max(1, info.Width >> drop); height = Math.Max(1, info.Height >> drop);
                         var target = info with { Width = width, Height = height, MipCount = 1 + (int)Math.Log2(Math.Max(width, height)) };
                         items.Add(new(asset.Path, asset.Origin, asset.Container, category, Decision.Rebuild,
-                            $"Explicit CPU rebuild from the top mip; {rebuild.Semantic}; original {info.Format} format retained.", info, drop, width, height,
-                            Enumerable.Range(0, target.MipCount).Sum(target.MipBytes)) { Semantic = rebuild.Semantic });
+                            complete ? $"Complete original mip chain; retain available levels byte-for-byte and generate missing levels with {rebuild.Semantic}; original {info.Format} format retained."
+                                : $"Explicit CPU rebuild from the top mip; {rebuild.Semantic}; original {info.Format} format retained.", info, drop, width, height,
+                            Enumerable.Range(0, target.MipCount).Sum(target.MipBytes)) { Semantic = rebuild.Semantic, PreserveExistingMips = complete });
                         if (items.Count % 100 == 0 || items.Count == catalog.Assets.Count)
                             progress?.Report(new("Analyze", items.Count, catalog.Assets.Count, asset.Path, "Planning explicit mip rebuilds"));
                         continue;
