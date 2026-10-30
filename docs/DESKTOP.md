@@ -10,6 +10,8 @@ Start `PenguTEX.Desktop` in a portable distribution, or run
    schema as the CLI. Later matching rules win.
 3. Choose separate output/cache folders. Output is a removable mod; cache is reusable
    work. They must be outside all source folders and separate from each other.
+   Creating an empty output folder in the file picker is supported. Nonempty folders
+   must be previous PenguTEX output; personal files prevent replacement.
 4. Analyze. Review changed, protected, unsupported and invalid textures; search by
    path, source mod or decision reason. Source or policy edits invalidate review.
 5. Inspect a texture to compare existing source/proposed mips. The channel selector

@@ -45,6 +45,7 @@ public static class Program
             Get("profiles"), Get("overwrite"), Get("wine-prefix"), Get("ini"), Get("exclude-mods")?.Split('|'), Get("data"));
         Policy policy = Get("policy") is { } json ? JsonFiles.Read<Policy>(json) : Policy.Preset(Get("preset") ?? "balanced");
         if (Get("max") is { } max) policy = policy with { Maximum = int.Parse(max), NormalMaximum = int.Parse(max), MaterialMaximum = int.Parse(max) };
+        if (args[0] == "build") JobRunner.ValidateOutputDirectory(Get("output") ?? throw new ArgumentException("--output is required."));
         var progress = new ConsoleProgress();
         var catalog = CatalogLoader.Load(source, progress, ct); var plan = Planner.Analyze(catalog, policy, progress, ct);
         if (Get("report") is { } report) JsonFiles.Write(report, plan);
