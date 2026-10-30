@@ -9,6 +9,9 @@ namespace PenguTEX.Assets;
 public static class CatalogLoader
 {
     public static Catalog Load(SourceOptions options, IProgress<JobProgress>? progress = null, CancellationToken ct = default)
+        => Load(options, progress, ct, comparisonOnly: false);
+
+    private static Catalog Load(SourceOptions options, IProgress<JobProgress>? progress, CancellationToken ct, bool comparisonOnly)
     {
         if ((options.Folder is null) == (options.Instance is null))
             throw new ArgumentException("Choose exactly one folder or MO2/Fluorine instance.");
@@ -24,6 +27,8 @@ public static class CatalogLoader
         {
             var root = HostPath.Resolve(options.Folder);
             if (!Directory.Exists(root)) throw new DirectoryNotFoundException(root);
+            if (!comparisonOnly && IsOptimizerOutput(root))
+                throw new InvalidDataException("This folder is marked as previous optimizer output. Choose original textures as the source and use this folder only as Reference.");
             if (referenceRoot is not null && (referenceRoot == HostPath.Canonical(root)
                 || referenceRoot.StartsWith(HostPath.Canonical(root) + Path.DirectorySeparatorChar, StringComparison.Ordinal)
                 || HostPath.Canonical(root).StartsWith(referenceRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal)))
@@ -134,14 +139,14 @@ public static class CatalogLoader
         ReferenceCatalog? reference = null;
         if (referenceRoot is not null)
         {
-            var referenceFiles = Load(new(Folder: referenceRoot), progress, ct);
+            var referenceFiles = Load(new(Folder: referenceRoot), progress, ct, comparisonOnly: true);
             diagnostics.AddRange(referenceFiles.Diagnostics.Select(d => d with { Message = "Reference: " + d.Message }));
             if (referenceFiles.Assets.Count == 0) diagnostics.Add(new("Error", "Reference folder contains no loose DDS textures."));
             reference = new(referenceRoot, referencePlacement, referencePriority, referenceFiles.Assets)
             {
                 Refresh = token =>
                 {
-                    var refreshed = Load(new(Folder: referenceRoot), ct: token);
+                    var refreshed = Load(new(Folder: referenceRoot), null, token, comparisonOnly: true);
                     if (refreshed.Diagnostics.Any(d => d.Severity == "Error")) throw new IOException("Reference output cannot be read consistently. Analyze again.");
                     return new(referenceRoot, referencePlacement, referencePriority, refreshed.Assets);
                 }
