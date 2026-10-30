@@ -30,15 +30,18 @@ public sealed class ImagingTests
         string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
         var result = JobRunner.Build(catalog, plan, output, cache, processor: new CpuMipProcessor());
         var entry = Assert.Single(result.Manifest.Files); Assert.Equal("Rebuild", entry.Operation); Assert.Equal(semantic, entry.Semantic);
-        using var file = File.OpenRead(Path.Combine(output, "textures/test.dds")); var info = Dds.Inspect(file).Info;
-        Assert.Equal(8, info.Width); Assert.Equal(4, info.MipCount); Assert.Equal(cc is null ? dxgi : 0, info.Dxgi);
-        Assert.Equal(item.OutputPayload, info.PayloadBytes);
-        if (Environment.GetEnvironmentVariable("PENGUTEX_ORACLE_FIXTURES") is { } fixtures)
+        using (var file = File.OpenRead(Path.Combine(output, "textures/test.dds")))
         {
-            Directory.CreateDirectory(fixtures);
-            System.IO.File.Copy(Path.Combine(output, "textures/test.dds"), Path.Combine(fixtures, $"bc-{dxgi}-{cc ?? "dx10"}.dds"), true);
+            var info = Dds.Inspect(file).Info;
+            Assert.Equal(8, info.Width); Assert.Equal(4, info.MipCount); Assert.Equal(cc is null ? dxgi : 0, info.Dxgi);
+            Assert.Equal(item.OutputPayload, info.PayloadBytes);
+            if (Environment.GetEnvironmentVariable("PENGUTEX_ORACLE_FIXTURES") is { } fixtures)
+            {
+                Directory.CreateDirectory(fixtures);
+                System.IO.File.Copy(Path.Combine(output, "textures/test.dds"), Path.Combine(fixtures, $"bc-{dxgi}-{cc ?? "dx10"}.dds"), true);
+            }
+            for (int mip = 0; mip < info.MipCount; mip++) { file.Position = 0; Assert.Equal(Math.Max(1, 8 >> mip), TexturePreview.Decode(file, mip).Width); }
         }
-        for (int mip = 0; mip < info.MipCount; mip++) { file.Position = 0; Assert.Equal(Math.Max(1, 8 >> mip), TexturePreview.Decode(file, mip).Width); }
         Assert.Single(JobRunner.Verify(output).Files);
         Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache, processor: new CpuMipProcessor()).Reused);
     }

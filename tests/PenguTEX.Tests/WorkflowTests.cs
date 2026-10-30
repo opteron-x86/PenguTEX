@@ -205,6 +205,21 @@ public class WorkflowTests
         }
         Assert.Equal(built.Manifest.Files[0].OutputHash, JobRunner.Verify(output).Files[0].OutputHash);
     }
+    [Fact] public void WindowsOpenOutputBlocksReplacementAndPreservesThePublishedMod()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds());
+        var catalog = CatalogLoader.Load(new(Folder: f.Dir("source"))); var plan = Planner.Analyze(catalog, Small);
+        string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
+        var built = JobRunner.Build(catalog, plan, output, cache);
+        using (var reader = File.OpenRead(Path.Combine(output, "textures/a.dds")))
+        {
+            Assert.Throws<IOException>(() => JobRunner.Build(catalog, plan, output, cache));
+            Assert.Equal(built.Manifest.Files[0].OutputHash, JobRunner.Verify(output).Files[0].OutputHash);
+        }
+        Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache).Reused);
+        Assert.Equal(built.Manifest.Files[0].OutputHash, JobRunner.Verify(output).Files[0].OutputHash);
+    }
     [Fact] public void SymbolicLinksPreventWritesOutsideOwnedOutput()
     {
         if (OperatingSystem.IsWindows()) return; // Creating symlinks requires an additional Windows privilege.
