@@ -7,6 +7,7 @@ public sealed record PathRule(string Pattern, int? Maximum = null, bool Protect 
     bool RebuildMips = false, TextureSemantic? Semantic = null);
 public sealed record Policy
 {
+    public const long MaximumRebuildPixels = 8192L * 8192;
     public int Schema { get; init; } = 1;
     public string Name { get; init; } = "Balanced";
     public int Maximum { get; init; } = 2048;
@@ -49,12 +50,18 @@ public sealed record Policy
     {
         if (info.Format == "BC6H") return "HDR BC6H currently supports existing-mip copying only; rebuilding requires an HDR filter.";
         if (!info.IsBlockCompressed && !info.HasByteChannels) return "This uncompressed layout supports existing-mip copying only; rebuilding requires a precision-preserving decoder.";
-        if (!info.IsBlockCompressed) return "Uncompressed mip rebuilding is not available yet; existing-mip copying is supported.";
         if (info.Signed || info.Premultiplied) return "CPU rebuilding does not support signed channels or premultiplied alpha; use existing-mip copying.";
-        if ((long)info.Width * info.Height > 4096L * 4096) return "CPU rebuilding is limited to 16 million source pixels to bound decoded memory.";
+        if ((long)info.Width * info.Height > MaximumRebuildPixels) return "CPU rebuilding is limited to 64 million source pixels, with one decoded texture at a time; use existing-mip copying for larger inputs.";
         if (info.Srgb && semantic is not (TextureSemantic.SrgbColor or TextureSemantic.OpacitySrgb)) return "sRGB headers require an sRGB color semantic; changing the format is not supported.";
-        if (semantic == TextureSemantic.NormalRg && info.Format != "BC5") return "NormalRg requires unsigned BC5; swizzled normal layouts are not inferred.";
+        bool rawRg = !info.IsBlockCompressed && info.RedMask != 0 && info.GreenMask != 0 && info.BlueMask == 0 && !info.Luminance;
+        if (semantic == TextureSemantic.NormalRg && info.Format != "BC5" && !rawRg) return "NormalRg requires unsigned BC5 or raw RG channels; swizzled normal layouts are not inferred.";
         if (semantic != TextureSemantic.LinearData && semantic != TextureSemantic.NormalRg && info.Format is "BC4" or "BC5") return "Single/two-channel textures require LinearData or BC5 NormalRg semantics.";
+        if (!info.IsBlockCompressed && semantic is not (TextureSemantic.LinearData or TextureSemantic.NormalRg))
+        {
+            bool rgb = info.RedMask != 0 && info.GreenMask != 0 && info.BlueMask != 0;
+            if (!rgb && (!info.Luminance || semantic == TextureSemantic.NormalRgb)) return "This raw channel layout requires LinearData or compatible NormalRg semantics.";
+            if (semantic == TextureSemantic.OpacitySrgb && info.AlphaMask == 0) return "OpacitySrgb requires a stored alpha channel.";
+        }
         return null;
     }
 

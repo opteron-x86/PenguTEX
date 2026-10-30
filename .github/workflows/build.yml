@@ -33,6 +33,12 @@ jobs:
       - run: bash tools/test.sh
         env:
           PENGUTEX_SCREENSHOTS: ${{ github.workspace }}/.artifacts/screenshots
+          PENGUTEX_ORACLE_FIXTURES: ${{ github.workspace }}/.artifacts/oracle
+      - name: Independent DDS decoder
+        run: |
+          python3 -m venv .tools/dds-oracle
+          .tools/dds-oracle/bin/pip install Pillow==13.0.0
+          .tools/dds-oracle/bin/python tools/independent-dds.py .artifacts/oracle
       - run: dotnet build src/PenguTEX.Cli -c Release --no-restore
       - run: python3 tools/cli-smoke.py dotnet src/PenguTEX.Cli/bin/Release/net10.0/PenguTEX.dll
       - run: bash tools/build.sh

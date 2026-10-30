@@ -1,7 +1,7 @@
 # Opt-in CPU mip rebuilding
 
-All presets default to copying existing compressed mip levels. Rebuilding introduces
-another lossy encoding pass and can increase payload when repairing missing mips.
+All presets default to copying existing mip levels. Rebuilding compressed textures
+introduces another lossy encoding pass and can increase payload when repairing missing mips.
 Choose it only for known texture sets; inspect output before installation.
 
 Add a path rule to a JSON policy (or the desktop's custom-rule editor):
@@ -29,7 +29,7 @@ Rules without RebuildMips use normal mip copying. Missing semantics reject the p
 | LinearColor | Average RGB and alpha independently in linear space |
 | LinearData | Average each packed channel independently; never alpha-mask RGB |
 | NormalRgb | Average signed XYZ directions and normalize; alpha averages independently |
-| NormalRg | Unsigned BC5 XY, reconstruct positive Z, average/normalize, retain XY |
+| NormalRg | Unsigned BC5 or raw RG XY, reconstruct positive Z, average/normalize, retain XY |
 | OpacitySrgb | Linear-light RGB weighted by opacity, independent alpha with approximate 0.5-threshold coverage preservation |
 
 Legacy DDS often has no explicit color-space flag. Explicit semantics declare how
@@ -42,9 +42,24 @@ BC1/2/3/4/5/7 encoding uses BCnEncoder.NET 2.3.0 Balanced. Source compression fo
 DXGI/FourCC, sRGB flag and alpha metadata are preserved. Every encoded level is
 decoded before publication, then the DDS structure, payload and output hash are
 verified. The content cache includes source hash, policy, semantic and encoder/filter
-identity. CPU decoding is limited to 16 million source pixels and one texture per
-process at a time; streaming workers may continue other files. Larger inputs remain
-available to the streaming mip-copy operation.
+identity. Rebuilding is limited to 64 million source pixels (including 8192×8192)
+and one texture per process at a time; streaming workers may continue other files.
+BC decoding and encoding operate on four-row strips; raw I/O uses scanlines. The
+largest RGBA pixel buffer is 256 MiB, plus a filtered destination and bounded codec
+scratch buffers. This is not a hard process RSS ceiling: the runtime, cache work and
+garbage collection add overhead. Interactive preview remains capped at 16 million
+pixels. Larger inputs remain available to streaming mip copying.
+
+Legacy and typed raw layouts with unsigned channels of at most eight bits can be
+rebuilt without changing their masks, format or row alignment. Packed channels are
+expanded to bytes for filtering and quantized back to their original bit depth.
+Unused bits and row padding in rebuilt levels become zero. Luminance previews show
+the luminance in RGB; only the stored channels are written. Raw RG normals require
+explicit NormalRg semantics. High-precision/HDR and signed raw data remain copy-only.
+
+CI also decodes synthetic rebuilt BC1/2/3/4/5/7 and RGBA DDS output with Pillow's
+independent decoder, checking every mip and known channel values. This supplements
+the in-process parser/hash checks; it does not validate game-specific materials.
 
 Filtering uses area-weighted boxes, including odd image edges, and generates through
 1×1. Opacity coverage is approximate after alpha quantization, especially in tail
