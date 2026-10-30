@@ -15,7 +15,7 @@ public sealed class CpuMipProcessor : ITextureProcessor
         MemorySlot.Wait(ct);
         try
         {
-            var (info, header) = Dds.Inspect(source, length);
+            var (info, header) = Dds.Inspect(source, length, item.Input?.DeclaredMipCount is not null);
             if (info != item.Input) throw new IOException("Source metadata changed; analyze again.");
             if (item.Semantic is not { } semantic) throw new InvalidDataException("Rebuilding requires explicit channel semantics.");
             if (Policy.RebuildRestriction(info, semantic, item.PreserveExistingMips) is { } restriction) throw new NotSupportedException(restriction);

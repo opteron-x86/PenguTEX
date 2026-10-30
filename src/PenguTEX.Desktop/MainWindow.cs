@@ -26,6 +26,7 @@ public sealed class MainWindow : Window
         _reference = Box("ReferencePath"), _replaceMod = Box("ReplaceMod");
     private readonly CheckBox _fitReference = new() { Name = "FitReference", Content = "Fit previous dimensions and texture payload", IsChecked = false };
     private readonly CheckBox _fitProtected = new() { Name = "FitProtectedReference", Content = "Allow this fit for protected landscapes and characters", IsChecked = false };
+    private readonly CheckBox _recoverMips = new() { Name = "RecoverMipCounts", Content = "Recover incorrect mip counts only when the payload matches a full chain" };
     private readonly DataGrid _comparisonTable = new() { Name = "ReferenceTable", AutoGenerateColumns = false, IsReadOnly = true, CanUserSortColumns = true };
     private readonly TextBlock _comparisonSummary = Text("Choose a previous optimizer output to compare replacements.");
     private readonly CheckBox _large = new() { Content = "Protect landscapes and large surfaces", IsChecked = true };
@@ -87,6 +88,7 @@ public sealed class MainWindow : Window
         _large.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
         _characters.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
         _fitReference.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
+        _recoverMips.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
         _fitProtected.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
         _preset.SelectionChanged += (_, _) => { if (!_loading && _preset.SelectedItem is string name && name != "Custom / saved limits") SetPolicy(Policy.Preset(name)); };
         _profiles.SelectionChanged += (_, _) => { if (_profiles.SelectedItem is string name) _profile.Text = name; };
@@ -146,7 +148,7 @@ public sealed class MainWindow : Window
             new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { import, save } },
             Columns(PathField("Output mod folder", _output), PathField("Reusable work cache", _cache)),
             Columns(PathField("Previous optimized output (optional comparison)", _reference), Field("Mod to replace (auto-detected for installed reference)", _replaceMod)),
-            Columns(_fitReference, _fitProtected),
+            Columns(_fitReference, _fitProtected), _recoverMips,
             Field("Workers (1–32)", _workers),
             new Expander { Header = "Locations and custom rules", Content = advanced, HorizontalAlignment = HorizontalAlignment.Stretch },
             Text("Quality: color 2K, normal/material/height 1K. Balanced: color 2K, normal 1K, material/height 512. Compact: color 1K, normal/material 512, height 256. Saved custom limits are preserved."),
@@ -175,6 +177,7 @@ public sealed class MainWindow : Window
         static string? Value(TextBox box) => string.IsNullOrWhiteSpace(box.Text) ? null : box.Text.Trim();
         var policy = new Policy { Name = _policyName, Maximum = int.Parse(_maximum.Text ?? ""), NormalMaximum = int.Parse(_normal.Text ?? ""),
             MaterialMaximum = int.Parse(_material.Text ?? ""), HeightMaximum = int.Parse(_height.Text ?? ""), ProtectLargeSurfaces = _large.IsChecked == true,
+            RecoverMipCounts = _recoverMips.IsChecked == true,
             ProtectCharacters = _characters.IsChecked == true, FitReference = _fitReference.IsChecked == true,
             FitProtectedReference = _fitReference.IsChecked == true && _fitProtected.IsChecked == true,
             Rules = JsonSerializer.Deserialize<PathRule[]>(_rules.Text ?? "[]", JsonFiles.Options) ?? [] };
@@ -203,6 +206,7 @@ public sealed class MainWindow : Window
         _preset.SelectedItem = known?.Name ?? "Custom / saved limits"; _maximum.Text = policy.Maximum.ToString(); _normal.Text = policy.NormalMaximum.ToString();
         _material.Text = policy.MaterialMaximum.ToString(); _large.IsChecked = policy.ProtectLargeSurfaces; _characters.IsChecked = policy.ProtectCharacters;
         _height.Text = (policy.HeightMaximum ?? policy.MaterialMaximum).ToString(); _fitReference.IsChecked = policy.FitReference; _fitProtected.IsChecked = policy.FitProtectedReference;
+        _recoverMips.IsChecked = policy.RecoverMipCounts;
         _rules.Text = JsonSerializer.Serialize(policy.Rules, JsonFiles.Options); _loading = wasLoading; InvalidatePlan();
     }
     private void InvalidatePlan()
@@ -298,7 +302,7 @@ public sealed class MainWindow : Window
     }
     private sealed record PlanRow(PlanItem Item)
     {
-        public string Path => Item.Path; public string Origin => Item.Origin; public string Decision => Item.PreserveExistingMips ? "Complete mips" : Item.Decision.ToString();
+        public string Path => Item.Path; public string Origin => Item.Origin; public string Decision => Item.PreserveExistingMips ? "Complete mips" : Item.Operation == "RepairHeader" ? "Repair header" : Item.Decision.ToString();
         public string Format => (Item.Input?.Format ?? "—") + (Item.Input?.Srgb == true ? " sRGB" : "");
         public string Dimensions => Item.Input is null ? "—" : $"{Item.Input.Width}×{Item.Input.Height} → {Item.TargetWidth}×{Item.TargetHeight}";
         public string Saved => (Item.SavedBytes / 1048576d).ToString("N2");

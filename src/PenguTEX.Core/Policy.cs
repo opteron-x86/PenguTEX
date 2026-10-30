@@ -18,6 +18,7 @@ public sealed record Policy
     public bool ProtectCharacters { get; init; } = true;
     public bool FitReference { get; init; }
     public bool FitProtectedReference { get; init; }
+    public bool RecoverMipCounts { get; init; }
     // Retained only to reject legacy policies explicitly, rather than ignore their intent.
     public bool CarryReference { get; init; }
     public PathRule[] Rules { get; init; } = [];
@@ -108,7 +109,8 @@ public static class Planner
                 protection = null;
             try
             {
-                using var stream = asset.Open(); var (info, _) = Dds.Inspect(stream, asset.Length);
+                using var stream = asset.Open(); var (info, _) = Dds.Inspect(stream, asset.Length,
+                    policy.RecoverMipCounts && !higherPriority && protection is null);
                 int drop = info.DropFor(maximum); int width = Math.Max(1, info.Width >> drop), height = Math.Max(1, info.Height >> drop);
                 if (policy.FitReference && reference?.Info is { } previous)
                     while (drop < info.MipCount - 1 && !ReferenceComparison.Fits(info, drop, false, previous)) drop++;
@@ -149,6 +151,11 @@ public static class Planner
                 else if (Math.Max(width, height) > maximum) { decision = Decision.Keep; reason = "No existing mip reaches the selected maximum; use explicit mip rebuilding when available."; drop = 0; }
                 else if (drop > 0) { decision = Decision.Reduce; reason = $"Retain existing mip {drop} and its smaller levels; {category.ToLowerInvariant()} cap {maximum}." + (policy.FitReference && reference?.Info is not null ? " Also fits reference dimensions and payload without changing format." : ""); }
                 else { decision = Decision.Keep; reason = "Already within the selected maximum."; }
+                if (info.DeclaredMipCount is { } declared)
+                {
+                    if (decision == Decision.Keep) decision = Decision.Reduce;
+                    reason = $"Recovered source mip count {declared} → {info.MipCount} from the exact full-chain payload length. " + reason;
+                }
                 items.Add(new(asset.Path, asset.Origin, asset.Container, category, decision, reason, info, drop,
                     Math.Max(1, info.Width >> drop), Math.Max(1, info.Height >> drop), info.PayloadBytes - info.RemovedBytes(drop)));
             }

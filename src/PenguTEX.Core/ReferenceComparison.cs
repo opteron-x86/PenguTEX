@@ -67,7 +67,7 @@ public static class ReferenceComparison
     public static DdsInfo Target(DdsInfo input, int drop, bool rebuild)
     {
         int width = Math.Max(1, input.Width >> drop), height = Math.Max(1, input.Height >> drop);
-        var target = input with { Width = width, Height = height,
+        var target = input with { Width = width, Height = height, DeclaredMipCount = null,
             MipCount = rebuild ? 1 + (int)Math.Log2(Math.Max(width, height)) : input.MipCount - drop };
         return target with { PayloadBytes = Enumerable.Range(0, target.MipCount).Sum(target.MipBytes) };
     }
@@ -85,7 +85,7 @@ public static class ReferenceComparison
             { differences.Add(new(item.Path, item.Origin, "ReferenceRetained", item.Reason, old.Info, old.Info, old.Info?.PayloadBytes, old.Info?.PayloadBytes)); continue; }
             if (assets[item.Path].Priority > reference.Priority)
             { differences.Add(new(item.Path, item.Origin, "HigherPriority", "An unchanged higher-priority source wins over both outputs.", item.Input, item.Input, item.Input?.PayloadBytes, item.Input?.PayloadBytes)); continue; }
-            DdsInfo? proposed = item.Input is null ? null : ReferenceComparison.Target(item.Input, item.DropMips, item.Decision == Decision.Rebuild);
+            DdsInfo? proposed = item.Input is null || item.Input.DeclaredMipCount is not null && item.Decision is not (Decision.Reduce or Decision.Rebuild) ? null : ReferenceComparison.Target(item.Input, item.DropMips, item.Decision == Decision.Rebuild);
             string status = old.Info is null ? "UnknownReference" : proposed is null ? "UnknownSource"
                 : proposed.Width > old.Info.Width || proposed.Height > old.Info.Height || proposed.PayloadBytes > old.Info.PayloadBytes ? "Larger"
                 : !CoversReferenceMips(proposed, old.Info) ? "IncompleteMips"

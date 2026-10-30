@@ -50,6 +50,7 @@ public static class Program
         if (Get("max") is { } max) policy = policy with { Maximum = int.Parse(max), NormalMaximum = int.Parse(max), MaterialMaximum = int.Parse(max), HeightMaximum = int.Parse(max) };
         if (Get("fit-reference") is { } fit) policy = policy with { FitReference = bool.Parse(fit) };
         if (Get("fit-protected") is { } fitProtected) policy = policy with { FitProtectedReference = bool.Parse(fitProtected) };
+        if (Get("recover-mip-counts") is { } recover) policy = policy with { RecoverMipCounts = bool.Parse(recover) };
         if (Get("carry-reference") is { } carry) policy = policy with { CarryReference = bool.Parse(carry) };
         policy.Validate();
         bool requireParity = bool.Parse(Get("require-parity") ?? "false");
@@ -71,7 +72,7 @@ public static class Program
     {
         string[] known = ["folder", "instance", "profile", "game", "mods", "profiles", "overwrite", "wine-prefix",
             "ini", "exclude-mods", "preset", "policy", "max", "report", "output", "cache", "workers", "data",
-            "reference", "replace-mod", "fit-reference", "fit-protected", "carry-reference", "require-parity"];
+            "reference", "replace-mod", "fit-reference", "fit-protected", "carry-reference", "require-parity", "recover-mip-counts"];
         var options = new Dictionary<string, string>();
         for (int i = 0; i < args.Length; i += 2)
         {
@@ -94,6 +95,8 @@ public static class Program
     }
     private const string Help = """
         PenguTEX — native Skyrim texture optimization
+
+        --recover-mip-counts true           Recover a complete BC chain with an underreported count
 
         inspect texture.dds                 Validate a DDS header and payload size
         profiles --instance PATH            List MO2/Fluorine profiles

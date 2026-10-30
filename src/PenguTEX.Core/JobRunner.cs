@@ -8,6 +8,7 @@ public sealed record OutputEntry(string Path, string Source, string SourceHash, 
     int Width, int Height, int DropMips, long Bytes, string Recipe)
 {
     public string? SourceContainer { get; init; }
+    public int? DeclaredSourceMipCount { get; init; }
     public string Operation { get; init; } = "MipCopy";
     public TextureSemantic? Semantic { get; init; }
     public string Processor { get; init; } = "mip-copy-v1";
@@ -16,7 +17,7 @@ public sealed record OutputManifest(string Product, int Schema, string Version, 
     string PolicyHash, IReadOnlyList<OutputEntry> Files, int Unchanged, int Protected, int Unsupported, int Invalid)
 {
     public ReferenceReport? Comparison { get; init; }
-    public bool OriginalsOnly => Files.All(f => f.Operation is "MipCopy" or "Rebuild" or "CompleteMips");
+    public bool OriginalsOnly => Files.All(f => f.Operation is "MipCopy" or "Rebuild" or "CompleteMips" or "RepairHeader");
 }
 public sealed record BuildResult(string Output, int Files, int Reused, long Bytes, double Seconds, OutputManifest Manifest);
 
@@ -135,7 +136,7 @@ public static class JobRunner
                         && candidate.Operation == item.Operation
                         && candidate.Semantic == item.Semantic && info.Width == item.TargetWidth
                         && info.Height == item.TargetHeight && HashFile(cached, ct) == candidate.OutputHash)
-                        entry = candidate with { Path = item.Path, Source = item.Origin, SourceContainer = asset.Container };
+                        entry = candidate with { Path = item.Path, Source = item.Origin, SourceContainer = asset.Container, DeclaredSourceMipCount = item.Input?.DeclaredMipCount };
                 }
                 catch (Exception e) when (e is IOException or InvalidDataException or System.Text.Json.JsonException or NotSupportedException) { }
             }
@@ -150,7 +151,7 @@ public static class JobRunner
                 {
                     if (source.CanSeek)
                     {
-                        var current = Dds.Inspect(source, asset.Length).Info;
+                        var current = Dds.Inspect(source, asset.Length, item.Input?.DeclaredMipCount is not null).Info;
                         if (current != item.Input) throw new IOException("Source metadata changed; analyze again: " + item.Path);
                         source.Position = 0;
                     }
@@ -163,7 +164,7 @@ public static class JobRunner
                     || info.Format != item.Input!.Format || info.Dxgi != item.Input.Dxgi || info.Signed != item.Input.Signed || info.Premultiplied != item.Input.Premultiplied)
                     throw new InvalidDataException("Generated texture does not match the plan: " + item.Path);
                 entry = new(item.Path, item.Origin, hash, HashFile(dest, ct), info.Width, info.Height, item.DropMips, verify.Length, recipe)
-                { SourceContainer = asset.Container, Operation = item.Operation, Semantic = item.Semantic, Processor = processorIdentity };
+                { SourceContainer = asset.Container, DeclaredSourceMipCount = item.Input.DeclaredMipCount, Operation = item.Operation, Semantic = item.Semantic, Processor = processorIdentity };
             }
             using (var source = asset.Open())
                 if (Hash(source, ct) != hash) throw new IOException("Source changed during processing: " + item.Path);

@@ -84,6 +84,14 @@ with tempfile.TemporaryDirectory(prefix="pengutex-cli-") as temporary:
     assert completed["Manifest"]["OriginalsOnly"] and not completed["Manifest"]["Comparison"]["HasUnresolved"]
     assert completed["Manifest"]["Files"][0]["Operation"] == "CompleteMips"
     assert (root / "completed/textures/example.dds").read_bytes()[148:148 + 64] == partial[148:]
+    damaged_header = bytearray(original); struct.pack_into("<I", damaged_header, 28, 2)
+    (root / "damaged").mkdir(); (root / "damaged/example.dds").write_bytes(damaged_header)
+    assert run("analyze", "--folder", root / "damaged")["Items"][0]["Decision"] == "Invalid"
+    repaired = run("build", "--folder", root / "damaged", "--recover-mip-counts", "true",
+                   "--output", root / "repaired", "--cache", root / "cache")
+    assert repaired["Manifest"]["Files"][0]["Operation"] == "RepairHeader"
+    assert repaired["Manifest"]["Files"][0]["DeclaredSourceMipCount"] == 2
+    assert (root / "repaired/textures/example.dds").read_bytes()[148:] == original[148:]
     target.write_bytes(target.read_bytes()[:-1])
     run("verify", root / "output", expected=1)
     (root / "foreign").mkdir()
