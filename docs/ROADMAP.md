@@ -84,6 +84,7 @@ Track execution in [issues](https://github.com/opteron-x86/PenguTEX/issues) and
 - [#26 — Extend native DDS mip copying to verified uncompressed layouts and BC6H](https://github.com/opteron-x86/PenguTEX/issues/26)
 - [#29 — Bound CPU mip rebuilding and preserve uncompressed byte channels](https://github.com/opteron-x86/PenguTEX/issues/29)
 - [#36 — Require original-source provenance for replacement outputs](https://github.com/opteron-x86/PenguTEX/issues/36)
+- [#38 — Complete original mip chains without recompressing retained levels](https://github.com/opteron-x86/PenguTEX/issues/38)
 - [#34 — Require replacement mip chains to retain reference coverage](https://github.com/opteron-x86/PenguTEX/issues/34)
 
 Use original assets for processing and a prior optimizer output as a comparison

@@ -2,7 +2,7 @@
 """Read synthetic rebuilt DDS files with Pillow's separate native DDS/BC decoder.
 
 Generate the fixtures with PENGUTEX_ORACLE_FIXTURES=/path bash tools/test.sh.
-The 13 files contain known solid channel values, including color under zero alpha.
+The files contain known solid channel values, including color under zero alpha.
 No game assets are required. This is a build-time oracle, not a runtime dependency.
 """
 import io
@@ -51,6 +51,6 @@ def verify(path):
 
 
 paths = sorted(Path(sys.argv[1]).glob("*.dds"))
-assert len(paths) == 13, f"Expected 13 synthetic fixtures, found {len(paths)}"
+assert len(paths) == 20, f"Expected 20 synthetic fixtures, found {len(paths)}"
 levels = sum(verify(path) for path in paths)
 print(f"Pillow {__version__}: independently decoded {len(paths)} DDS files / {levels} mip levels; channels and lengths match.")

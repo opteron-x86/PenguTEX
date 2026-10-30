@@ -75,6 +75,15 @@ with tempfile.TemporaryDirectory(prefix="pengutex-cli-") as temporary:
     assert mip_gap["Comparison"]["IncompleteMipCount"] == 1
     run("analyze", "--folder", root / "partial", "--reference", root / "reference",
         "--carry-reference", "true", expected=1)
+    completion_policy = root / "completion.json"
+    completion_policy.write_text(json.dumps({"Rules": [{"Pattern": "*", "Maximum": 8,
+        "CompleteMipChain": True, "Semantic": "LinearData"}]}))
+    completed = run("build", "--folder", root / "partial", "--reference", root / "reference",
+                    "--policy", completion_policy, "--require-parity", "true",
+                    "--output", root / "completed", "--cache", root / "cache")
+    assert completed["Manifest"]["OriginalsOnly"] and not completed["Manifest"]["Comparison"]["HasUnresolved"]
+    assert completed["Manifest"]["Files"][0]["Operation"] == "CompleteMips"
+    assert (root / "completed/textures/example.dds").read_bytes()[148:148 + 64] == partial[148:]
     target.write_bytes(target.read_bytes()[:-1])
     run("verify", root / "output", expected=1)
     (root / "foreign").mkdir()

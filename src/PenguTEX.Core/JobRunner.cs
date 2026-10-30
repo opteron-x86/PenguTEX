@@ -16,7 +16,7 @@ public sealed record OutputManifest(string Product, int Schema, string Version, 
     string PolicyHash, IReadOnlyList<OutputEntry> Files, int Unchanged, int Protected, int Unsupported, int Invalid)
 {
     public ReferenceReport? Comparison { get; init; }
-    public bool OriginalsOnly => Files.All(f => f.Operation is "MipCopy" or "Rebuild");
+    public bool OriginalsOnly => Files.All(f => f.Operation is "MipCopy" or "Rebuild" or "CompleteMips");
 }
 public sealed record BuildResult(string Output, int Files, int Reused, long Bytes, double Seconds, OutputManifest Manifest);
 
@@ -121,7 +121,7 @@ public static class JobRunner
             string hash;
             using (var stream = asset.Open()) hash = Hash(stream, ct);
             string processorIdentity = item.Decision == Decision.Rebuild ? processor!.Identity : RecipeVersion;
-            string recipe = JsonFiles.Hash(hash + "|" + processorIdentity + "|" + item.DropMips + "|" + item.Semantic + "|" + policyHash);
+            string recipe = JsonFiles.Hash(hash + "|" + processorIdentity + "|" + item.DropMips + "|" + item.Semantic + "|" + item.Operation + "|" + policyHash);
             string cached = Path.Combine(cache, recipe + ".dds"), metadata = cached + ".json";
             string dest = Resolve(stage, item.Path); Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
             OutputEntry? entry = null;
@@ -132,7 +132,7 @@ public static class JobRunner
                     var candidate = JsonFiles.Read<OutputEntry>(metadata);
                     using var check = File.OpenRead(cached); var info = Dds.Inspect(check).Info;
                     if (candidate.Recipe == recipe && candidate.SourceHash == hash && candidate.Processor == processorIdentity
-                        && candidate.Operation == (item.Decision == Decision.Rebuild ? "Rebuild" : "MipCopy")
+                        && candidate.Operation == item.Operation
                         && candidate.Semantic == item.Semantic && info.Width == item.TargetWidth
                         && info.Height == item.TargetHeight && HashFile(cached, ct) == candidate.OutputHash)
                         entry = candidate with { Path = item.Path, Source = item.Origin, SourceContainer = asset.Container };
@@ -163,7 +163,7 @@ public static class JobRunner
                     || info.Format != item.Input!.Format || info.Dxgi != item.Input.Dxgi || info.Signed != item.Input.Signed || info.Premultiplied != item.Input.Premultiplied)
                     throw new InvalidDataException("Generated texture does not match the plan: " + item.Path);
                 entry = new(item.Path, item.Origin, hash, HashFile(dest, ct), info.Width, info.Height, item.DropMips, verify.Length, recipe)
-                { SourceContainer = asset.Container, Operation = item.Decision == Decision.Rebuild ? "Rebuild" : "MipCopy", Semantic = item.Semantic, Processor = processorIdentity };
+                { SourceContainer = asset.Container, Operation = item.Operation, Semantic = item.Semantic, Processor = processorIdentity };
             }
             using (var source = asset.Open())
                 if (Hash(source, ct) != hash) throw new IOException("Source changed during processing: " + item.Path);

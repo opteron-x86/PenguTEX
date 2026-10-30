@@ -7,7 +7,7 @@ namespace PenguTEX.Imaging;
 
 public sealed class CpuMipProcessor : ITextureProcessor
 {
-    public string Identity => "bcn-2.3.0-strips-raw-area-v2";
+    public string Identity => "bcn-2.3.0-strips-raw-area-complete-v3";
     // One decoded texture per process; other workers can continue streaming mip copies.
     private static readonly SemaphoreSlim MemorySlot = new(1, 1);
     public void Process(Stream source, Stream target, PlanItem item, long length, CancellationToken ct)
@@ -18,19 +18,36 @@ public sealed class CpuMipProcessor : ITextureProcessor
             var (info, header) = Dds.Inspect(source, length);
             if (info != item.Input) throw new IOException("Source metadata changed; analyze again.");
             if (item.Semantic is not { } semantic) throw new InvalidDataException("Rebuilding requires explicit channel semantics.");
-            if (Policy.RebuildRestriction(info, semantic) is { } restriction) throw new NotSupportedException(restriction);
-            var pixels = TexturePreview.DecodePayload(source, info, ct: ct, maximumPixels: Policy.MaximumRebuildPixels);
+            if (Policy.RebuildRestriction(info, semantic, item.PreserveExistingMips) is { } restriction) throw new NotSupportedException(restriction);
+            int mips = 1 + (int)Math.Log2(Math.Max(item.TargetWidth, item.TargetHeight));
+            Dds.ResizeHeader(header, info, item.TargetWidth, item.TargetHeight, mips); target.Write(header);
+            PixelImage pixels; int firstGenerated = 0, downsample = item.DropMips;
+            if (item.PreserveExistingMips)
+            {
+                int last = info.MipCount - 1;
+                int start = Math.Min(item.DropMips, last);
+                Dds.Transfer(source, Stream.Null, info.RemovedBytes(start), ct);
+                Dds.Transfer(source, target, info.RemovedBytes(last) - info.RemovedBytes(start), ct);
+                var smallest = info with { Width = Math.Max(1, info.Width >> last), Height = Math.Max(1, info.Height >> last), MipCount = 1 };
+                // Decode the last original level while copying it, without buffering a second full image.
+                Stream input = item.DropMips <= last ? new CopyingReadStream(source, target) : source;
+                pixels = TexturePreview.DecodePayload(input, smallest, ct: ct, maximumPixels: Policy.MaximumRebuildPixels);
+                if (item.DropMips <= last) firstGenerated = info.MipCount - item.DropMips;
+                downsample = item.DropMips <= last ? 1 : item.DropMips - last;
+                if (source.ReadByte() != -1) throw new InvalidDataException("Unexpected trailing DDS payload.");
+                if (firstGenerated == mips) return;
+            }
+            else pixels = TexturePreview.DecodePayload(source, info, ct: ct, maximumPixels: Policy.MaximumRebuildPixels);
             double coverage = semantic == TextureSemantic.OpacitySrgb ? MipFilter.Coverage(pixels) : 0;
-            for (int n = 0; n < item.DropMips; n++) pixels = MipFilter.Downsample(pixels, semantic, coverage, ct);
-            if (pixels.Width != item.TargetWidth || pixels.Height != item.TargetHeight) throw new InvalidDataException("Rebuild dimensions do not match plan.");
-            int mips = 1 + (int)Math.Log2(Math.Max(pixels.Width, pixels.Height));
-            Dds.ResizeHeader(header, info, pixels.Width, pixels.Height, mips); target.Write(header);
+            for (int n = 0; n < downsample; n++) pixels = MipFilter.Downsample(pixels, semantic, coverage, ct);
+            if (pixels.Width != Math.Max(1, item.TargetWidth >> firstGenerated) || pixels.Height != Math.Max(1, item.TargetHeight >> firstGenerated))
+                throw new InvalidDataException("Rebuild dimensions do not match plan.");
             var format = info.IsBlockCompressed ? TexturePreview.Format(info) : CompressionFormat.Unknown;
             var encoder = new BcEncoder(format);
             encoder.OutputOptions.GenerateMipMaps = false; encoder.OutputOptions.Quality = CompressionQuality.Balanced;
             encoder.Options.IsParallel = false;
             var decoder = new BcDecoder(); decoder.Options.IsParallel = false;
-            for (int mip = 0; mip < mips; mip++)
+            for (int mip = firstGenerated; mip < mips; mip++)
             {
                 ct.ThrowIfCancellationRequested();
                 if (!info.IsBlockCompressed) RawPixels.Write(target, pixels, info, ct);
@@ -49,5 +66,23 @@ public sealed class CpuMipProcessor : ITextureProcessor
             }
         }
         finally { MemorySlot.Release(); }
+    }
+
+    private sealed class CopyingReadStream(Stream source, Stream target) : Stream
+    {
+        public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+        public override int Read(Span<byte> buffer)
+        {
+            int read = source.Read(buffer); target.Write(buffer[..read]); return read;
+        }
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }

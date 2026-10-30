@@ -21,7 +21,21 @@ Add a path rule to a JSON policy (or the desktop's custom-rule editor):
 These example suffixes are not proof of shader semantics. Verify the actual material
 and channels first. Last matching processing rule wins. A rule with an explicit
 Maximum also clears default path protection; a Protect rule still prevents changes.
-Rules without RebuildMips use normal mip copying. Missing semantics reject the policy.
+Rules without RebuildMips or CompleteMipChain use normal mip copying. Missing semantics reject the policy.
+
+To fill missing levels while preserving all usable original levels, use
+`"CompleteMipChain": true` instead of `"RebuildMips": true`. The two options are
+mutually exclusive. Completion copies retained payloads byte for byte and filters
+from the smallest available original mip. If the requested cap is smaller than
+that mip, filtering continues down to the cap before writing. Complete source
+chains use ordinary mip copying and need no decoder. Reports label generated work
+`CompleteMips`; source hashes and containers still refer to originals. Reference
+files supply comparison metadata only.
+
+Completion decodes only the smallest available original level, so the 64-million
+pixel limit applies to that level. It can stream a larger base texture without
+decoding it. Opacity coverage for newly appended levels is measured from the last
+original level; existing coverage and original compressed blocks are untouched.
 
 | Semantic | Filtering |
 | --- | --- |
