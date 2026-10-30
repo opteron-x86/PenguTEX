@@ -36,6 +36,10 @@ checks the output location before scanning sources and again before publication.
 Ctrl+C and rerun the same command to reuse validated cached textures. Install the
 output as a high-priority mod; disable the old optimizer output to compare results.
 
+Build reports generation, per-texture verification, publication and previous-output
+cleanup separately. Each phase has its own count; generation reaching its total
+does not mean publication is finished. Standalone `verify` also reports progress.
+
 JSON goes to stdout and progress/errors to stderr. Exit codes: 0 success, 1 failure,
 2 incomplete source analysis, 130 cancellation. Unsupported and invalid textures
 remain unchanged in their original mods and are counted explicitly. Missing or

@@ -59,6 +59,32 @@ public sealed class DesktopTests
         finally { window.Close(); }
     }
     [AvaloniaFact]
+    public async Task FastBuildLogsFinalCountsAndKeepsCompletionStatus()
+    {
+        using var f = new Fixture();
+        for (int i = 0; i < 3; i++) f.File($"source/texture{i}.dds", Fixture.Dds());
+        var settings = Settings(f) with { Workers = 3 };
+        var window = new MainWindow(new SettingsStore(Path.Combine(f.Root, "settings.json"))); window.SetSettings(settings); window.Show();
+        try
+        {
+            await window.AnalyzeAsync();
+            window.GetVisualDescendants().OfType<TabControl>().Single().SelectedIndex = 2;
+            Dispatcher.UIThread.RunJobs();
+            for (int run = 0; run < 2; run++)
+            {
+                Control<TextBox>(window, "JobLog").Text = "";
+                await window.BuildAsync(); Dispatcher.UIThread.RunJobs();
+                Assert.StartsWith("Complete: 3 verified textures", window.Status);
+                string log = Control<TextBox>(window, "JobLog").Text!;
+                Assert.Contains("Build: 3 / 3", log); Assert.Contains("Verify: 0 / 3", log);
+                Assert.Contains("Verify: 3 / 3", log); Assert.Contains("Publish: 1 / 1", log);
+                if (run == 1) Assert.Contains("Cleanup: 1 / 1", log);
+                Assert.StartsWith("Complete: 3 verified textures", log.TrimEnd().Split('\n')[^1]);
+            }
+        }
+        finally { window.Close(); }
+    }
+    [AvaloniaFact]
     public async Task InvalidOutputIsReportedBeforeSourcesAreScannedAgain()
     {
         using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds()); var settings = Settings(f);

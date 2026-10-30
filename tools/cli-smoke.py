@@ -13,10 +13,12 @@ if not command:
     raise SystemExit("usage: cli-smoke.py /path/to/PenguTEX (or dotnet /path/to/PenguTEX.dll)")
 
 
-def run(*args, expected=0):
+def run(*args, expected=0, progress=()):
     result = subprocess.run([*command, *map(str, args)], capture_output=True, text=True)
     if result.returncode != expected:
         raise RuntimeError(f"{args[0]} returned {result.returncode}: {result.stderr}")
+    for message in progress:
+        assert message in result.stderr, f"Missing progress {message!r}: {result.stderr}"
     return json.loads(result.stdout) if result.stdout.strip() else None
 
 
@@ -37,14 +39,15 @@ with tempfile.TemporaryDirectory(prefix="pengutex-cli-") as temporary:
     assert plan["ChangedCount"] == 1
     (root / "output").mkdir()  # File-picker users commonly create the destination first.
     built = run("build", "--folder", root / "input", "--max", 8,
-                "--output", root / "output", "--cache", root / "cache")
+                "--output", root / "output", "--cache", root / "cache",
+                progress=("Build 1/1:", "Verify 0/1:", "Verify 1/1:", "Publish 0/1:", "Publish 1/1:"))
     assert built["Files"] == 1 and built["Reused"] == 0
     target = root / "output" / "textures" / "armor" / "example.dds"
     assert target.read_bytes()[148:] == payload[256:]
     assert run("inspect", target)["Width"] == 8
-    assert len(run("verify", root / "output")["Files"]) == 1
+    assert len(run("verify", root / "output", progress=("Verify 0/1:", "Verify 1/1:"))["Files"]) == 1
     assert run("build", "--folder", root / "input", "--max", 8,
-               "--output", root / "output", "--cache", root / "cache")["Reused"] == 1
+               "--output", root / "output", "--cache", root / "cache", progress=("Cleanup 0/1:", "Cleanup 1/1:"))["Reused"] == 1
     assert hashlib.sha256((source / "example.dds").read_bytes()).digest() == hashlib.sha256(original).digest()
     target.write_bytes(target.read_bytes()[:-1])
     run("verify", root / "output", expected=1)

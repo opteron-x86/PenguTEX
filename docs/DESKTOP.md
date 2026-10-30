@@ -21,6 +21,11 @@ Start `PenguTEX.Desktop` in a portable distribution, or run
 6. Build the output mod. Source winners/headers are checked again before work; full
    source hashes are checked during processing. Cancellation preserves previously
    published output and verified cache. Re-running reuses verified files.
+   After Build reaches its texture count, Verify reads every staged texture and
+   checks its hash. Publish then moves the verified output into place; Cleanup
+   removes the previous generated output when replacing it. Each phase has its
+   own progress count. The temporary `.pengutex-stage-*` folder is working data;
+   wait for Complete and use the chosen output folder for installation.
 7. Install/enable the output as a higher-priority mod through your mod manager.
    Disable/remove it to revert. PenguTEX does not edit profiles or launch the game.
 
