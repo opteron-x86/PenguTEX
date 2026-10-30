@@ -5,7 +5,8 @@ namespace PenguTEX.Desktop;
 public sealed record DesktopSettings
 {
     public SourceOptions Source { get; init; } = new(Folder: "");
-    public Policy Policy { get; init; } = new();
+    public Policy Policy { get; init; } = Policy.Preset("balanced");
+    public bool CompareReference { get; init; }
     public string Output { get; init; } = "";
     public string Cache { get; init; } = Path.Combine(Environment.GetEnvironmentVariable("XDG_CACHE_HOME")
         ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache"), "PenguTEX");

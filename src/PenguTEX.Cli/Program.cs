@@ -50,17 +50,21 @@ public static class Program
         if (Get("max") is { } max) policy = policy with { Maximum = int.Parse(max), NormalMaximum = int.Parse(max), MaterialMaximum = int.Parse(max), HeightMaximum = int.Parse(max) };
         if (Get("fit-reference") is { } fit) policy = policy with { FitReference = bool.Parse(fit) };
         if (Get("fit-protected") is { } fitProtected) policy = policy with { FitProtectedReference = bool.Parse(fitProtected) };
+        if (Get("complete-materials") is { } complete) policy = policy with { CompleteKnownMaterials = bool.Parse(complete) };
         if (Get("recover-mip-counts") is { } recover) policy = policy with { RecoverMipCounts = bool.Parse(recover) };
         if (Get("carry-reference") is { } carry) policy = policy with { CarryReference = bool.Parse(carry) };
         policy.Validate();
+        bool requireComplete = bool.Parse(Get("require-complete") ?? "false");
         bool requireParity = bool.Parse(Get("require-parity") ?? "false");
         if (requireParity && source.ReferenceFolder is null) throw new ArgumentException("--require-parity needs --reference.");
         if (args[0] == "build") JobRunner.ValidateOutputDirectory(Get("output") ?? throw new ArgumentException("--output is required."));
         var progress = new ConsoleProgress();
-        var catalog = CatalogLoader.Load(source, progress, ct); var plan = Planner.Analyze(catalog, policy, progress, ct);
+        var catalog = CatalogLoader.Load(source, progress, ct, policy.CompleteKnownMaterials); var plan = Planner.Analyze(catalog, policy, progress, ct);
         if (Get("report") is { } report) JsonFiles.Write(report, plan);
+        Console.Error.WriteLine(plan.Coverage.Assessment);
         if (plan.Comparison is { } comparison) Console.Error.WriteLine($"Replacement: {comparison.LargerCount} larger, {comparison.UnknownCount} unassessed, {comparison.IncompleteMipCount} incomplete mip chains. {comparison.Assessment}");
-        if (args[0] == "analyze") { Print(plan); return !plan.CompleteSource ? 2 : requireParity && plan.Comparison!.HasUnresolved ? 3 : 0; }
+        if (args[0] == "analyze") { Print(plan); return !plan.CompleteSource ? 2 : requireComplete && !plan.Coverage.MeetsPolicy ? 3 : requireParity && plan.Comparison!.HasUnresolved ? 3 : 0; }
+        if (requireComplete && !plan.Coverage.MeetsPolicy) { Print(plan.Coverage); return 3; }
         if (requireParity && plan.Comparison!.HasUnresolved) { Print(plan.Comparison); return 3; }
         var result = JobRunner.Build(catalog, plan,
             Get("output") ?? throw new ArgumentException("--output is required."),
@@ -72,7 +76,7 @@ public static class Program
     {
         string[] known = ["folder", "instance", "profile", "game", "mods", "profiles", "overwrite", "wine-prefix",
             "ini", "exclude-mods", "preset", "policy", "max", "report", "output", "cache", "workers", "data",
-            "reference", "replace-mod", "fit-reference", "fit-protected", "carry-reference", "require-parity", "recover-mip-counts"];
+            "reference", "replace-mod", "fit-reference", "fit-protected", "carry-reference", "require-parity", "recover-mip-counts", "complete-materials", "require-complete"];
         var options = new Dictionary<string, string>();
         for (int i = 0; i < args.Length; i += 2)
         {
@@ -107,6 +111,7 @@ public static class Program
         verify output-folder                Verify a published manifest and every texture
 
         Options: --preset NAME, --policy FILE, --max N, --report FILE, --workers N
+        Fresh runs: --complete-materials true|false, --require-complete true|false.
         Comparison: --reference PATH, --replace-mod NAME (profile slot when needed),
                     --require-parity true
         Profile overrides: --game PATH, --mods PATH, --profiles PATH, --overwrite PATH,

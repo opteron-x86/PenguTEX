@@ -35,6 +35,27 @@ public sealed class DesktopTests
         Assert.NotNull(image); image.Save(Path.Combine(folder, name + ".png"), Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
     }
     [AvaloniaFact]
+    public async Task FreshModeIgnoresDeletedPreviousOutputsAndReviewsOriginalCoverage()
+    {
+        using var f = new Fixture(); f.File("source/textures/a.dds", Fixture.RawDds(mipCount: 1));
+        f.File("source/meshes/a.nif", Fixture.Mesh());
+        var settings = Settings(f) with { Policy = Policy.Preset("balanced") with { Maximum = 8 },
+            Source = new(Folder: f.Dir("source")) { ReferenceFolder = Path.Combine(f.Root, "deleted-output"), ReplaceMod = "Old output" } };
+        var window = new MainWindow(new SettingsStore(Path.Combine(f.Root, "settings.json"))); window.SetSettings(settings); window.Show();
+        try
+        {
+            Assert.False(Control<CheckBox>(window, "CompareReference").IsChecked);
+            await window.AnalyzeAsync(); Assert.NotNull(window.CurrentPlan); Assert.Null(window.CurrentPlan.Source.ReferenceFolder);
+            Assert.Null(window.CurrentPlan.Comparison); Assert.True(window.CurrentPlan.Coverage.MeetsPolicy);
+            Assert.Equal(Decision.Rebuild, window.CurrentPlan.Items[0].Decision);
+            Control<ComboBox>(window, "DecisionFilter").SelectedItem = "All";
+            Control<DataGrid>(window, "TextureTable").SelectedIndex = 0; Capture(window, "material-review");
+            window.GetVisualDescendants().OfType<TabControl>().Single().SelectedIndex = 2; Capture(window, "fresh-coverage");
+            await window.BuildAsync(); Assert.NotNull(window.LastBuild); Assert.True(window.LastBuild.Manifest.OriginalsOnly);
+        }
+        finally { window.Close(); }
+    }
+    [AvaloniaFact]
     public async Task DesktopAnalysisBuildAndFiltersAgreeWithEngine()
     {
         using var f = new Fixture(); f.File("source/armor/metal.dds", Fixture.Dds(dxgi: 71));
@@ -88,7 +109,7 @@ public sealed class DesktopTests
     public async Task ReferenceReviewShowsGrowthAndFitRechecksBeforeBuilding()
     {
         using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds()); f.File("reference/a.dds", Fixture.Dds(4, 4));
-        var settings = Settings(f); settings = settings with { Source = settings.Source with { ReferenceFolder = f.Dir("reference") } };
+        var settings = Settings(f); settings = settings with { CompareReference = true, Source = settings.Source with { ReferenceFolder = f.Dir("reference") } };
         var window = new MainWindow(new SettingsStore(Path.Combine(f.Root, "settings.json"))); window.SetSettings(settings); window.Show();
         try
         {

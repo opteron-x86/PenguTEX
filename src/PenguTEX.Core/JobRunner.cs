@@ -11,12 +11,16 @@ public sealed record OutputEntry(string Path, string Source, string SourceHash, 
     public int? DeclaredSourceMipCount { get; init; }
     public string Operation { get; init; } = "MipCopy";
     public TextureSemantic? Semantic { get; init; }
+    public int AlphaCutoff { get; init; } = 128;
+    public MaterialHint? Material { get; init; }
     public string Processor { get; init; } = "mip-copy-v1";
 }
 public sealed record OutputManifest(string Product, int Schema, string Version, DateTimeOffset Created,
     string PolicyHash, IReadOnlyList<OutputEntry> Files, int Unchanged, int Protected, int Unsupported, int Invalid)
 {
     public ReferenceReport? Comparison { get; init; }
+    public NativeCoverage? Coverage { get; init; }
+    public string? MaterialFingerprint { get; init; }
     public bool OriginalsOnly => Files.All(f => f.Operation is "MipCopy" or "Rebuild" or "CompleteMips" or "RepairHeader");
 }
 public sealed record BuildResult(string Output, int Files, int Reused, long Bytes, double Seconds, OutputManifest Manifest);
@@ -85,6 +89,11 @@ public static class JobRunner
         if (catalog.Reference is { } baseline && catalog.Assets.Any(a => Within(a.Container, baseline.Folder)))
             throw new InvalidDataException("Reference files cannot be used as original texture sources.");
         if (workers is < 1 or > 32) throw new ArgumentException("Workers must be between 1 and 32.");
+        if (plan.MaterialFingerprint is not null)
+        {
+            if (catalog.Materials is null) throw new IOException("Material evidence is missing. Analyze again.");
+            catalog.Materials.VerifyUnchanged(plan.MaterialFingerprint, ct);
+        }
         ReferenceComparison.VerifyUnchanged(catalog, plan, ct);
         if (new DirectoryInfo(Path.TrimEndingDirectorySeparator(Path.GetFullPath(output))).LinkTarget is not null
             || new DirectoryInfo(Path.TrimEndingDirectorySeparator(Path.GetFullPath(cache))).LinkTarget is not null)
@@ -122,7 +131,7 @@ public static class JobRunner
             string hash;
             using (var stream = asset.Open()) hash = Hash(stream, ct);
             string processorIdentity = item.Decision == Decision.Rebuild ? processor!.Identity : RecipeVersion;
-            string recipe = JsonFiles.Hash(hash + "|" + processorIdentity + "|" + item.DropMips + "|" + item.Semantic + "|" + item.Operation + "|" + policyHash);
+            string recipe = JsonFiles.Hash(hash + "|" + processorIdentity + "|" + item.DropMips + "|" + item.Semantic + "|" + item.AlphaCutoff + "|" + item.Operation + "|" + policyHash);
             string cached = Path.Combine(cache, recipe + ".dds"), metadata = cached + ".json";
             string dest = Resolve(stage, item.Path); Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
             OutputEntry? entry = null;
@@ -134,9 +143,9 @@ public static class JobRunner
                     using var check = File.OpenRead(cached); var info = Dds.Inspect(check).Info;
                     if (candidate.Recipe == recipe && candidate.SourceHash == hash && candidate.Processor == processorIdentity
                         && candidate.Operation == item.Operation
-                        && candidate.Semantic == item.Semantic && info.Width == item.TargetWidth
+                        && candidate.Semantic == item.Semantic && candidate.AlphaCutoff == item.AlphaCutoff && info.Width == item.TargetWidth
                         && info.Height == item.TargetHeight && HashFile(cached, ct) == candidate.OutputHash)
-                        entry = candidate with { Path = item.Path, Source = item.Origin, SourceContainer = asset.Container, DeclaredSourceMipCount = item.Input?.DeclaredMipCount };
+                        entry = candidate with { Path = item.Path, Source = item.Origin, SourceContainer = asset.Container, DeclaredSourceMipCount = item.Input?.DeclaredMipCount, Material = item.Material };
                 }
                 catch (Exception e) when (e is IOException or InvalidDataException or System.Text.Json.JsonException or NotSupportedException) { }
             }
@@ -164,7 +173,7 @@ public static class JobRunner
                     || info.Format != item.Input!.Format || info.Dxgi != item.Input.Dxgi || info.Signed != item.Input.Signed || info.Premultiplied != item.Input.Premultiplied)
                     throw new InvalidDataException("Generated texture does not match the plan: " + item.Path);
                 entry = new(item.Path, item.Origin, hash, HashFile(dest, ct), info.Width, info.Height, item.DropMips, verify.Length, recipe)
-                { SourceContainer = asset.Container, DeclaredSourceMipCount = item.Input.DeclaredMipCount, Operation = item.Operation, Semantic = item.Semantic, Processor = processorIdentity };
+                { SourceContainer = asset.Container, DeclaredSourceMipCount = item.Input.DeclaredMipCount, Operation = item.Operation, Semantic = item.Semantic, AlphaCutoff = item.AlphaCutoff, Material = item.Material, Processor = processorIdentity };
             }
             using (var source = asset.Open())
                 if (Hash(source, ct) != hash) throw new IOException("Source changed during processing: " + item.Path);
@@ -186,10 +195,16 @@ public static class JobRunner
         var manifest = new OutputManifest(Product, 1, Version, DateTimeOffset.UtcNow,
             policyHash, entries, plan.Items.Count(x => x.Decision == Decision.Keep), plan.Items.Count(x => x.Decision == Decision.Protected),
             plan.Items.Count(x => x.Decision == Decision.Unsupported), plan.Items.Count(x => x.Decision == Decision.Invalid))
-        { Comparison = plan.Comparison };
+        { Comparison = plan.Comparison, Coverage = plan.Coverage, MaterialFingerprint = plan.MaterialFingerprint };
         JsonFiles.Write(Path.Combine(stage, ManifestName), manifest);
         File.WriteAllText(Path.Combine(stage, "meta.ini"), "[General]\ncomments=Generated by PenguTEX. See pengutex-manifest.json.\n");
         Verify(stage, ct, progress); ct.ThrowIfCancellationRequested();
+        if (plan.MaterialFingerprint is not null)
+        {
+            progress?.Report(new("Material recheck", 0, 1, "", "Checking original mesh evidence before publication"));
+            catalog.Materials!.VerifyUnchanged(plan.MaterialFingerprint, ct);
+            progress?.Report(new("Material recheck", 1, 1, "", "Material sources unchanged"));
+        }
         if (catalog.Reference is { } reference)
         {
             progress?.Report(new("Reference recheck", 0, 1, reference.Folder, "Checking that the comparison still applies"));

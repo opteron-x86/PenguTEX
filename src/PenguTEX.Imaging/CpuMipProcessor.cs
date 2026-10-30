@@ -7,7 +7,7 @@ namespace PenguTEX.Imaging;
 
 public sealed class CpuMipProcessor : ITextureProcessor
 {
-    public string Identity => "bcn-2.3.0-strips-raw-area-complete-v3";
+    public string Identity => "bcn-2.3.0-strips-raw-area-complete-alpha-v4";
     // One decoded texture per process; other workers can continue streaming mip copies.
     private static readonly SemaphoreSlim MemorySlot = new(1, 1);
     public void Process(Stream source, Stream target, PlanItem item, long length, CancellationToken ct)
@@ -38,8 +38,8 @@ public sealed class CpuMipProcessor : ITextureProcessor
                 if (firstGenerated == mips) return;
             }
             else pixels = TexturePreview.DecodePayload(source, info, ct: ct, maximumPixels: Policy.MaximumRebuildPixels);
-            double coverage = semantic == TextureSemantic.OpacitySrgb ? MipFilter.Coverage(pixels) : 0;
-            for (int n = 0; n < downsample; n++) pixels = MipFilter.Downsample(pixels, semantic, coverage, ct);
+            double coverage = semantic == TextureSemantic.OpacitySrgb ? MipFilter.Coverage(pixels, item.AlphaCutoff) : 0;
+            for (int n = 0; n < downsample; n++) pixels = MipFilter.Downsample(pixels, semantic, coverage, ct, item.AlphaCutoff);
             if (pixels.Width != Math.Max(1, item.TargetWidth >> firstGenerated) || pixels.Height != Math.Max(1, item.TargetHeight >> firstGenerated))
                 throw new InvalidDataException("Rebuild dimensions do not match plan.");
             var format = info.IsBlockCompressed ? TexturePreview.Format(info) : CompressionFormat.Unknown;
@@ -62,7 +62,7 @@ public sealed class CpuMipProcessor : ITextureProcessor
                         throw new InvalidDataException("Generated strip did not decode to its expected dimensions.");
                     target.Write(blocks);
                 }
-                if (mip + 1 < mips) pixels = MipFilter.Downsample(pixels, semantic, coverage, ct);
+                if (mip + 1 < mips) pixels = MipFilter.Downsample(pixels, semantic, coverage, ct, item.AlphaCutoff);
             }
         }
         finally { MemorySlot.Release(); }

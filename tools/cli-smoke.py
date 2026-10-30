@@ -71,6 +71,9 @@ with tempfile.TemporaryDirectory(prefix="pengutex-cli-") as temporary:
     partial = bytearray(target.read_bytes()[:148 + 64]); struct.pack_into("<I", partial, 28, 1)
     (root / "partial").mkdir(); (root / "partial/example.dds").write_bytes(partial)
     (root / "reference").mkdir(); (root / "reference/example.dds").write_bytes(target.read_bytes())
+    fresh_gap = run("analyze", "--folder", root / "partial", "--require-complete", "true", expected=3)
+    assert fresh_gap["Comparison"] is None and fresh_gap["Coverage"]["IncompleteMips"] == 1
+    assert fresh_gap["Source"]["ReferenceFolder"] is None
     mip_gap = run("analyze", "--folder", root / "partial", "--reference", root / "reference", "--require-parity", "true", expected=3)
     assert mip_gap["Comparison"]["IncompleteMipCount"] == 1
     run("analyze", "--folder", root / "partial", "--reference", root / "reference",
@@ -86,7 +89,7 @@ with tempfile.TemporaryDirectory(prefix="pengutex-cli-") as temporary:
     assert (root / "completed/textures/example.dds").read_bytes()[148:148 + 64] == partial[148:]
     damaged_header = bytearray(original); struct.pack_into("<I", damaged_header, 28, 2)
     (root / "damaged").mkdir(); (root / "damaged/example.dds").write_bytes(damaged_header)
-    assert run("analyze", "--folder", root / "damaged")["Items"][0]["Decision"] == "Invalid"
+    assert run("analyze", "--folder", root / "damaged", "--recover-mip-counts", "false")["Items"][0]["Decision"] == "Invalid"
     repaired = run("build", "--folder", root / "damaged", "--recover-mip-counts", "true",
                    "--output", root / "repaired", "--cache", root / "cache")
     assert repaired["Manifest"]["Files"][0]["Operation"] == "RepairHeader"

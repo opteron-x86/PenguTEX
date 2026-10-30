@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Text;
 using PenguTEX.Core;
 
 namespace PenguTEX.Tests;
@@ -11,6 +12,32 @@ public sealed class Fixture : IDisposable
     public string File(string name, byte[] data) { string p = Path.Combine(Root, name); Directory.CreateDirectory(Path.GetDirectoryName(p)!); System.IO.File.WriteAllBytes(p, data); return p; }
     public string Text(string name, string data) => File(name, System.Text.Encoding.UTF8.GetBytes(data));
     public void Dispose() { try { Directory.Delete(Root, true); } catch (IOException) { } }
+    // Metadata-only synthetic SSE NIF: no game geometry or third-party textures.
+    public static byte[] Mesh(int slot = 0, string texture = "textures/a.dds", uint type = 0,
+        ushort? alpha = null, byte threshold = 128, uint flags1 = 0, uint flags2 = 0, bool bound = true)
+    {
+        static byte[] Bytes(Action<BinaryWriter> write) { using var s = new MemoryStream(); using var w = new BinaryWriter(s); write(w); return s.ToArray(); }
+        static void Net(BinaryWriter w) { w.Write(-1); w.Write(0u); w.Write(-1); }
+        static void Str(BinaryWriter w, string s) { byte[] b = Encoding.Latin1.GetBytes(s); w.Write(b.Length); w.Write(b); }
+        var blocks = new List<(string Type, byte[] Data)>
+        {
+            ("BSShaderTextureSet", Bytes(w => { w.Write(9u); for (int i = 0; i < 9; i++) Str(w, i == slot ? texture : ""); })),
+            ("BSLightingShaderProperty", Bytes(w => { w.Write(type); Net(w); w.Write(flags1); w.Write(flags2); w.Write(new byte[16]); w.Write(0); w.Write(new byte[20]); w.Write(1f); })),
+            ("BSTriShape", Bytes(w => { Net(w); w.Write(new byte[4 + 52]); w.Write(-1); w.Write(new byte[16]); w.Write(-1); w.Write(bound ? 1 : -1); w.Write(alpha.HasValue ? 3 : -1); })),
+        };
+        if (alpha is { } a) blocks.Add(("NiAlphaProperty", Bytes(w => { Net(w); w.Write(a); w.Write(threshold); })));
+        return Bytes(w =>
+        {
+            w.Write(Encoding.ASCII.GetBytes("Gamebryo File Format, Version 20.2.0.7\n"));
+            w.Write(0x14020007u); w.Write((byte)1); w.Write(12u); w.Write(blocks.Count); w.Write(100u); w.Write(new byte[3]);
+            w.Write((ushort)blocks.Count); foreach (var b in blocks) Str(w, b.Type);
+            for (ushort i = 0; i < blocks.Count; i++) w.Write(i);
+            foreach (var b in blocks) w.Write(b.Data.Length);
+            w.Write(0u); w.Write(0u); w.Write(0u);
+            foreach (var b in blocks) w.Write(b.Data);
+            w.Write(1u); w.Write(2);
+        });
+    }
     public static byte[] Dds(int width = 16, int height = 16, int dxgi = 98, string? fourCC = null, int? mipCount = null)
     {
         int mips = mipCount ?? 1 + (int)Math.Log2(Math.Max(width, height));
@@ -26,10 +53,10 @@ public sealed class Fixture : IDisposable
         for (int i = header; i < bytes.Length; i++) bytes[i] = (byte)(i * 31);
         return bytes;
     }
-    public static byte[] Bsa(byte[] payload, string filename = "archive.dds")
+    public static byte[] Bsa(byte[] payload, string filename = "archive.dds", string directory = "textures")
     {
         using var output = new MemoryStream(); using var w = new BinaryWriter(output);
-        byte[] folder = System.Text.Encoding.UTF8.GetBytes("textures\0"), name = System.Text.Encoding.UTF8.GetBytes(filename + "\0");
+        byte[] folder = System.Text.Encoding.UTF8.GetBytes(directory + "\0"), name = System.Text.Encoding.UTF8.GetBytes(filename + "\0");
         const uint folderBlock = 60;
         uint dataOffset = folderBlock + 1 + (uint)folder.Length + 16 + (uint)name.Length;
         w.Write("BSA\0"u8); w.Write(105u); w.Write(36u); w.Write(3u); w.Write(1u); w.Write(1u);
