@@ -62,7 +62,9 @@ with tempfile.TemporaryDirectory(prefix="pengutex-cli-") as temporary:
         "--carry-reference", "true", "--output", root / "carried", "--cache", root / "cache", expected=1)
     assert not (root / "carried").exists()
     assert candidate["Manifest"]["OriginalsOnly"]
-    assert candidate["Manifest"]["Files"][0]["SourceContainer"] == str(source / "example.dds")
+    recorded_source = Path(candidate["Manifest"]["Files"][0]["SourceContainer"])
+    # Windows temp paths may use a short-name alias or different casing. Verify file identity.
+    assert recorded_source.samefile(source / "example.dds"), (recorded_source, source / "example.dds")
     legacy_manifest = root / "candidate" / "pengutex-manifest.json"
     legacy = json.loads(legacy_manifest.read_text())
     legacy["Files"][0]["Operation"] = "ReferenceCopy"
