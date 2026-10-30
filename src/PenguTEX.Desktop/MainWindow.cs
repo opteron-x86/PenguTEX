@@ -16,6 +16,7 @@ namespace PenguTEX.Desktop;
 public sealed class MainWindow : Window
 {
     private readonly SettingsStore _store;
+    private readonly Func<DirectoryInfo, Task<bool>> _openDirectory;
     private readonly ComboBox _mode = new() { ItemsSource = new[] { "Texture folder", "MO2 / Fluorine profile" }, SelectedIndex = 0 };
     private readonly ComboBox _preset = new() { ItemsSource = new[] { "Quality", "Balanced", "Compact", "Custom / saved limits" }, SelectedIndex = 1 };
     private readonly ComboBox _profiles = new() { MinWidth = 180 };
@@ -25,11 +26,12 @@ public sealed class MainWindow : Window
         _normal = Box("NormalMaximum"), _material = Box("MaterialMaximum"), _height = Box("HeightMaximum"), _workers = Box("Workers"),
         _reference = Box("ReferencePath"), _replaceMod = Box("ReplaceMod");
     private readonly CheckBox _compareReference = new() { Name = "CompareReference", Content = "Compare against a previous output (optional)", IsChecked = false };
-    private readonly CheckBox _completeMaterials = new() { Name = "CompleteKnownMaterials", Content = "Complete missing mips using resolved mesh bindings (review before building)" };
+    private readonly CheckBox _completeMaterials = new() { Name = "CompleteKnownMaterials", Content = "Complete missing mipmaps" };
     private readonly CheckBox _fitReference = new() { Name = "FitReference", Content = "Fit previous dimensions and texture payload", IsChecked = false };
     private readonly CheckBox _fitProtected = new() { Name = "FitProtectedReference", Content = "Allow this fit for protected landscapes and characters", IsChecked = false };
-    private readonly CheckBox _recoverRecords = new() { Name = "RecoverMipRecords", Content = "Recover recognized DDS mip records only after validating every boundary" };
-    private readonly CheckBox _recoverMips = new() { Name = "RecoverMipCounts", Content = "Recover incorrect mip counts only when the payload matches a full chain" };
+    private readonly CheckBox _recoverRecords = new() { Name = "RecoverMipRecords", Content = "Recover supported DDS layouts" };
+    private readonly CheckBox _recoverMips = new() { Name = "RecoverMipCounts", Content = "Repair mipmap counts" };
+    private readonly StackPanel _comparisonOptions = new() { Name = "ComparisonOptions", Spacing = 12, IsVisible = false, IsEnabled = false };
     private readonly DataGrid _comparisonTable = new() { Name = "ReferenceTable", AutoGenerateColumns = false, IsReadOnly = true, CanUserSortColumns = true };
     private readonly TextBlock _comparisonSummary = Text("Analyze selected originals to review coverage and exceptions.");
     private readonly CheckBox _large = new() { Content = "Protect landscapes and large surfaces", IsChecked = true };
@@ -44,31 +46,44 @@ public sealed class MainWindow : Window
     private readonly Button _analyze = new() { Content = "Analyze textures", Name = "Analyze", Padding = new Thickness(20, 10) },
         _build = new() { Content = "Build output mod", Name = "Build", IsEnabled = false, Padding = new Thickness(20, 10) },
         _cancelButton = new() { Content = "Cancel", Name = "Cancel", IsEnabled = false },
+        _openOutput = new() { Content = "Open output folder", Name = "OpenOutput", IsEnabled = false },
         _preview = new() { Content = "Inspect texture", IsEnabled = false }, _export = new() { Content = "Export analysis", IsEnabled = false };
     private readonly TabControl _tabs = new(); private Control? _setup; private CancellationTokenSource? _cancel;
     private Catalog? _catalog; private OptimizationPlan? _plan; private bool _loading; private string _policyName = "Balanced";
     private DateTime _lastLog; private string _lastPhase = "";
+    private bool _openingOutput;
     public bool IsWorking { get; private set; }
     public string Status => _status.Text ?? "";
     public OptimizationPlan? CurrentPlan => _plan;
     public int VisibleCount { get; private set; }
     public BuildResult? LastBuild { get; private set; }
 
-    public MainWindow(SettingsStore store)
+    public MainWindow(SettingsStore store, Func<DirectoryInfo, Task<bool>>? openDirectory = null)
     {
         _store = store; Title = "PenguTEX — Texture optimizer"; Width = 1280; Height = 900; MinWidth = 980; MinHeight = 700;
-        var title = Text("PenguTEX", 32);
+        _summary.Name = "Summary";
+        _openDirectory = openDirectory ?? (directory => Launcher.LaunchDirectoryInfoAsync(directory));
+        var version = new TextBlock { Name = "ApplicationVersion", Text = "v" + JobRunner.Version.Split('+')[0],
+            FontSize = 14, Opacity = 0.75, VerticalAlignment = VerticalAlignment.Center };
+        Tip(version, "Build: " + JobRunner.Version);
+        var title = new DockPanel(); DockPanel.SetDock(version, Dock.Right); title.Children.Add(version); title.Children.Add(Text("PenguTEX", 32));
+        Tip(_completeMaterials, "Add missing smaller texture levels when supported material use is identified in the source meshes. Existing mipmaps are preserved. Review unresolved textures under Coverage.");
+        Tip(_recoverMips, "Use additional mipmaps already stored in the original texture only when its data exactly matches a complete mipmap chain. Image data is not recompressed.");
+        Tip(_recoverRecords, "Recover recognized nonstandard DDS mipmap records after checking their sizes and boundaries. Unrecognized layouts remain unchanged and appear under Coverage.");
+        Tip(_openOutput, "Open the selected output folder in your file manager. The folder must already exist.");
         _setup = Setup();
         _tabs.ItemsSource = new[] { new TabItem { Header = "1  Source & policy", Content = new ScrollViewer { Content = _setup } },
             new TabItem { Header = "2  Review textures", Content = Review() }, new TabItem { Header = "3  Coverage", Content = ReplacementReview() },
             new TabItem { Header = "4  Run log", Content = _log } };
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { _analyze, _build, _cancelButton, _export } };
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { _analyze, _build, _cancelButton, _export, _openOutput } };
         var footer = new StackPanel { Spacing = 10, Children = { actions, _progress, _status } };
         var root = new Grid { Margin = new Thickness(24), RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto"), RowSpacing = 18 };
         root.Children.Add(title); Grid.SetRow(_summary, 1); root.Children.Add(_summary); Grid.SetRow(_tabs, 2); root.Children.Add(_tabs);
         Grid.SetRow(footer, 3); root.Children.Add(footer); Content = root;
         _analyze.Click += async (_, _) => await AnalyzeAsync(); _build.Click += async (_, _) => await BuildAsync();
         _cancelButton.Click += (_, _) => _cancel?.Cancel(); _export.Click += async (_, _) => await ExportAsync();
+        _openOutput.Click += async (_, _) => await OpenOutputFolderAsync();
+        _output.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) UpdateOutputFolderAction(); };
         _preview.Click += async (_, _) =>
         {
             if (_table.SelectedItem is PlanRow row && _catalog is not null)
@@ -105,6 +120,7 @@ public sealed class MainWindow : Window
     }
     private static TextBox Box(string name) => new() { Name = name, HorizontalAlignment = HorizontalAlignment.Stretch };
     private static TextBlock Text(string text, double size = 14) => new() { Text = text, FontSize = size, TextWrapping = TextWrapping.Wrap };
+    private static void Tip(Control control, string text) { var content = Text(text); content.MaxWidth = 420; ToolTip.SetTip(control, content); }
     private static Control Field(string label, Control input) => new StackPanel { Spacing = 5, Children = { Text(label), input } };
     private static Grid Columns(Control left, Control right)
     { var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 18 }; grid.Children.Add(left); Grid.SetColumn(right, 1); grid.Children.Add(right); return grid; }
@@ -147,6 +163,8 @@ public sealed class MainWindow : Window
             Columns(Field("INI archive list override", _ini), Field("Excluded mods (separate names with |)", _exclude)),
             Field("Path rules (JSON; later matching rules win)", _rules),
             Text("Example: [{\"Pattern\":\"textures/armor/*\",\"Maximum\":1024}]. Explicit caps can override protections.") } };
+        _comparisonOptions.Children.Add(Columns(PathField("Previous optimized output", _reference), Field("Mod to replace (auto-detected for installed reference)", _replaceMod)));
+        _comparisonOptions.Children.Add(Columns(_fitReference, _fitProtected));
         return new StackPanel { Spacing = 16, Margin = new Thickness(0, 14, 12, 10), Children = {
             Columns(Field("Source type", _mode), Field("Preset", _preset)), PathField("Source folder or MO2 / Fluorine instance", _source),
             Columns(Field("Profile name (profile sources only)", _profile), profileRow),
@@ -155,8 +173,7 @@ public sealed class MainWindow : Window
             new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { import, save } },
             Columns(PathField("Output mod folder", _output), PathField("Reusable work cache", _cache)),
             _completeMaterials, _recoverMips, _recoverRecords, _compareReference,
-            Columns(PathField("Previous optimized output (optional comparison)", _reference), Field("Mod to replace (auto-detected for installed reference)", _replaceMod)),
-            Columns(_fitReference, _fitProtected),
+            _comparisonOptions,
             Field("Workers (1–32)", _workers),
             new Expander { Header = "Locations and custom rules", Content = advanced, HorizontalAlignment = HorizontalAlignment.Stretch },
             Text("Quality: color 2K, normal/material/height 1K. Balanced: color 2K, normal 1K, material/height 512. Compact: color 1K, normal/material 512, height 256. Saved custom limits are preserved."),
@@ -203,7 +220,7 @@ public sealed class MainWindow : Window
         _compareReference.IsChecked = settings.CompareReference; SetComparisonEnabled();
         _reference.Text = s.ReferenceFolder; _replaceMod.Text = s.ReplaceMod;
         _output.Text = settings.Output; _cache.Text = settings.Cache; _workers.Text = settings.Workers.ToString();
-        SetPolicy(settings.Policy); _loading = false; InvalidatePlan();
+        SetPolicy(settings.Policy); _loading = false; InvalidatePlan(settingsLoaded: true); UpdateOutputFolderAction();
         if (settings.Policy.CarryReference) _status.Text = "Legacy reference copying was disabled. Analyze again to build from original textures only.";
     }
     private void SetPolicy(Policy policy)
@@ -221,13 +238,34 @@ public sealed class MainWindow : Window
     private void SetComparisonEnabled()
     {
         bool enabled = _compareReference.IsChecked == true;
+        _comparisonOptions.IsVisible = _comparisonOptions.IsEnabled = enabled;
         _reference.IsEnabled = _replaceMod.IsEnabled = _fitReference.IsEnabled = _fitProtected.IsEnabled = enabled;
     }
-    private void InvalidatePlan()
+    private void InvalidatePlan(bool settingsLoaded = false)
     {
         if (_loading) return; _plan = null; _catalog = null; LastBuild = null; _table.ItemsSource = null; VisibleCount = 0;
         _comparisonTable.ItemsSource = null; _comparisonSummary.Text = "Analyze selected originals to assess coverage.";
-        _build.IsEnabled = false; _export.IsEnabled = false; _preview.IsEnabled = false; _summary.Text = "Source or policy changed. Analyze to review a new plan.";
+        _build.IsEnabled = false; _export.IsEnabled = false; _preview.IsEnabled = false;
+        _summary.Text = settingsLoaded
+            ? (string.IsNullOrWhiteSpace(_source.Text) ? "Choose a source and analyze its textures." : "Ready to analyze the selected source.")
+            : "Source or policy changed. Analyze to review a new plan.";
+    }
+    private void UpdateOutputFolderAction() => _openOutput.IsEnabled = !IsWorking && !_openingOutput && Directory.Exists(_output.Text?.Trim());
+    public async Task OpenOutputFolderAsync()
+    {
+        if (IsWorking || _openingOutput) return;
+        _openingOutput = true; UpdateOutputFolderAction();
+        try
+        {
+            string? path = _output.Text?.Trim();
+            if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+                throw new DirectoryNotFoundException("Choose an existing output folder or build the output first.");
+            var folder = new DirectoryInfo(Path.GetFullPath(path));
+            if (!await _openDirectory(folder))
+                throw new IOException("Your desktop could not open the folder. Open it manually: " + folder.FullName);
+        }
+        catch (Exception e) { _status.Text = "Could not open output folder: " + e.GetBaseException().Message; AppendLog(_status.Text); }
+        finally { _openingOutput = false; UpdateOutputFolderAction(); }
     }
     private void Filter()
     {
@@ -278,7 +316,7 @@ public sealed class MainWindow : Window
     private async Task RunAsync(Func<DesktopSettings, IProgress<JobProgress>, CancellationToken, Task> run)
     {
         if (IsWorking) return;
-        IsWorking = true; _cancel = new(); _analyze.IsEnabled = _build.IsEnabled = _preview.IsEnabled = _export.IsEnabled = false;
+        IsWorking = true; _cancel = new(); _analyze.IsEnabled = _build.IsEnabled = _preview.IsEnabled = _export.IsEnabled = _openOutput.IsEnabled = false;
         _cancelButton.IsEnabled = true; _setup!.IsEnabled = false; _progress.Value = 0;
         _lastPhase = ""; _lastLog = default; bool acceptingProgress = true;
         try
@@ -301,6 +339,7 @@ public sealed class MainWindow : Window
             acceptingProgress = false;
             IsWorking = false; _setup.IsEnabled = true; _cancelButton.IsEnabled = false; _analyze.IsEnabled = true;
             _build.IsEnabled = _plan?.CompleteSource == true; _export.IsEnabled = _plan is not null; _preview.IsEnabled = (_table.SelectedItem as PlanRow)?.Item.Input is not null;
+            UpdateOutputFolderAction();
             _cancel.Dispose(); _cancel = null;
         }
     }

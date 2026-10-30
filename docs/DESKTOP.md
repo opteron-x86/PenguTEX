@@ -9,6 +9,8 @@ Start `PenguTEX.Desktop` in a portable distribution, or run
    protection switches. Import/save JSON policies; advanced path rules use the same
    schema as the CLI. Later matching rules win. Previously saved numeric limits
    remain unchanged and appear as Custom / saved limits when they differ from a preset.
+   Hover over Complete missing mipmaps, Repair mipmap counts or Recover supported
+   DDS layouts for an explanation of each option. Saved choices are preserved.
 3. Choose separate output/cache folders. Output is a removable mod; cache is reusable
    work. They must be outside all source folders and separate from each other.
    Creating an empty output folder in the file picker is supported. Nonempty folders
@@ -17,8 +19,10 @@ Start `PenguTEX.Desktop` in a portable distribution, or run
    path, source mod or decision reason. Source or policy edits invalidate review.
    The Coverage tab lists protected and unresolved original textures. To compare
    against an existing output, enable "Compare against a previous output (optional)"
-   and select its folder before analyzing. Coverage then shows larger, missing and
-   unassessed textures relative to that output. Optional fitting preserves formats;
+   to reveal its settings, then select its folder before analyzing. With comparison
+   enabled, Coverage shows larger, missing and unassessed textures relative to that
+   output. Turning comparison off hides its controls and excludes their values from
+   the run. Optional fitting preserves formats;
    a separate switch permits reference-covered landscape and character reductions.
    See [replacement checks](REPLACEMENT.md).
 5. Inspect a texture to compare existing source/proposed mips. The channel selector
@@ -41,6 +45,12 @@ Start `PenguTEX.Desktop` in a portable distribution, or run
    Disable/remove it to revert. PenguTEX does not edit profiles or launch the game.
    Compare visuals and performance in game after installation; the application
    does not measure gameplay or track an in-game approval step.
+
+Open output folder opens the currently selected output location in your file
+manager. It is available when that folder exists and no analysis/build is running.
+A missing folder or desktop-launcher failure is reported without changing output.
+The application version appears beside the title; hover over it for the full build
+identifier when reporting a problem.
 
 Preferences use `$XDG_CONFIG_HOME/PenguTEX/settings.json`, or
 `~/.config/PenguTEX/settings.json`. Cache defaults to `$XDG_CACHE_HOME/PenguTEX`, or
