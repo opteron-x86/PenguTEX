@@ -19,6 +19,7 @@ public sealed record Policy
     public bool FitReference { get; init; }
     public bool FitProtectedReference { get; init; }
     public bool CompleteKnownMaterials { get; init; }
+    public bool RecoverMipRecords { get; init; }
     public bool RecoverMipCounts { get; init; }
     // Retained only to reject legacy policies explicitly, rather than ignore their intent.
     public bool CarryReference { get; init; }
@@ -47,7 +48,7 @@ public sealed record Policy
         "balanced" => new Policy(),
         "compact" => new Policy() { Name = "Compact", Maximum = 1024, NormalMaximum = 512, MaterialMaximum = 512, HeightMaximum = 256 },
         _ => throw new ArgumentException("Preset must be Quality, Balanced or Compact."),
-    }) with { ProtectLargeSurfaces = false, ProtectCharacters = false, CompleteKnownMaterials = true, RecoverMipCounts = true };
+    }) with { ProtectLargeSurfaces = false, ProtectCharacters = false, CompleteKnownMaterials = true, RecoverMipCounts = true, RecoverMipRecords = true };
     public static bool Matches(string path, string pattern) => Regex.IsMatch(path.Replace('\\', '/'),
         "^" + Regex.Escape(pattern.Replace('\\', '/')).Replace("\\*", ".*").Replace("\\?", ".") + "$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
@@ -55,6 +56,7 @@ public sealed record Policy
 
     public static string? RebuildRestriction(DdsInfo info, TextureSemantic semantic, bool preserveExistingMips = false)
     {
+        if (info.RecordLayout is not null) return "Recover the original mip records by copying before requesting explicit pixel rebuilding.";
         if (info.Format == "BC6H") return "HDR BC6H currently supports existing-mip copying only; rebuilding requires an HDR filter.";
         if (!info.IsBlockCompressed && !info.HasByteChannels) return "This uncompressed layout supports existing-mip copying only; rebuilding requires a precision-preserving decoder.";
         if (info.Signed || info.Premultiplied) return "CPU rebuilding does not support signed channels or premultiplied alpha; use existing-mip copying.";
@@ -114,7 +116,8 @@ public static class Planner
             try
             {
                 using var stream = asset.Open(); var (info, _) = Dds.Inspect(stream, asset.Length,
-                    policy.RecoverMipCounts && !higherPriority && protection is null);
+                    policy.RecoverMipCounts && !higherPriority && protection is null,
+                    policy.RecoverMipRecords && !higherPriority && protection is null, ct);
                 MaterialHint? hint = null;
                 int fullSourceMips = 1 + (int)Math.Log2(Math.Max(info.Width, info.Height));
                 var rebuild = policy.ProcessingRule(asset.Path);
@@ -170,11 +173,13 @@ public static class Planner
                 if (info.DeclaredMipCount is { } declared)
                 {
                     if (decision == Decision.Keep) decision = Decision.Reduce;
-                    reason = $"Recovered source mip count {declared} → {info.MipCount} from the exact full-chain payload length. " + reason;
+                    reason = (info.RecordLayout is null ? $"Recovered source mip count {declared} → {info.MipCount} from the exact full-chain payload length. "
+                        : $"Recovered {info.MipCount} original mips from validated {info.RecordLayout}; every descriptor and footer checked. ") + reason;
                 }
                 items.Add(new(asset.Path, asset.Origin, asset.Container, category, decision, reason, info, drop,
                     Math.Max(1, info.Width >> drop), Math.Max(1, info.Height >> drop), info.PayloadBytes - info.RemovedBytes(drop)) { Material = hint });
             }
+            catch (ProtectedTextureException e) { items.Add(new(asset.Path, asset.Origin, asset.Container, category, Decision.Protected, e.Message, null, 0, 0, 0, 0)); }
             catch (NotSupportedException e) { items.Add(new(asset.Path, asset.Origin, asset.Container, category, Decision.Unsupported, e.Message, null, 0, 0, 0, 0)); }
             catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or OverflowException or ArgumentException)
             { items.Add(new(asset.Path, asset.Origin, asset.Container, category, Decision.Invalid, e.Message, null, 0, 0, 0, 0)); }

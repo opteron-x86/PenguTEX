@@ -37,7 +37,7 @@ public class DdsTests
     public void ProtectsOtherSurfaces(int at, uint value)
     {
         byte[] data = Fixture.Dds(); BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(at), value);
-        Assert.Throws<NotSupportedException>(() => Dds.Inspect(new MemoryStream(data)));
+        Assert.Throws<ProtectedTextureException>(() => Dds.Inspect(new MemoryStream(data)));
     }
     [Fact] public void RejectsTruncatedOrTrailingData()
     {

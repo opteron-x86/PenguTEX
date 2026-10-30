@@ -6,8 +6,8 @@ Marked PenguTEX/VRAMr outputs are excluded as original sources. Inactive mods an
 archives stay inactive. Removing a previous output does not remove a prerequisite.
 
 New presets apply category limits to ordinary characters and landscapes and enable
-material-aware mip completion and exact-length mip-count recovery. Generated LOD,
-interface and shader resources remain protected. Saved numeric limits and explicit
+material-aware mip completion and validated DDS recovery. [Input recovery](INPUT-RECOVERY.md) describes the accepted layouts and archive bounds. Generated LOD,
+interface, cubemap, array, volume and shader resources remain deliberately protected. Their contents are not claimed as assessed. Saved numeric limits and explicit
 protection choices are preserved; old policies do not silently gain automatic
 completion. The desktop comparison checkbox defaults off, including when loading
 old preferences containing a reference path. Enable it explicitly for a comparison.
@@ -40,7 +40,7 @@ uses XY reconstruction only for tangent normals. sRGB normal/data declarations,
 signed channels, unsupported precision and swizzles are not silently reinterpreted.
 Color uses linear-light filtering. Standard straight-alpha blends use alpha-weighted
 color without coverage scaling. Cutout alpha uses the material's greater/greater-equal
-threshold; coverage is approximate in tiny mips. Animated, externally controlled,
+threshold; BC1 output explicitly encodes the resulting binary mask. Coverage is approximate in tiny mips. Animated, externally controlled,
 vertex-dependent or nonstandard alpha tests remain unresolved.
 
 Available original mip levels are retained byte-for-byte. Only absent levels are

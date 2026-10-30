@@ -118,6 +118,28 @@ public sealed class MaterialTests
         var binding = Assert.Single(MaterialReader.ReadBindings(Fixture.Mesh(slot, flags2: 1u << 23), "mesh", "container")).Use;
         Assert.Equal(role, binding.Role); Assert.Contains("TruePBR", binding.Detail);
     }
+    [Fact] public void Bc1EncodingPreservesThePlannedMaterialMaskAtNonDefaultCutoff()
+    {
+        byte[] pixels = new byte[8 * 8 * 4]; int[] counts = [1, 3, 2, 2];
+        for (int y = 0; y < 8; y++) for (int x = 0; x < 8; x++)
+        {
+            int at = (y * 8 + x) * 4; pixels[at] = 64; pixels[at + 1] = 128; pixels[at + 2] = 192;
+            pixels[at + 3] = (y % 2 * 2 + x % 2) < counts[x / 2] ? (byte)255 : (byte)0;
+        }
+        var encoder = new BCnEncoder.Encoder.BcEncoder(BCnEncoder.Shared.CompressionFormat.Bc1WithAlpha);
+        encoder.OutputOptions.GenerateMipMaps = false; encoder.Options.IsParallel = false;
+        byte[] original = Fixture.Dds(8, 8, fourCC: "DXT1", mipCount: 1);
+        encoder.EncodeToRawBytes(pixels, 8, 8, BCnEncoder.Encoder.PixelFormat.Rgba32)[0].CopyTo(original, 128);
+        using var f = new Fixture(); f.File("source/a.dds", original); var c = CatalogLoader.Load(new(Folder: f.Dir("source")));
+        var plan = Planner.Analyze(c, new() { Rules = [new("*", CompleteMipChain: true, Semantic: TextureSemantic.OpacitySrgb, AlphaCutoff: 192)] });
+        using var output = new MemoryStream(); new CpuMipProcessor().Process(new MemoryStream(original), output, plan.Items[0], original.Length, default);
+        var sourcePixels = TexturePreview.Decode(new MemoryStream(original));
+        var expected = MipFilter.Downsample(sourcePixels, TextureSemantic.OpacitySrgb, MipFilter.Coverage(sourcePixels, 192), alphaCutoff: 192);
+        output.Position = 0; var actual = TexturePreview.Decode(output, 1);
+        for (int a = 3; a < expected.Rgba.Length; a += 4) Assert.Equal(expected.Rgba[a] >= 192 ? (byte)255 : (byte)0, actual.Rgba[a]);
+        if (Environment.GetEnvironmentVariable("PENGUTEX_ORACLE_FIXTURES") is { } folder)
+        { Directory.CreateDirectory(folder); File.WriteAllBytes(Path.Combine(folder, "cutout-bc1.dds"), output.ToArray()); }
+    }
     [Fact] public void BlendFilteringPreservesMeanAlphaAndCutoutUsesItsActualThreshold()
     {
         var pixels = new PixelImage([255,0,0,255, 0,0,255,0, 255,0,0,255, 0,0,255,0], 2, 2);

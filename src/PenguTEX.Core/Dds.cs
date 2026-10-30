@@ -14,6 +14,7 @@ public sealed record DdsInfo(int Width, int Height, int MipCount, int BlockBytes
     public uint AlphaMask { get; init; }
     public bool Luminance { get; init; }
     public int? DeclaredMipCount { get; init; }
+    public string? RecordLayout { get; init; }
     public bool IsBlockCompressed => BlockBytes != 0;
     public bool HasByteChannels => !IsBlockCompressed && !Signed && (RedMask | GreenMask | BlueMask | AlphaMask) != 0
         && new[] { RedMask, GreenMask, BlueMask, AlphaMask }.All(m => System.Numerics.BitOperations.PopCount(m) <= 8);
@@ -31,9 +32,17 @@ public sealed record DdsInfo(int Width, int Height, int MipCount, int BlockBytes
     }
 }
 
+public sealed class ProtectedTextureException(string message) : NotSupportedException(message);
+
 public static class Dds
 {
-    public static (DdsInfo Info, byte[] Header) Inspect(Stream input, long? length = null, bool recoverMipCount = false)
+    // For validated record recovery on a forward-only stream, inspection consumes the records.
+    public static (DdsInfo Info, byte[] Header) Inspect(Stream input, long? length = null, bool recoverMipCount = false,
+        bool recoverMipRecords = false, CancellationToken ct = default)
+        => InspectCore(input, length, recoverMipCount, recoverMipRecords, validateRecords: true, ct);
+
+    private static (DdsInfo Info, byte[] Header) InspectCore(Stream input, long? length, bool recoverMipCount,
+        bool recoverMipRecords, bool validateRecords, CancellationToken ct)
     {
         var header = new byte[128]; input.ReadExactly(header);
         uint U(int at) => BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(at));
@@ -48,7 +57,7 @@ public static class Dds
         if (mips < 1 || mips > 1 + (int)Math.Log2(Math.Max(width, height)))
             throw new InvalidDataException("DDS mip count exceeds its dimensions.");
         if ((U(112) & (0xfe00 | 0x200000)) != 0 || U(24) > 1)
-            throw new NotSupportedException("Cube maps and volume textures are protected.");
+            throw new ProtectedTextureException("Cube maps and volume textures are deliberately protected; their surfaces are not assessed or rewritten.");
         string cc = System.Text.Encoding.ASCII.GetString(header, 84, 4);
         int dxgi = 0, block = 0, bits = 0; bool srgb = false, signed = false, luminance = false; string format;
         uint red = 0, green = 0, blue = 0, alpha = 0;
@@ -56,7 +65,7 @@ public static class Dds
         {
             Array.Resize(ref header, 148); input.ReadExactly(header.AsSpan(128));
             if (U(132) != 3 || U(140) != 1 || (U(136) & 4) != 0)
-                throw new NotSupportedException("Only single-surface 2D textures can be processed.");
+                throw new ProtectedTextureException("Texture arrays and non-2D resources are deliberately protected; their surfaces are not assessed or rewritten.");
             dxgi = checked((int)U(128));
             (format, block) = dxgi switch
             {
@@ -133,6 +142,23 @@ public static class Dds
             if (mips < fullCount && actualLength.Value == header.Length + fullPayload)
             { info = info with { MipCount = fullCount, DeclaredMipCount = mips }; payload = fullPayload; }
         }
+        if (recoverMipRecords && cc == "DXT1" && info.HeaderBytes == 128 && mips == 1 && actualLength.HasValue)
+        {
+            int fullCount = 1 + (int)Math.Log2(Math.Max(width, height));
+            long fullPayload = Enumerable.Range(0, fullCount).Sum(info.MipBytes);
+            long framedLength = checked(header.Length + fullPayload + 16L * (fullCount - 1) + 5);
+            if (fullCount > 1 && actualLength.Value == framedLength)
+            {
+                info = info with { MipCount = fullCount, DeclaredMipCount = mips, RecordLayout = "BC1-mip-records16-zero-tail5" };
+                payload = fullPayload;
+                if (validateRecords)
+                {
+                    long? start = input.CanSeek ? input.Position : null;
+                    CopyMipRecords(input, Stream.Null, info, 0, ct);
+                    if (start is { } position) input.Position = position;
+                }
+            }
+        }
         if (!info.IsBlockCompressed)
         {
             // Legacy writers use either tight rows or DWORD-aligned rows, including mip tails.
@@ -145,21 +171,47 @@ public static class Dds
                 if (actualLength.Value == header.Length + padded) { info = aligned; payload = padded; }
             }
         }
-        if (actualLength.HasValue && actualLength.Value != header.Length + payload)
-            throw new InvalidDataException($"DDS payload length is {actualLength.Value - header.Length}; expected {payload}.");
+        if (info.RecordLayout is null && actualLength.HasValue && actualLength.Value != header.Length + payload)
+            throw new InvalidDataException($"DDS payload length is {actualLength.Value - header.Length}; expected {payload}. Unrecognized trailing or missing bytes require a validated original conversion.");
         return (info with { PayloadBytes = payload }, header);
     }
 
     public static void Reduce(Stream source, Stream target, int drop, long length, CancellationToken ct = default, DdsInfo? expected = null)
     {
-        var (info, header) = Inspect(source, length, expected?.DeclaredMipCount is not null);
+        var (info, header) = InspectCore(source, length, expected?.DeclaredMipCount is not null, expected?.RecordLayout is not null, validateRecords: false, ct);
         if (expected is not null && info != expected) throw new IOException("Source metadata changed; analyze again.");
         if (drop < 0 || drop >= info.MipCount || drop == 0 && info.DeclaredMipCount is null) throw new ArgumentOutOfRangeException(nameof(drop));
         ResizeHeader(header, info, Math.Max(1, info.Width >> drop), Math.Max(1, info.Height >> drop), info.MipCount - drop);
         target.Write(header);
+        if (info.RecordLayout is not null)
+        { CopyMipRecords(source, target, info, drop, ct); return; }
         Transfer(source, Stream.Null, info.RemovedBytes(drop), ct);
         Transfer(source, target, info.PayloadBytes - info.RemovedBytes(drop), ct);
         if (source.ReadByte() != -1) throw new InvalidDataException("Unexpected trailing DDS payload.");
+    }
+
+    private static void CopyMipRecords(Stream source, Stream target, DdsInfo info, int drop, CancellationToken ct)
+    {
+        Span<byte> descriptor = stackalloc byte[16];
+        for (int level = 0; level < info.MipCount; level++)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (level > 0)
+            {
+                source.ReadExactly(descriptor);
+                uint width = BinaryPrimitives.ReadUInt32LittleEndian(descriptor);
+                uint height = BinaryPrimitives.ReadUInt32LittleEndian(descriptor[4..]);
+                uint pitch = BinaryPrimitives.ReadUInt32LittleEndian(descriptor[8..]);
+                uint size = BinaryPrimitives.ReadUInt32LittleEndian(descriptor[12..]);
+                if (width != Math.Max(1, info.Width >> level) || height != Math.Max(1, info.Height >> level)
+                    || pitch != info.RowBytes(level) || size != info.MipBytes(level))
+                    throw new InvalidDataException($"Invalid DDS mip record {level}: dimensions, row pitch or slice length disagree. Restore the original or use a validated source conversion.");
+            }
+            Transfer(source, level >= drop ? target : Stream.Null, info.MipBytes(level), ct);
+        }
+        Span<byte> footer = stackalloc byte[5]; source.ReadExactly(footer);
+        if (footer.ContainsAnyExcept((byte)0) || source.ReadByte() != -1)
+            throw new InvalidDataException("Unrecognized DDS mip-record footer. Trailing bytes are not discarded.");
     }
 
     public static void ResizeHeader(byte[] header, DdsInfo info, int width, int height, int mips)

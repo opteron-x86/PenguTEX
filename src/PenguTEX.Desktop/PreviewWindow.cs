@@ -43,6 +43,17 @@ public sealed class PreviewWindow : Window
             _status.Text = "Decoding selected mip levels…";
             var pair = await Task.Run(() =>
             {
+                if (_item.Input is { RecordLayout: not null } records)
+                {
+                    int first = Math.Min(mip, _item.DropMips);
+                    if ((long)Math.Max(1, records.Width >> first) * Math.Max(1, records.Height >> first) > 16 * 1024 * 1024)
+                        throw new NotSupportedException("Choose smaller mip levels for record-recovery previews (16 million pixels maximum).");
+                    using var original = _asset.Open(); using var canonical = new MemoryStream();
+                    Dds.Reduce(original, canonical, first, _asset.Length, cancel.Token, records);
+                    canonical.Position = 0; var a = TexturePreview.Decode(canonical, mip - first, ct: cancel.Token);
+                    canonical.Position = 0; var b = TexturePreview.Decode(canonical, _item.DropMips - first, ct: cancel.Token);
+                    return (a, b);
+                }
                 using var source = _asset.Open(); var left = TexturePreview.Decode(source, mip, _asset.Length, cancel.Token, _item.Input?.DeclaredMipCount is not null);
                 using var target = _asset.Open(); PixelImage right;
                 if (_item.Decision == Decision.Rebuild)

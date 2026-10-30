@@ -1,4 +1,9 @@
-# Replacing a previous optimizer output
+# Optional comparison with a previous output
+
+Fresh runs do not require this workflow. Use [source coverage](MATERIALS.md) for the
+normal original-only workflow; enable **Compare against a previous output** only
+when deliberately benchmarking a previous output. Historical reference-only paths
+do not define fresh-run completeness.
 
 Reducing original textures does not necessarily match a previous optimizer. An
 omitted override exposes the original winner again. The replacement check compares

@@ -51,6 +51,7 @@ public static class Program
         if (Get("fit-reference") is { } fit) policy = policy with { FitReference = bool.Parse(fit) };
         if (Get("fit-protected") is { } fitProtected) policy = policy with { FitProtectedReference = bool.Parse(fitProtected) };
         if (Get("complete-materials") is { } complete) policy = policy with { CompleteKnownMaterials = bool.Parse(complete) };
+        if (Get("recover-mip-records") is { } records) policy = policy with { RecoverMipRecords = bool.Parse(records) };
         if (Get("recover-mip-counts") is { } recover) policy = policy with { RecoverMipCounts = bool.Parse(recover) };
         if (Get("carry-reference") is { } carry) policy = policy with { CarryReference = bool.Parse(carry) };
         policy.Validate();
@@ -76,7 +77,7 @@ public static class Program
     {
         string[] known = ["folder", "instance", "profile", "game", "mods", "profiles", "overwrite", "wine-prefix",
             "ini", "exclude-mods", "preset", "policy", "max", "report", "output", "cache", "workers", "data",
-            "reference", "replace-mod", "fit-reference", "fit-protected", "carry-reference", "require-parity", "recover-mip-counts", "complete-materials", "require-complete"];
+            "reference", "replace-mod", "fit-reference", "fit-protected", "carry-reference", "require-parity", "recover-mip-counts", "complete-materials", "require-complete", "recover-mip-records"];
         var options = new Dictionary<string, string>();
         for (int i = 0; i < args.Length; i += 2)
         {
@@ -112,6 +113,7 @@ public static class Program
 
         Options: --preset NAME, --policy FILE, --max N, --report FILE, --workers N
         Fresh runs: --complete-materials true|false, --require-complete true|false.
+        Recovery: --recover-mip-counts true|false, --recover-mip-records true|false.
         Comparison: --reference PATH, --replace-mod NAME (profile slot when needed),
                     --require-parity true
         Profile overrides: --game PATH, --mods PATH, --profiles PATH, --overwrite PATH,
