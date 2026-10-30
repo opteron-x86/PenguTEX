@@ -15,6 +15,12 @@ Explicit per-path rules can also [rebuild mips on the CPU](docs/CPU-PROCESSING.m
 with declared color/normal/data semantics. The [roadmap](docs/ROADMAP.md) distinguishes
 implementation from planned work and in-game validation.
 
+When replacing a previous optimizer, use the [replacement check](docs/REPLACEMENT.md)
+to compare effective textures at the same mod priority. It reports larger and
+unassessed paths, offers explicit reference fitting, and can carry unresolved
+reference files unchanged with separate provenance. Successful file validation is
+followed by an in-game comparison; retain the working output until that passes.
+
 - Resolve winning textures, including loaded BSAs and loose files.
 - Prefer existing lower mip levels to avoid an additional compression pass.
 - Preserve formats, color space and shader channels by default.

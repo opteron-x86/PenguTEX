@@ -12,8 +12,8 @@ For AppImage, mark it executable and launch it. `--cli` selects the CLI. If moun
 AppImages through FUSE is unavailable, use:
 
 ```sh
-./PenguTEX-0.1.0-alpha.3-x86_64.AppImage --appimage-extract-and-run
-./PenguTEX-0.1.0-alpha.3-x86_64.AppImage --appimage-extract-and-run --cli --version
+./PenguTEX-0.1.0-alpha.4-x86_64.AppImage --appimage-extract-and-run
+./PenguTEX-0.1.0-alpha.4-x86_64.AppImage --appimage-extract-and-run --cli --version
 ```
 
 Compare downloads with `sha256sum -c SHA256SUMS`. Release artifacts include the exact
