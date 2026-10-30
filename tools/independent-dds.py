@@ -51,6 +51,6 @@ def verify(path):
 
 
 paths = sorted(Path(sys.argv[1]).glob("*.dds"))
-assert len(paths) == 20, f"Expected 20 synthetic fixtures, found {len(paths)}"
+assert len(paths) == 21, f"Expected 21 synthetic fixtures, found {len(paths)}"
 levels = sum(verify(path) for path in paths)
 print(f"Pillow {__version__}: independently decoded {len(paths)} DDS files / {levels} mip levels; channels and lengths match.")

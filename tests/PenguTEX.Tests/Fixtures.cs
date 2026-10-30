@@ -38,6 +38,19 @@ public sealed class Fixture : IDisposable
             w.Write(1u); w.Write(2);
         });
     }
+    public static byte[] MipRecords(byte[] canonical)
+    {
+        var info = PenguTEX.Core.Dds.Inspect(new MemoryStream(canonical)).Info;
+        using var output = new MemoryStream(); using var w = new BinaryWriter(output);
+        var header = canonical[..128]; BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(28), 1); w.Write(header);
+        int at = 128;
+        for (int i = 0; i < info.MipCount; i++)
+        {
+            if (i > 0) { w.Write(Math.Max(1, info.Width >> i)); w.Write(Math.Max(1, info.Height >> i)); w.Write((int)info.RowBytes(i)); w.Write((int)info.MipBytes(i)); }
+            w.Write(canonical, at, (int)info.MipBytes(i)); at += (int)info.MipBytes(i);
+        }
+        w.Write(new byte[5]); return output.ToArray();
+    }
     public static byte[] Dds(int width = 16, int height = 16, int dxgi = 98, string? fourCC = null, int? mipCount = null)
     {
         int mips = mipCount ?? 1 + (int)Math.Log2(Math.Max(width, height));

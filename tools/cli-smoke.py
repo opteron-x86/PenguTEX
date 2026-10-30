@@ -95,6 +95,21 @@ with tempfile.TemporaryDirectory(prefix="pengutex-cli-") as temporary:
     assert repaired["Manifest"]["Files"][0]["Operation"] == "RepairHeader"
     assert repaired["Manifest"]["Files"][0]["DeclaredSourceMipCount"] == 2
     assert (root / "repaired/textures/example.dds").read_bytes()[148:] == original[148:]
+    # Legacy BC1 with bounded per-mip descriptors; every payload byte is synthetic.
+    record_header = bytearray(header[:128]); record_header[84:88] = b"DXT1"
+    struct.pack_into("<I", record_header, 20, 128); struct.pack_into("<I", record_header, 28, 1)
+    framed = bytes(record_header); blocks = b""
+    for level in range(5):
+        dimension = max(1, 16 >> level); pitch = ((dimension + 3) // 4) * 8
+        data = bytes([level + 1]) * (pitch * ((dimension + 3) // 4)); blocks += data
+        if level: framed += struct.pack("<IIII", dimension, dimension, pitch, len(data))
+        framed += data
+    framed += bytes(5)
+    (root / "records").mkdir(); (root / "records/a.dds").write_bytes(framed)
+    assert run("analyze", "--folder", root / "records", "--recover-mip-records", "false")["Items"][0]["Decision"] == "Invalid"
+    recovered = run("build", "--folder", root / "records", "--output", root / "recovered-records", "--cache", root / "cache")
+    assert recovered["Manifest"]["OriginalsOnly"] and recovered["Manifest"]["Files"][0]["Operation"] == "RecoverMipRecords"
+    assert (root / "recovered-records/textures/a.dds").read_bytes()[128:] == blocks
     target.write_bytes(target.read_bytes()[:-1])
     run("verify", root / "output", expected=1)
     (root / "foreign").mkdir()

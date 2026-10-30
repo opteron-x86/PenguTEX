@@ -1,6 +1,6 @@
 using PenguTEX.Assets.Materials;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Archives;
+using PenguTEX.Assets.Archives;
 using PenguTEX.Assets.Paths;
 using PenguTEX.Assets.Profiles;
 using PenguTEX.Core;
@@ -123,15 +123,15 @@ public static class CatalogLoader
                 progress?.Report(new("Archives", i, archives.Count, Path.GetFileName(archive), "Indexing loaded archives"));
                 try
                 {
-                    var reader = Archive.CreateReader(GameRelease.SkyrimSE, archive);
+                    var archiveMembers = BoundedBsa.Read(archive, diagnostics);
                     var members = new Dictionary<string, Asset>(StringComparer.Ordinal);
-                    foreach (var entry in reader.Files)
+                    foreach (var entry in archiveMembers)
                     {
                         ct.ThrowIfCancellationRequested(); var path = entry.Path.Replace('\\', '/').ToLowerInvariant();
                         if (!(path.StartsWith("textures/") && path.EndsWith(".dds"))
                             && !(inspectMaterials && path.StartsWith("meshes/") && path.EndsWith(".nif"))) continue;
                         GamePath.ValidateRelative(path); var file = entry;
-                        if (!members.TryAdd(path, new(path, Path.GetFileName(archive), archive, file.Size, () => file.AsStream()) { Priority = -1 }))
+                        if (!members.TryAdd(path, new(path, Path.GetFileName(archive), archive, file.Size, () => file.Open()) { Priority = -1 }))
                             throw new InvalidDataException("Duplicate archive member: " + path);
                     }
                     foreach (var (key, asset) in members) assets[key] = asset;

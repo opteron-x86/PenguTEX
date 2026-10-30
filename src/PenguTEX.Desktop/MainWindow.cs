@@ -28,6 +28,7 @@ public sealed class MainWindow : Window
     private readonly CheckBox _completeMaterials = new() { Name = "CompleteKnownMaterials", Content = "Complete missing mips using resolved mesh bindings (review before building)" };
     private readonly CheckBox _fitReference = new() { Name = "FitReference", Content = "Fit previous dimensions and texture payload", IsChecked = false };
     private readonly CheckBox _fitProtected = new() { Name = "FitProtectedReference", Content = "Allow this fit for protected landscapes and characters", IsChecked = false };
+    private readonly CheckBox _recoverRecords = new() { Name = "RecoverMipRecords", Content = "Recover recognized DDS mip records only after validating every boundary" };
     private readonly CheckBox _recoverMips = new() { Name = "RecoverMipCounts", Content = "Recover incorrect mip counts only when the payload matches a full chain" };
     private readonly DataGrid _comparisonTable = new() { Name = "ReferenceTable", AutoGenerateColumns = false, IsReadOnly = true, CanUserSortColumns = true };
     private readonly TextBlock _comparisonSummary = Text("Analyze selected originals to review coverage and exceptions.");
@@ -93,6 +94,7 @@ public sealed class MainWindow : Window
         _compareReference.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) { SetComparisonEnabled(); InvalidatePlan(); } };
         _completeMaterials.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
         _fitReference.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
+        _recoverRecords.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
         _recoverMips.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
         _fitProtected.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
         _preset.SelectionChanged += (_, _) => { if (!_loading && _preset.SelectedItem is string name && name != "Custom / saved limits") SetPolicy(Policy.Preset(name)); };
@@ -152,7 +154,7 @@ public sealed class MainWindow : Window
             Columns(_large, _characters),
             new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { import, save } },
             Columns(PathField("Output mod folder", _output), PathField("Reusable work cache", _cache)),
-            _completeMaterials, _recoverMips, _compareReference,
+            _completeMaterials, _recoverMips, _recoverRecords, _compareReference,
             Columns(PathField("Previous optimized output (optional comparison)", _reference), Field("Mod to replace (auto-detected for installed reference)", _replaceMod)),
             Columns(_fitReference, _fitProtected),
             Field("Workers (1–32)", _workers),
@@ -183,7 +185,7 @@ public sealed class MainWindow : Window
         static string? Value(TextBox box) => string.IsNullOrWhiteSpace(box.Text) ? null : box.Text.Trim();
         var policy = new Policy { Name = _policyName, Maximum = int.Parse(_maximum.Text ?? ""), NormalMaximum = int.Parse(_normal.Text ?? ""),
             MaterialMaximum = int.Parse(_material.Text ?? ""), HeightMaximum = int.Parse(_height.Text ?? ""), ProtectLargeSurfaces = _large.IsChecked == true,
-            RecoverMipCounts = _recoverMips.IsChecked == true, CompleteKnownMaterials = _completeMaterials.IsChecked == true,
+            RecoverMipCounts = _recoverMips.IsChecked == true, RecoverMipRecords = _recoverRecords.IsChecked == true, CompleteKnownMaterials = _completeMaterials.IsChecked == true,
             ProtectCharacters = _characters.IsChecked == true, FitReference = _compareReference.IsChecked == true && _fitReference.IsChecked == true,
             FitProtectedReference = _compareReference.IsChecked == true && _fitReference.IsChecked == true && _fitProtected.IsChecked == true,
             Rules = JsonSerializer.Deserialize<PathRule[]>(_rules.Text ?? "[]", JsonFiles.Options) ?? [] };
@@ -213,7 +215,7 @@ public sealed class MainWindow : Window
         _preset.SelectedItem = known?.Name ?? "Custom / saved limits"; _maximum.Text = policy.Maximum.ToString(); _normal.Text = policy.NormalMaximum.ToString();
         _material.Text = policy.MaterialMaximum.ToString(); _large.IsChecked = policy.ProtectLargeSurfaces; _characters.IsChecked = policy.ProtectCharacters;
         _height.Text = (policy.HeightMaximum ?? policy.MaterialMaximum).ToString(); _fitReference.IsChecked = policy.FitReference; _fitProtected.IsChecked = policy.FitProtectedReference;
-        _recoverMips.IsChecked = policy.RecoverMipCounts; _completeMaterials.IsChecked = policy.CompleteKnownMaterials;
+        _recoverRecords.IsChecked = policy.RecoverMipRecords; _recoverMips.IsChecked = policy.RecoverMipCounts; _completeMaterials.IsChecked = policy.CompleteKnownMaterials;
         _rules.Text = JsonSerializer.Serialize(policy.Rules, JsonFiles.Options); _loading = wasLoading; InvalidatePlan();
     }
     private void SetComparisonEnabled()

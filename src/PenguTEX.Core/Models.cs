@@ -56,7 +56,7 @@ public sealed record PlanItem(string Path, string Origin, string Container, stri
     public bool PreserveExistingMips { get; init; }
     public int AlphaCutoff { get; init; } = 128;
     public MaterialHint? Material { get; init; }
-    public string Operation => Decision == Decision.Rebuild ? PreserveExistingMips ? "CompleteMips" : "Rebuild"
+    public string Operation => Input?.RecordLayout is not null && Decision == Decision.Reduce ? "RecoverMipRecords" : Decision == Decision.Rebuild ? PreserveExistingMips ? "CompleteMips" : "Rebuild"
         : Input?.DeclaredMipCount is not null && DropMips == 0 ? "RepairHeader" : "MipCopy";
     public long SavedBytes => Input is null ? 0 : Input.PayloadBytes - OutputPayload;
 }

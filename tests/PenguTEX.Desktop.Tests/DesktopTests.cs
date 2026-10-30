@@ -35,6 +35,16 @@ public sealed class DesktopTests
         Assert.NotNull(image); image.Save(Path.Combine(folder, name + ".png"), Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
     }
     [AvaloniaFact]
+    public async Task RecoveredRecordPreviewUsesCanonicalRetainedLevels()
+    {
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.MipRecords(Fixture.Dds(fourCC: "DXT1")));
+        var catalog = CatalogLoader.Load(new(Folder: f.Dir("source")));
+        var item = Planner.Analyze(catalog, new() { Maximum = 8, RecoverMipRecords = true }).Items[0];
+        var preview = new PreviewWindow(catalog.Assets[0], item); preview.Show();
+        try { await preview.LoadAsync(); Assert.Contains("Proposed 8×8", preview.Status); Capture(preview, "record-recovery-preview"); }
+        finally { preview.Close(); }
+    }
+    [AvaloniaFact]
     public async Task FreshModeIgnoresDeletedPreviousOutputsAndReviewsOriginalCoverage()
     {
         using var f = new Fixture(); f.File("source/textures/a.dds", Fixture.RawDds(mipCount: 1));

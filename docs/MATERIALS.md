@@ -6,8 +6,8 @@ Marked PenguTEX/VRAMr outputs are excluded as original sources. Inactive mods an
 archives stay inactive. Removing a previous output does not remove a prerequisite.
 
 New presets apply category limits to ordinary characters and landscapes and enable
-material-aware mip completion and exact-length mip-count recovery. Generated LOD,
-interface and shader resources remain protected. Saved numeric limits and explicit
+material-aware mip completion and validated DDS recovery. [Input recovery](INPUT-RECOVERY.md) describes the accepted layouts and archive bounds. Generated LOD,
+interface, cubemap, array, volume and shader resources remain deliberately protected. Their contents are not claimed as assessed. Saved numeric limits and explicit
 protection choices are preserved; old policies do not silently gain automatic
 completion. The desktop comparison checkbox defaults off, including when loading
 old preferences containing a reference path. Enable it explicitly for a comparison.
