@@ -84,6 +84,7 @@ public sealed class DesktopTests
             Control<TextBox>(window, "TextureSearch").Text = ""; Capture(window, "review");
             await window.BuildAsync(); Assert.NotNull(window.LastBuild); Assert.Equal(1, window.LastBuild.Files);
             Assert.Single(JobRunner.Verify(settings.Output, TestContext.Current.CancellationToken).Files); Assert.False(window.IsWorking);
+            Capture(window, "output-built");
             await window.BuildAsync(); Assert.Equal(1, window.LastBuild!.Reused);
             Assert.Equal(settings.Policy with { HeightMaximum = settings.Policy.MaterialMaximum }, new SettingsStore(Path.Combine(f.Root, "settings.json")).Load().Policy with { Rules = settings.Policy.Rules });
         }
