@@ -54,7 +54,7 @@ public sealed class DesktopTests
             await window.BuildAsync(); Assert.NotNull(window.LastBuild); Assert.Equal(1, window.LastBuild.Files);
             Assert.Single(JobRunner.Verify(settings.Output, TestContext.Current.CancellationToken).Files); Assert.False(window.IsWorking);
             await window.BuildAsync(); Assert.Equal(1, window.LastBuild!.Reused);
-            Assert.Equal(settings.Policy, new SettingsStore(Path.Combine(f.Root, "settings.json")).Load().Policy with { Rules = settings.Policy.Rules });
+            Assert.Equal(settings.Policy with { HeightMaximum = settings.Policy.MaterialMaximum }, new SettingsStore(Path.Combine(f.Root, "settings.json")).Load().Policy with { Rules = settings.Policy.Rules });
         }
         finally { window.Close(); }
     }
@@ -68,7 +68,7 @@ public sealed class DesktopTests
         try
         {
             await window.AnalyzeAsync();
-            window.GetVisualDescendants().OfType<TabControl>().Single().SelectedIndex = 2;
+            window.GetVisualDescendants().OfType<TabControl>().Single().SelectedIndex = 3;
             Dispatcher.UIThread.RunJobs();
             for (int run = 0; run < 2; run++)
             {
@@ -81,6 +81,26 @@ public sealed class DesktopTests
                 if (run == 1) Assert.Contains("Cleanup: 1 / 1", log);
                 Assert.StartsWith("Complete: 3 verified textures", log.TrimEnd().Split('\n')[^1]);
             }
+        }
+        finally { window.Close(); }
+    }
+    [AvaloniaFact]
+    public async Task ReferenceReviewShowsGrowthAndFitRechecksBeforeBuilding()
+    {
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds()); f.File("reference/a.dds", Fixture.Dds(4, 4));
+        var settings = Settings(f); settings = settings with { Source = settings.Source with { ReferenceFolder = f.Dir("reference") } };
+        var window = new MainWindow(new SettingsStore(Path.Combine(f.Root, "settings.json"))); window.SetSettings(settings); window.Show();
+        try
+        {
+            await window.AnalyzeAsync(); Assert.Equal(1, window.CurrentPlan!.Comparison!.LargerCount);
+            Assert.Single(Control<DataGrid>(window, "ReferenceTable").ItemsSource.Cast<object>()); Capture(window, "replacement");
+            window.GetVisualDescendants().OfType<TabControl>().Single().SelectedIndex = 0;
+            Control<CheckBox>(window, "FitReference").IsChecked = true; Assert.Null(window.CurrentPlan);
+            await window.AnalyzeAsync(); Assert.False(window.CurrentPlan!.Comparison!.HasUnresolved);
+            await window.BuildAsync(); Assert.False(window.LastBuild!.Manifest.Comparison!.HasUnresolved);
+            Assert.Contains("In-game", window.Status);
+            f.File("reference/a.dds", Fixture.Dds(8, 8));
+            await window.BuildAsync(); Assert.Contains("Analyze again", window.Status);
         }
         finally { window.Close(); }
     }

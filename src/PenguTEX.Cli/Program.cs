@@ -42,14 +42,21 @@ public static class Program
         }
         if (args[0] is not ("analyze" or "build")) throw new ArgumentException("Unknown command. Use --help.");
         var source = new SourceOptions(Get("folder"), Get("instance"), Get("profile"), Get("game"), Get("mods"),
-            Get("profiles"), Get("overwrite"), Get("wine-prefix"), Get("ini"), Get("exclude-mods")?.Split('|'), Get("data"));
+            Get("profiles"), Get("overwrite"), Get("wine-prefix"), Get("ini"), Get("exclude-mods")?.Split('|'), Get("data"))
+        { ReferenceFolder = Get("reference"), ReplaceMod = Get("replace-mod") };
         Policy policy = Get("policy") is { } json ? JsonFiles.Read<Policy>(json) : Policy.Preset(Get("preset") ?? "balanced");
-        if (Get("max") is { } max) policy = policy with { Maximum = int.Parse(max), NormalMaximum = int.Parse(max), MaterialMaximum = int.Parse(max) };
+        if (Get("max") is { } max) policy = policy with { Maximum = int.Parse(max), NormalMaximum = int.Parse(max), MaterialMaximum = int.Parse(max), HeightMaximum = int.Parse(max) };
+        if (Get("fit-reference") is { } fit) policy = policy with { FitReference = bool.Parse(fit) };
+        if (Get("fit-protected") is { } fitProtected) policy = policy with { FitProtectedReference = bool.Parse(fitProtected) };
+        bool requireParity = bool.Parse(Get("require-parity") ?? "false");
+        if (requireParity && source.ReferenceFolder is null) throw new ArgumentException("--require-parity needs --reference.");
         if (args[0] == "build") JobRunner.ValidateOutputDirectory(Get("output") ?? throw new ArgumentException("--output is required."));
         var progress = new ConsoleProgress();
         var catalog = CatalogLoader.Load(source, progress, ct); var plan = Planner.Analyze(catalog, policy, progress, ct);
         if (Get("report") is { } report) JsonFiles.Write(report, plan);
-        if (args[0] == "analyze") { Print(plan); return plan.CompleteSource ? 0 : 2; }
+        if (plan.Comparison is { } comparison) Console.Error.WriteLine($"Replacement: {comparison.LargerCount} larger, {comparison.UnknownCount} unassessed. {comparison.Assessment}");
+        if (args[0] == "analyze") { Print(plan); return !plan.CompleteSource ? 2 : requireParity && plan.Comparison!.HasUnresolved ? 3 : 0; }
+        if (requireParity && plan.Comparison!.HasUnresolved) { Print(plan.Comparison); return 3; }
         var result = JobRunner.Build(catalog, plan,
             Get("output") ?? throw new ArgumentException("--output is required."),
             Get("cache") ?? throw new ArgumentException("--cache is required."),
@@ -59,7 +66,8 @@ public static class Program
     private static Dictionary<string, string> Parse(string[] args)
     {
         string[] known = ["folder", "instance", "profile", "game", "mods", "profiles", "overwrite", "wine-prefix",
-            "ini", "exclude-mods", "preset", "policy", "max", "report", "output", "cache", "workers", "data"];
+            "ini", "exclude-mods", "preset", "policy", "max", "report", "output", "cache", "workers", "data",
+            "reference", "replace-mod", "fit-reference", "fit-protected", "require-parity"];
         var options = new Dictionary<string, string>();
         for (int i = 0; i < args.Length; i += 2)
         {
@@ -92,6 +100,8 @@ public static class Program
         verify output-folder                Verify a published manifest and every texture
 
         Options: --preset NAME, --policy FILE, --max N, --report FILE, --workers N
+        Comparison: --reference PATH, --replace-mod NAME (profile slot when needed),
+                    --fit-reference true, --fit-protected true, --require-parity true
         Profile overrides: --game PATH, --mods PATH, --profiles PATH, --overwrite PATH,
                            --wine-prefix PATH, --data PATH, --ini FILE, --exclude-mods 'Mod A|Mod B'
 
@@ -99,6 +109,9 @@ public static class Program
         build writes a separate output mod and cache; originals remain untouched.
         Defaults protect large surfaces, character textures, generated LOD and UI.
         Explicit JSON path rules can override protections. Estimates are texture payload,
-        not resident VRAM. Exit codes: 0 success, 1 failure, 2 incomplete source, 130 cancelled.
+        not resident VRAM. Reference fitting preserves formats and can choose smaller
+        dimensions to meet the previous payload. Install at the compared mod priority.
+        Exit codes: 0 file operation succeeded, 1 failure, 2 incomplete source,
+        3 required reference parity not met, 130 cancelled. Game validation is separate.
         """;
 }

@@ -17,12 +17,17 @@ public sealed class MainWindow : Window
 {
     private readonly SettingsStore _store;
     private readonly ComboBox _mode = new() { ItemsSource = new[] { "Texture folder", "MO2 / Fluorine profile" }, SelectedIndex = 0 };
-    private readonly ComboBox _preset = new() { ItemsSource = new[] { "Quality", "Balanced", "Compact" }, SelectedIndex = 1 };
+    private readonly ComboBox _preset = new() { ItemsSource = new[] { "Quality", "Balanced", "Compact", "Custom / saved limits" }, SelectedIndex = 1 };
     private readonly ComboBox _profiles = new() { MinWidth = 180 };
     private readonly TextBox _source = Box("SourcePath"), _profile = Box("ProfileName"), _game = Box("GamePath"), _data = Box("DataPath"),
         _mods = Box("ModsPath"), _profileRoot = Box("ProfilesPath"), _overwrite = Box("OverwritePath"), _wine = Box("WinePrefix"), _ini = Box("IniPath"), _exclude = Box("ExcludedMods");
     private readonly TextBox _output = Box("OutputPath"), _cache = Box("CachePath"), _maximum = Box("Maximum"),
-        _normal = Box("NormalMaximum"), _material = Box("MaterialMaximum"), _workers = Box("Workers");
+        _normal = Box("NormalMaximum"), _material = Box("MaterialMaximum"), _height = Box("HeightMaximum"), _workers = Box("Workers"),
+        _reference = Box("ReferencePath"), _replaceMod = Box("ReplaceMod");
+    private readonly CheckBox _fitReference = new() { Name = "FitReference", Content = "Fit previous dimensions and texture payload", IsChecked = false };
+    private readonly CheckBox _fitProtected = new() { Name = "FitProtectedReference", Content = "Allow this fit for protected landscapes and characters", IsChecked = false };
+    private readonly DataGrid _comparisonTable = new() { Name = "ReferenceTable", AutoGenerateColumns = false, IsReadOnly = true, CanUserSortColumns = true };
+    private readonly TextBlock _comparisonSummary = Text("Choose a previous optimizer output to compare replacements.");
     private readonly CheckBox _large = new() { Content = "Protect landscapes and large surfaces", IsChecked = true };
     private readonly CheckBox _characters = new() { Content = "Protect characters and faces", IsChecked = true };
     private readonly TextBox _rules = new() { Name = "PathRules", AcceptsReturn = true, MinHeight = 90, Text = "[]", TextWrapping = TextWrapping.Wrap };
@@ -33,7 +38,7 @@ public sealed class MainWindow : Window
     private readonly TextBlock _summary = Text("Choose a source and analyze its textures.", 17), _detail = Text("Select a texture to inspect its decision."), _status = Text("Ready");
     private readonly ProgressBar _progress = new() { Minimum = 0, Maximum = 100, Height = 5 };
     private readonly Button _analyze = new() { Content = "Analyze textures", Name = "Analyze", Padding = new Thickness(20, 10) },
-        _build = new() { Content = "Build output mod", Name = "Build", IsEnabled = false, Padding = new Thickness(20, 10) },
+        _build = new() { Content = "Build candidate mod", Name = "Build", IsEnabled = false, Padding = new Thickness(20, 10) },
         _cancelButton = new() { Content = "Cancel", Name = "Cancel", IsEnabled = false },
         _preview = new() { Content = "Inspect texture", IsEnabled = false }, _export = new() { Content = "Export analysis", IsEnabled = false };
     private readonly TabControl _tabs = new(); private Control? _setup; private CancellationTokenSource? _cancel;
@@ -51,7 +56,8 @@ public sealed class MainWindow : Window
         var title = new StackPanel { Spacing = 5, Children = { Text("PenguTEX", 32), Text("Inspect your textures. Choose what changes. Build a removable output mod.") } };
         _setup = Setup();
         _tabs.ItemsSource = new[] { new TabItem { Header = "1  Source & policy", Content = new ScrollViewer { Content = _setup } },
-            new TabItem { Header = "2  Review textures", Content = Review() }, new TabItem { Header = "3  Run log", Content = _log } };
+            new TabItem { Header = "2  Review textures", Content = Review() }, new TabItem { Header = "3  Replacement check", Content = ReplacementReview() },
+            new TabItem { Header = "4  Run log", Content = _log } };
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { _analyze, _build, _cancelButton, _export } };
         var footer = new StackPanel { Spacing = 10, Children = { actions, _progress, _status } };
         var root = new Grid { Margin = new Thickness(24), RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto"), RowSpacing = 18 };
@@ -71,12 +77,14 @@ public sealed class MainWindow : Window
             _detail.Text = item is null ? "Select a texture to inspect its decision."
                 : $"{item.Path}\n{item.Origin} • {item.Category} • {item.Reason}";
         };
-        foreach (var box in new[] { _source, _profile, _game, _data, _mods, _profileRoot, _overwrite, _wine, _ini, _exclude, _maximum, _normal, _material, _rules })
+        foreach (var box in new[] { _source, _profile, _game, _data, _mods, _profileRoot, _overwrite, _wine, _ini, _exclude, _maximum, _normal, _material, _height, _rules, _reference, _replaceMod })
             box.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) InvalidatePlan(); };
         _mode.SelectionChanged += (_, _) => InvalidatePlan();
         _large.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
         _characters.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
-        _preset.SelectionChanged += (_, _) => { if (!_loading && _preset.SelectedItem is string name) SetPolicy(Policy.Preset(name)); };
+        _fitReference.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
+        _fitProtected.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
+        _preset.SelectionChanged += (_, _) => { if (!_loading && _preset.SelectedItem is string name && name != "Custom / saved limits") SetPolicy(Policy.Preset(name)); };
         _profiles.SelectionChanged += (_, _) => { if (_profiles.SelectedItem is string name) _profile.Text = name; };
         Closing += (_, e) => { if (IsWorking) { e.Cancel = true; _cancel?.Cancel(); _status.Text = "Cancelling… close again when the job stops."; } };
         try { SetSettings(store.Load()); }
@@ -129,13 +137,24 @@ public sealed class MainWindow : Window
         return new StackPanel { Spacing = 16, Margin = new Thickness(0, 14, 12, 10), Children = {
             Columns(Field("Source type", _mode), Field("Preset", _preset)), PathField("Source folder or MO2 / Fluorine instance", _source),
             Columns(Field("Profile name (profile sources only)", _profile), profileRow),
-            Columns(Field("Color maximum dimension", _maximum), Columns(Field("Normal maximum", _normal), Field("Material maximum", _material))),
+            Columns(Columns(Field("Color maximum", _maximum), Field("Normal maximum", _normal)), Columns(Field("Material maximum", _material), Field("Height maximum", _height))),
             Columns(_large, _characters),
             new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { import, save } },
             Columns(PathField("Output mod folder", _output), PathField("Reusable work cache", _cache)),
+            Columns(PathField("Previous optimized output (optional comparison)", _reference), Field("Mod to replace (auto-detected for installed reference)", _replaceMod)),
+            Columns(_fitReference, _fitProtected),
             Field("Workers (1–32)", _workers),
             new Expander { Header = "Locations and custom rules", Content = advanced, HorizontalAlignment = HorizontalAlignment.Stretch },
-            Text("Default policies copy existing mip levels without recompression. CPU rebuilding requires an explicit semantic in a custom path rule. Estimates describe texture payload, not live VRAM. A fresh profile baseline requires an unmounted original Data directory.") } };
+            Text("Quality: color 2K, normal/material/height 1K. Balanced: color 2K, normal 1K, material/height 512. Compact: color 1K, normal/material 512, height 256. Saved custom limits are preserved."),
+            Text("Reference fitting uses original inputs and may choose smaller dimensions to preserve formats while meeting the previous payload. Review all exceptions before replacing an output. Estimates are texture payload, not live VRAM. Profile scans need an unmounted original Data directory.") } };
+    }
+    private Control ReplacementReview()
+    {
+        foreach (var (label, path, width) in new[] { ("Texture", "Path", 300d), ("Assessment", "Status", 145d),
+            ("Previous", "Previous", 150d), ("Proposed", "Proposed", 150d), ("Change MiB", "Change", 110d), ("Reason", "Reason", 450d) })
+            _comparisonTable.Columns.Add(new DataGridTextColumn { Header = label, Binding = new Binding(path), Width = new DataGridLength(width) });
+        var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), RowSpacing = 12, Margin = new Thickness(0, 14, 0, 0) };
+        grid.Children.Add(_comparisonSummary); Grid.SetRow(_comparisonTable, 1); grid.Children.Add(_comparisonTable); return grid;
     }
     private Control Review()
     {
@@ -151,11 +170,14 @@ public sealed class MainWindow : Window
     {
         static string? Value(TextBox box) => string.IsNullOrWhiteSpace(box.Text) ? null : box.Text.Trim();
         var policy = new Policy { Name = _policyName, Maximum = int.Parse(_maximum.Text ?? ""), NormalMaximum = int.Parse(_normal.Text ?? ""),
-            MaterialMaximum = int.Parse(_material.Text ?? ""), ProtectLargeSurfaces = _large.IsChecked == true,
-            ProtectCharacters = _characters.IsChecked == true, Rules = JsonSerializer.Deserialize<PathRule[]>(_rules.Text ?? "[]", JsonFiles.Options) ?? [] };
+            MaterialMaximum = int.Parse(_material.Text ?? ""), HeightMaximum = int.Parse(_height.Text ?? ""), ProtectLargeSurfaces = _large.IsChecked == true,
+            ProtectCharacters = _characters.IsChecked == true, FitReference = _fitReference.IsChecked == true,
+            FitProtectedReference = _fitReference.IsChecked == true && _fitProtected.IsChecked == true,
+            Rules = JsonSerializer.Deserialize<PathRule[]>(_rules.Text ?? "[]", JsonFiles.Options) ?? [] };
         policy.Validate();
         var source = new SourceOptions(_mode.SelectedIndex == 0 ? Value(_source) : null, _mode.SelectedIndex == 1 ? Value(_source) : null,
-            Value(_profile), Value(_game), Value(_mods), Value(_profileRoot), Value(_overwrite), Value(_wine), Value(_ini), Value(_exclude)?.Split('|'), Value(_data));
+            Value(_profile), Value(_game), Value(_mods), Value(_profileRoot), Value(_overwrite), Value(_wine), Value(_ini), Value(_exclude)?.Split('|'), Value(_data))
+        { ReferenceFolder = Value(_reference), ReplaceMod = Value(_replaceMod) };
         return new() { Source = source, Policy = policy, Output = _output.Text?.Trim() ?? "", Cache = _cache.Text?.Trim() ?? "", Workers = int.Parse(_workers.Text ?? "2") };
     }
     public void SetSettings(DesktopSettings settings)
@@ -163,19 +185,25 @@ public sealed class MainWindow : Window
         _loading = true; var s = settings.Source; _mode.SelectedIndex = s.Instance is null ? 0 : 1; _source.Text = s.Instance ?? s.Folder;
         _profile.Text = s.Profile; _game.Text = s.Game; _data.Text = s.Data; _mods.Text = s.Mods; _profileRoot.Text = s.Profiles;
         _overwrite.Text = s.Overwrite; _wine.Text = s.WinePrefix; _ini.Text = s.Ini; _exclude.Text = s.ExcludeMods is null ? "" : string.Join('|', s.ExcludeMods);
+        _reference.Text = s.ReferenceFolder; _replaceMod.Text = s.ReplaceMod;
         _output.Text = settings.Output; _cache.Text = settings.Cache; _workers.Text = settings.Workers.ToString();
         SetPolicy(settings.Policy); _loading = false; InvalidatePlan();
     }
     private void SetPolicy(Policy policy)
     {
         bool wasLoading = _loading; _loading = true; _policyName = policy.Name;
-        _preset.SelectedItem = policy.Name; _maximum.Text = policy.Maximum.ToString(); _normal.Text = policy.NormalMaximum.ToString();
+        var known = new[] { "Quality", "Balanced", "Compact" }.Select(Policy.Preset).FirstOrDefault(p => p.Name == policy.Name
+            && p.Maximum == policy.Maximum && p.NormalMaximum == policy.NormalMaximum && p.MaterialMaximum == policy.MaterialMaximum
+            && (p.HeightMaximum ?? p.MaterialMaximum) == (policy.HeightMaximum ?? policy.MaterialMaximum));
+        _preset.SelectedItem = known?.Name ?? "Custom / saved limits"; _maximum.Text = policy.Maximum.ToString(); _normal.Text = policy.NormalMaximum.ToString();
         _material.Text = policy.MaterialMaximum.ToString(); _large.IsChecked = policy.ProtectLargeSurfaces; _characters.IsChecked = policy.ProtectCharacters;
+        _height.Text = (policy.HeightMaximum ?? policy.MaterialMaximum).ToString(); _fitReference.IsChecked = policy.FitReference; _fitProtected.IsChecked = policy.FitProtectedReference;
         _rules.Text = JsonSerializer.Serialize(policy.Rules, JsonFiles.Options); _loading = wasLoading; InvalidatePlan();
     }
     private void InvalidatePlan()
     {
         if (_loading) return; _plan = null; _catalog = null; LastBuild = null; _table.ItemsSource = null; VisibleCount = 0;
+        _comparisonTable.ItemsSource = null; _comparisonSummary.Text = "Analyze to compare with the previous output.";
         _build.IsEnabled = false; _export.IsEnabled = false; _preview.IsEnabled = false; _summary.Text = "Source or policy changed. Analyze to review a new plan.";
     }
     private void Filter()
@@ -188,9 +216,15 @@ public sealed class MainWindow : Window
     public async Task AnalyzeAsync() => await RunAsync(async (settings, progress, ct) =>
     {
         var analyzed = await Task.Run(() => { var catalog = CatalogLoader.Load(settings.Source, progress, ct); return (catalog, Planner.Analyze(catalog, settings.Policy, progress, ct)); }, ct);
-        (_catalog, _plan) = analyzed; LastBuild = null; Filter(); _tabs.SelectedIndex = 1;
+        (_catalog, _plan) = analyzed; LastBuild = null; Filter(); _tabs.SelectedIndex = _plan.Comparison is null ? 1 : 2;
         _summary.Text = $"{_plan.Items.Count:N0} textures • {_plan.ChangedCount:N0} changes • {_plan.SavedPayloadBytes / 1048576d:N1} MiB less texture payload";
         foreach (var diagnostic in _plan.Diagnostics) AppendLog(diagnostic.Severity + ": " + diagnostic.Message);
+        if (_plan.Comparison is { } comparison)
+        {
+            _comparisonSummary.Text = $"Replace at: {comparison.Placement} • {comparison.LargerCount:N0} larger • {comparison.UnknownCount:N0} unassessed\n{comparison.Assessment}\nOnly this installation priority is compared. Keep other settings fixed for the in-game test.";
+            _comparisonTable.ItemsSource = comparison.Items.OrderByDescending(i => i.ChangeBytes ?? long.MaxValue).Select(i => new ReferenceRow(i)).ToArray();
+            AppendLog(_comparisonSummary.Text);
+        }
         _status.Text = _plan.CompleteSource ? "Analysis complete. Review changes, then build a separate output mod." : "Analysis incomplete. Resolve source errors in the log before building.";
     });
     public async Task BuildAsync() => await RunAsync(async (settings, progress, ct) =>
@@ -204,12 +238,13 @@ public sealed class MainWindow : Window
             JobRunner.ValidateOutputDirectory(settings.Output);
             var recheck = new RecheckProgress(progress);
             var catalog = CatalogLoader.Load(settings.Source, recheck, ct); var fresh = Planner.Analyze(catalog, settings.Policy, recheck, ct);
-            string Signature(OptimizationPlan p) => JsonSerializer.Serialize(p.Items, JsonFiles.Options);
-            if (Signature(fresh) != Signature(previous)) throw new IOException("Source winners or texture metadata changed. Analyze again to review the new plan.");
+            string Signature(OptimizationPlan p) => JsonSerializer.Serialize(new { p.Items, p.Comparison }, JsonFiles.Options);
+            if (Signature(fresh) != Signature(previous)) throw new IOException("Source or reference winners/metadata changed. Analyze again to review the new plan.");
             return JobRunner.Build(catalog, fresh, settings.Output, settings.Cache, settings.Workers, progress, ct, new CpuMipProcessor());
         }, ct);
-        _status.Text = $"Complete: {LastBuild.Files:N0} verified textures ({LastBuild.Reused:N0} reused). Install {LastBuild.Output} as a separate high-priority mod.";
-        AppendLog(_status.Text); _summary.Text = $"Output ready • {LastBuild.Bytes / 1048576d:N1} MiB • {LastBuild.Seconds:F1} seconds • originals preserved";
+        _status.Text = $"Complete: {LastBuild.Files:N0} verified textures ({LastBuild.Reused:N0} reused). Candidate: {LastBuild.Output}. "
+            + (LastBuild.Manifest.Comparison?.Assessment ?? "No previous-output comparison was selected. Validate in game before replacing an existing optimizer.");
+        AppendLog(_status.Text); _summary.Text = $"Candidate built • {LastBuild.Bytes / 1048576d:N1} MiB of overrides • {LastBuild.Seconds:F1} seconds • game validation pending";
     });
     private async Task RunAsync(Func<DesktopSettings, IProgress<JobProgress>, CancellationToken, Task> run)
     {
@@ -262,5 +297,16 @@ public sealed class MainWindow : Window
         public string Format => (Item.Input?.Format ?? "—") + (Item.Input?.Srgb == true ? " sRGB" : "");
         public string Dimensions => Item.Input is null ? "—" : $"{Item.Input.Width}×{Item.Input.Height} → {Item.TargetWidth}×{Item.TargetHeight}";
         public string Saved => (Item.SavedBytes / 1048576d).ToString("N2");
+    }
+    private sealed record ReferenceRow(ReferenceDifference Item)
+    {
+        public string Path => Item.Path;
+        public string Status => Item.Status;
+        public string Previous => Describe(Item.Previous);
+        public string Proposed => Describe(Item.Proposed);
+        public string Change => Item.ChangeBytes is not { } bytes ? "Unknown" : bytes != 0 && Math.Abs(bytes) < 10485.76
+            ? (bytes > 0 ? "+<0.01" : "-<0.01") : (bytes / 1048576d).ToString("+0.00;-0.00;0");
+        public string Reason => Item.Reason;
+        private static string Describe(DdsInfo? info) => info is null ? "Unknown" : $"{info.Width}×{info.Height} {info.Format}";
     }
 }

@@ -15,6 +15,7 @@ public sealed class Mo2Profile
 
     /// <summary>Enabled mod folders, LOWEST priority first (the order files should be layered in).</summary>
     public IReadOnlyList<string> EnabledModsLowToHigh { get; }
+    public IReadOnlyList<string> AllModsLowToHigh { get; }
 
     /// <summary>Enabled plugin file names in load order (base masters and CC included).</summary>
     public IReadOnlyList<string> EnabledPlugins { get; }
@@ -41,6 +42,7 @@ public sealed class Mo2Profile
         Name = name;
         Folder = folder;
         EnabledModsLowToHigh = ReadModList(Path.Combine(folder, "modlist.txt"));
+        AllModsLowToHigh = ReadModList(Path.Combine(folder, "modlist.txt"), includeDisabled: true);
         UsesLocalInis = ReadLocalSettingsFlag(Path.Combine(folder, "settings.ini"));
         EnabledPlugins = ReadPlugins(folder, instance.GamePath, out var explicitSet);
         ExplicitlyEnabled = explicitSet;
@@ -58,13 +60,13 @@ public sealed class Mo2Profile
     /// modlist.txt is written highest priority first. "+" = enabled mod, "-" = disabled,
     /// "*" = unmanaged (DLC/CC already in the game Data folder). Separators end in "_separator".
     /// </summary>
-    internal static List<string> ReadModList(string path)
+    internal static List<string> ReadModList(string path, bool includeDisabled = false)
     {
         var enabledHighToLow = new List<string>();
         foreach (var raw in File.ReadLines(path))
         {
             var line = raw.TrimEnd();
-            if (line.Length < 2 || line[0] != '+') continue;
+            if (line.Length < 2 || (line[0] != '+' && (!includeDisabled || line[0] != '-'))) continue;
             var name = line[1..];
             if (name.EndsWith("_separator", StringComparison.OrdinalIgnoreCase)) continue;
             enabledHighToLow.Add(name);

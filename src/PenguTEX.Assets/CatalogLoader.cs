@@ -13,6 +13,9 @@ public static class CatalogLoader
         if ((options.Folder is null) == (options.Instance is null))
             throw new ArgumentException("Choose exactly one folder or MO2/Fluorine instance.");
         var roots = new List<string>(); var diagnostics = new List<Diagnostic>();
+        var priorities = new Dictionary<string, int>(StringComparer.Ordinal);
+        string? referenceRoot = options.ReferenceFolder is null ? null : HostPath.Canonical(HostPath.Resolve(options.ReferenceFolder));
+        string referencePlacement = "Above folder sources"; int referencePriority = int.MaxValue - 1;
         var loose = new Dictionary<string, Asset>(StringComparer.Ordinal);
         var rootFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         Mo2Profile? profile = null;
@@ -21,6 +24,10 @@ public static class CatalogLoader
         {
             var root = HostPath.Resolve(options.Folder);
             if (!Directory.Exists(root)) throw new DirectoryNotFoundException(root);
+            if (referenceRoot is not null && (referenceRoot == HostPath.Canonical(root)
+                || referenceRoot.StartsWith(HostPath.Canonical(root) + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                || HostPath.Canonical(root).StartsWith(referenceRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal)))
+                throw new ArgumentException("Reference and original source folders must not overlap.");
             roots.Add(root);
         }
         else
@@ -29,6 +36,15 @@ public static class CatalogLoader
                 options.Profiles, options.Overwrite, options.WinePrefix));
             profile = instance.OpenProfile(options.Profile); skipDirs = instance.SkipDirectories;
             options = options with { Profile = profile.Name };
+            var ranks = profile.AllModsLowToHigh.Select((name, index) => (name, index)).ToDictionary(x => x.name, x => x.index + 1, StringComparer.OrdinalIgnoreCase);
+            if (referenceRoot is not null)
+            {
+                string? replace = options.ReplaceMod;
+                if (replace is null && Path.GetDirectoryName(referenceRoot) == HostPath.Canonical(instance.ModsFolder)) replace = Path.GetFileName(referenceRoot);
+                if (replace is null || !ranks.TryGetValue(replace, out referencePriority))
+                    throw new ArgumentException("For a profile comparison, select the installed reference mod folder or specify ReplaceMod / --replace-mod with its profile mod name.");
+                referencePlacement = replace; options = options with { ReplaceMod = replace };
+            }
             var baseData = options.Data is null ? instance.GameDataFolder : HostPath.Resolve(options.Data);
             if (!Directory.Exists(baseData)) throw new DirectoryNotFoundException("Base Data folder is missing: " + baseData);
             if (OperatingSystem.IsLinux() && IsFluorineMount(baseData, File.ReadLines("/proc/self/mountinfo")))
@@ -41,10 +57,12 @@ public static class CatalogLoader
                 { diagnostics.Add(new("Info", "Excluded requested mod: " + mod)); continue; }
                 var path = GamePath.ResolveExisting(instance.ModsFolder, mod);
                 if (path is null || !Directory.Exists(path)) { diagnostics.Add(new("Error", "Enabled mod folder is missing: " + mod)); continue; }
+                if (referenceRoot is not null && (mod.Equals(referencePlacement, StringComparison.OrdinalIgnoreCase) || HostPath.Canonical(path) == referenceRoot))
+                { diagnostics.Add(new("Info", "Reference output excluded from original inputs: " + mod)); continue; }
                 if (IsOptimizerOutput(path)) { diagnostics.Add(new("Info", "Excluded prior optimizer output: " + mod)); continue; }
-                roots.Add(path);
+                roots.Add(path); priorities[path] = ranks[mod];
             }
-            if (Directory.Exists(instance.OverwriteFolder)) roots.Add(instance.OverwriteFolder);
+            if (Directory.Exists(instance.OverwriteFolder)) { roots.Add(instance.OverwriteFolder); priorities[instance.OverwriteFolder] = int.MaxValue; }
         }
         for (int i = 0; i < roots.Count; i++)
         {
@@ -74,7 +92,8 @@ public static class CatalogLoader
                 {
                     var actual = file;
                     loose[key] = new(key, origin, actual, new FileInfo(actual).Length,
-                        () => new FileStream(actual, FileMode.Open, FileAccess.Read, FileShare.Read, 128 * 1024, FileOptions.SequentialScan));
+                        () => new FileStream(actual, FileMode.Open, FileAccess.Read, FileShare.Read, 128 * 1024, FileOptions.SequentialScan))
+                    { Priority = priorities.GetValueOrDefault(root) };
                 }
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
@@ -102,7 +121,7 @@ public static class CatalogLoader
                         ct.ThrowIfCancellationRequested(); var path = entry.Path.Replace('\\', '/').ToLowerInvariant();
                         if (!path.StartsWith("textures/") || !path.EndsWith(".dds")) continue;
                         GamePath.ValidateRelative(path); var file = entry;
-                        if (!members.TryAdd(path, new(path, Path.GetFileName(archive), archive, file.Size, () => file.AsStream())))
+                        if (!members.TryAdd(path, new(path, Path.GetFileName(archive), archive, file.Size, () => file.AsStream()) { Priority = -1 }))
                             throw new InvalidDataException("Duplicate archive member: " + path);
                     }
                     foreach (var (key, asset) in members) assets[key] = asset;
@@ -112,7 +131,24 @@ public static class CatalogLoader
             }
         }
         foreach (var (key, asset) in loose) assets[key] = asset;
-        return new(options, roots, assets.Values.OrderBy(a => a.Path, StringComparer.Ordinal).ToArray(), diagnostics);
+        ReferenceCatalog? reference = null;
+        if (referenceRoot is not null)
+        {
+            var referenceFiles = Load(new(Folder: referenceRoot), progress, ct);
+            diagnostics.AddRange(referenceFiles.Diagnostics.Select(d => d with { Message = "Reference: " + d.Message }));
+            if (referenceFiles.Assets.Count == 0) diagnostics.Add(new("Error", "Reference folder contains no loose DDS textures."));
+            reference = new(referenceRoot, referencePlacement, referencePriority, referenceFiles.Assets)
+            {
+                Refresh = token =>
+                {
+                    var refreshed = Load(new(Folder: referenceRoot), ct: token);
+                    if (refreshed.Diagnostics.Any(d => d.Severity == "Error")) throw new IOException("Reference output cannot be read consistently. Analyze again.");
+                    return new(referenceRoot, referencePlacement, referencePriority, refreshed.Assets);
+                }
+            };
+            roots.Add(referenceRoot); // Protect comparison inputs from output/cache overlap too.
+        }
+        return new(options, roots, assets.Values.OrderBy(a => a.Path, StringComparer.Ordinal).ToArray(), diagnostics) { Reference = reference };
     }
 
     private static bool IsOptimizerOutput(string folder) => GamePath.ResolveExisting(folder, JobRunner.ManifestName) is not null
