@@ -7,6 +7,60 @@ namespace PenguTEX.Tests;
 
 public class SourceTests
 {
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public void PortableAndSeparateInstanceLocationsResolveNativePaths(bool separateBase)
+    {
+        using var f = new Fixture();
+        string game = f.Dir("Skyrim forêt"), instance = f.Dir("Instance forêt");
+        string library = separateBase ? f.Dir("Mod library forêt") : instance;
+        f.Dir("Skyrim forêt/Data");
+        static string Qt(string path) => path.Replace("\\", "\\\\");
+        f.Text(Path.Combine(instance, "ModOrganizer.ini"), $"[General]\ngamePath=@ByteArray({Qt(game)})\nselected_profile=Profile forêt\n[Settings]\nbase_directory={Qt(library)}\nmod_directory=%BASE_DIR%/mods\nprofiles_directory=%BASE_DIR%/profiles\n");
+        f.Text(Path.Combine(library, "profiles/Profile forêt/modlist.txt"), "+Textures\n-Disabled\n");
+        f.Text(Path.Combine(library, "profiles/Profile forêt/settings.ini"), "[General]\nLocalSettings=true\n");
+        f.Text(Path.Combine(library, "profiles/Profile forêt/skyrim.ini"), "[Archive]\nsResourceArchiveList=\nsResourceArchiveList2=\n");
+        f.File(Path.Combine(library, "mods/Textures/textures/forêt.dds"), Fixture.Dds());
+        f.File(Path.Combine(library, "mods/Disabled/textures/disabled.dds"), Fixture.Dds());
+        var opened = Mo2Instance.Open(instance);
+        Assert.Equal("Profile forêt", Assert.Single(opened.ListProfiles()));
+        var catalog = CatalogLoader.Load(new(Instance: instance));
+        Assert.DoesNotContain(catalog.Diagnostics, d => d.Severity == "Error");
+        Assert.Equal("Textures", Assert.Single(catalog.Assets).Origin);
+    }
+    [Fact] public void LinuxMo2WindowsPathsUseTheSelectedPrefix()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        using var f = new Fixture(); var prefix = f.Dir("compatdata/pfx"); f.Dir("compatdata/pfx/dosdevices");
+        f.Dir("compatdata/pfx/drive_c/Games/Skyrim/Data");
+        f.Text("instance/ModOrganizer.ini", "[General]\ngamePath=C:\\\\Games\\\\Skyrim\nselected_profile=Example\n[Settings]\nbase_directory=C:\\\\Mod library\n");
+        f.Text("compatdata/pfx/drive_c/Mod library/profiles/Example/modlist.txt", "+Originals\n");
+        f.Text("compatdata/pfx/drive_c/Mod library/profiles/Example/settings.ini", "[General]\nLocalSettings=true\n");
+        f.Text("compatdata/pfx/drive_c/Mod library/profiles/Example/skyrim.ini", "[Archive]\nsResourceArchiveList=\nsResourceArchiveList2=\n");
+        f.File("compatdata/pfx/drive_c/Mod library/mods/Originals/textures/a.dds", Fixture.Dds());
+        var catalog = CatalogLoader.Load(new(Instance: f.Dir("instance"), WinePrefix: f.Dir("compatdata")));
+        Assert.DoesNotContain(catalog.Diagnostics, d => d.Severity == "Error");
+        Assert.Equal("Originals", Assert.Single(catalog.Assets).Origin);
+    }
+    [Fact] public void WindowsReferenceFolderAliasesCannotOverlapOriginals()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var f = new Fixture(); string original = f.Dir("Original textures");
+        f.File("Original textures/a.dds", Fixture.Dds());
+        Assert.Throws<ArgumentException>(() => CatalogLoader.Load(new(Folder: original) { ReferenceFolder = original.ToUpperInvariant() }));
+        Assert.Throws<ArgumentException>(() => CatalogLoader.Load(new(Folder: original) { ReferenceFolder = Path.Combine(original.ToUpperInvariant(), "nested") }));
+    }
+    [Fact] public void WindowsInstalledReferenceCaseAliasKeepsItsProfilePriority()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var f = new Fixture(); var source = Setup(f);
+        f.File("instance/mods/Low/textures/test.dds", Fixture.Dds());
+        f.File("instance/mods/High/textures/test.dds", Fixture.Dds(8, 8));
+        var catalog = CatalogLoader.Load(source with { ReferenceFolder = f.Dir("instance/mods/High").ToUpperInvariant() });
+        Assert.DoesNotContain(catalog.Diagnostics, d => d.Severity == "Error");
+        Assert.Equal("Low", Assert.Single(catalog.Assets).Origin);
+        Assert.NotNull(catalog.Reference);
+        Assert.Single(catalog.Reference.Assets);
+    }
     private static SourceOptions Setup(Fixture f)
     {
         string game = f.Dir("game"); f.Dir("game/Data"); f.Dir("instance/mods");

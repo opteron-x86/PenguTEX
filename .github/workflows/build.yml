@@ -65,6 +65,57 @@ jobs:
             .artifacts/tests
             .artifacts/screenshots
             .artifacts/benchmarks
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      PYTHONUTF8: '1'
+      PENGUTEX_SCREENSHOTS: ${{ github.workspace }}/.artifacts/screenshots
+      PENGUTEX_ORACLE_FIXTURES: ${{ github.workspace }}/.artifacts/oracle
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: '10.0.x'
+      - name: Check release version
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python tools/version.py --check-tag "$env:RELEASE_TAG"
+      - name: Engine and rendered desktop tests
+        run: dotnet test PenguTEX.slnx -c Release --disable-build-servers -m:1 -nr:false -p:UseSharedCompilation=false --logger 'trx;LogFilePrefix=tests' --results-directory .artifacts/tests
+      - name: Install independent DDS decoder
+        run: python -m pip install Pillow==13.0.0
+      - name: Independent DDS decoder
+        run: python tools/independent-dds.py .artifacts/oracle
+      - name: Build portable Windows package
+        run: python tools/build-windows.py
+      - name: Extract portable ZIP
+        run: |
+          $version = python tools/version.py
+          if ($LASTEXITCODE -ne 0) { throw 'Could not read version' }
+          Expand-Archive -LiteralPath "dist/PenguTEX-$version-win-x64.zip" -DestinationPath 'Extracted package forêt'
+      - name: Extracted CLI workflow
+        run: python tools/cli-smoke.py 'Extracted package forêt/win-x64/PenguTEX.exe'
+      - name: Extracted native desktop startup
+        run: python tools/gui-smoke.py 'Extracted package forêt/win-x64/PenguTEX.Desktop.exe'
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: PenguTEX-win-x64
+          if-no-files-found: error
+          compression-level: 0
+          path: |
+            dist/PenguTEX-*-win-x64.zip
+            dist/SHA256SUMS.windows
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: test-results-windows
+          include-hidden-files: true
+          path: |
+            .artifacts/tests
+            .artifacts/screenshots
   compatibility:
     name: Package compatibility (${{ matrix.image }})
     needs: linux
@@ -124,7 +175,7 @@ jobs:
           timeout 30s "${image[0]}" --appimage-extract-and-run --settings "$PWD/appimage-settings.json" --smoke
   release:
     if: startsWith(github.ref, 'refs/tags/v') && github.repository == 'opteron-x86/PenguTEX'
-    needs: [linux, compatibility]
+    needs: [linux, windows, compatibility]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -134,6 +185,10 @@ jobs:
         with:
           name: PenguTEX-linux-x64
           path: release
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: PenguTEX-win-x64
+          path: release
       - name: Publish verified tag
         env:
           GH_TOKEN: ${{ github.token }}
@@ -141,7 +196,8 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         working-directory: release
         run: |
+          cat SHA256SUMS.windows >> SHA256SUMS
           sha256sum -c SHA256SUMS
           options=()
           if [[ "$RELEASE_TAG" == *-* ]]; then options+=(--prerelease); fi
-          gh release create "$RELEASE_TAG" --verify-tag --title "PenguTEX ${RELEASE_TAG#v}" --notes-file RELEASE-NOTES.md "${options[@]}" PenguTEX-*.tar.gz PenguTEX-*.AppImage SHA256SUMS
+          gh release create "$RELEASE_TAG" --verify-tag --title "PenguTEX ${RELEASE_TAG#v}" --notes-file RELEASE-NOTES.md "${options[@]}" PenguTEX-*.tar.gz PenguTEX-*.AppImage PenguTEX-*.zip SHA256SUMS

@@ -2,7 +2,7 @@
 
 Build with .NET 10: `dotnet build src/PenguTEX.Cli -c Release`.
 Run `dotnet src/PenguTEX.Cli/bin/Release/net10.0/PenguTEX.dll --help`, or use
-the `PenguTEX` executable in a self-contained package.
+the `PenguTEX` executable on Linux or `PenguTEX.exe` on Windows in a self-contained package.
 
 ```sh
 PenguTEX profiles --instance /games/modlist
@@ -13,6 +13,21 @@ PenguTEX build --folder /mods/TexturePack --policy policy.json --output /generat
 PenguTEX verify /generated/PenguTEX
 PenguTEX inspect /mods/TexturePack/textures/armor/example.dds
 ```
+
+On Windows, use native paths, for example in PowerShell:
+
+```powershell
+.\PenguTEX.exe profiles --instance 'D:\Modding\MO2'
+.\PenguTEX.exe analyze --instance 'D:\Modding\MO2' --profile 'Example' --preset balanced --report analysis.json
+.\PenguTEX.exe build --instance 'D:\Modding\MO2' --profile 'Example' --preset balanced --output 'D:\Generated\PenguTEX' --cache 'D:\Cache\PenguTEX'
+```
+
+Profile inputs can be MO2 on Windows, MO2 through Wine/Proton on Linux, or Fluorine
+on Linux. The instance is the folder containing `ModOrganizer.ini`; global MO2
+instances commonly keep it under `%LOCALAPPDATA%\ModOrganizer\<instance>`.
+Linux MO2 setups can supply `--wine-prefix /path/to/prefix` to map Windows drive
+paths from that INI, or use native Linux location overrides. A Proton compatdata
+folder containing `pfx/dosdevices` is accepted. PenguTEX itself runs natively.
 
 The folder source accepts a mod/Data root containing `textures`, or a texture folder.
 It includes loose DDS files only; use a profile for archive activation and conflicts.
@@ -45,8 +60,7 @@ folder is outside the instance, `--replace-mod 'Previous Output'`. The compariso
 uses that mod's profile priority, even if disabled. `--fit-reference true` selects
 existing mips that fit the reference dimensions and payload while preserving format.
 `--fit-protected true` also permits fitting reference-covered landscape/character
-textures. Optional `--carry-reference true` retains valid reference files unchanged
-for unresolved paths and reports them separately. `--require-parity true` refuses publication if larger or unassessed paths
+textures. Legacy `--carry-reference true` is rejected: every replacement must come from an original source. `--require-parity true` refuses publication if larger or unassessed paths
 remain. See [replacement checks](REPLACEMENT.md) for assumptions and acceptance.
 
 JSON goes to stdout and progress/errors to stderr. Exit codes: 0 file operation

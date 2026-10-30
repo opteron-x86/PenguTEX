@@ -21,6 +21,22 @@ public static class TestApp
 }
 public sealed class DesktopTests
 {
+    [Fact]
+    public void PreferencesAndCacheUseHostDefaultsAndExplicitLocationsRoundTrip()
+    {
+        using var f = new Fixture();
+        string Xdg(string name, string fallback) => Path.Combine(
+            Environment.GetEnvironmentVariable(name) is { Length: > 0 } value ? value
+                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), fallback), "PenguTEX");
+        string local = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PenguTEX");
+        Assert.Equal(Path.Combine(OperatingSystem.IsWindows() ? local : Xdg("XDG_CONFIG_HOME", ".config"), "settings.json"), new SettingsStore().Path);
+        Assert.Equal(OperatingSystem.IsWindows() ? Path.Combine(local, "Cache") : Xdg("XDG_CACHE_HOME", ".cache"), new DesktopSettings().Cache);
+        var store = new SettingsStore(Path.Combine(f.Root, "Préférences", "settings.json"));
+        var settings = Settings(f) with { Cache = f.Dir("Custom cache forêt") };
+        store.Save(settings);
+        Assert.Equal(settings.Cache, store.Load().Cache);
+        Assert.Equal(settings.Output, store.Load().Output);
+    }
     private static DesktopSettings Settings(Fixture f) => new()
     {
         Source = new(Folder: f.Dir("source")), Policy = new() { Maximum = 8, NormalMaximum = 8, MaterialMaximum = 8 },

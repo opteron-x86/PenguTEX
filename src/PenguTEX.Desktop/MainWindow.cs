@@ -17,7 +17,7 @@ public sealed class MainWindow : Window
 {
     private readonly SettingsStore _store;
     private readonly Func<DirectoryInfo, Task<bool>> _openDirectory;
-    private readonly ComboBox _mode = new() { ItemsSource = new[] { "Texture folder", "MO2 / Fluorine profile" }, SelectedIndex = 0 };
+    private readonly ComboBox _mode = new() { ItemsSource = new[] { "Texture folder", "Mod-manager profile" }, SelectedIndex = 0 };
     private readonly ComboBox _preset = new() { ItemsSource = new[] { "Quality", "Balanced", "Compact", "Custom / saved limits" }, SelectedIndex = 1 };
     private readonly ComboBox _profiles = new() { MinWidth = 180 };
     private readonly TextBox _source = Box("SourcePath"), _profile = Box("ProfileName"), _game = Box("GamePath"), _data = Box("DataPath"),
@@ -156,17 +156,24 @@ public sealed class MainWindow : Window
             try { var path = await SavePath("Save JSON policy", "pengutex-policy.json"); if (path is not null) JsonFiles.Write(path, ReadSettings().Policy); }
             catch (Exception e) { _status.Text = e.Message; }
         };
+        var prefix = PathField("Wine / Proton prefix (for Windows paths)", _wine);
+        prefix.IsVisible = !OperatingSystem.IsWindows();
+        var sourceHelp = Text(OperatingSystem.IsWindows()
+            ? "Profiles: select the MO2 instance folder containing ModOrganizer.ini. Texture folders work independently of a mod manager."
+            : "Profiles: select the instance folder containing ModOrganizer.ini for MO2 through Wine/Proton or Fluorine on Linux. Texture folders work independently of a mod manager.");
         var advanced = new StackPanel { Spacing = 12, Children = {
-            Columns(PathField("Game folder override", _game), PathField("Original Data override (unmounted)", _data)),
+            Columns(PathField("Game folder override", _game), PathField("Original Data override", _data)),
             Columns(PathField("Mods override", _mods), PathField("Profiles override", _profileRoot)),
-            Columns(PathField("Overwrite override", _overwrite), PathField("Wine / Proton prefix", _wine)),
+            Columns(PathField("Overwrite override", _overwrite), prefix),
             Columns(Field("INI archive list override", _ini), Field("Excluded mods (separate names with |)", _exclude)),
             Field("Path rules (JSON; later matching rules win)", _rules),
             Text("Example: [{\"Pattern\":\"textures/armor/*\",\"Maximum\":1024}]. Explicit caps can override protections.") } };
+        if (OperatingSystem.IsLinux()) advanced.Children.Add(Text("If Fluorine has mounted a merged Data folder, stop that VFS session or select its unmounted original Data folder above. MO2 through Wine/Proton can use native Linux overrides or its prefix to resolve Windows paths."));
         _comparisonOptions.Children.Add(Columns(PathField("Previous optimized output", _reference), Field("Mod to replace (auto-detected for installed reference)", _replaceMod)));
         _comparisonOptions.Children.Add(Columns(_fitReference, _fitProtected));
         return new StackPanel { Spacing = 16, Margin = new Thickness(0, 14, 12, 10), Children = {
-            Columns(Field("Source type", _mode), Field("Preset", _preset)), PathField("Source folder or MO2 / Fluorine instance", _source),
+            Columns(Field("Source type", _mode), Field("Preset", _preset)), PathField("Texture folder or mod-manager instance", _source),
+            sourceHelp,
             Columns(Field("Profile name (profile sources only)", _profile), profileRow),
             Columns(Columns(Field("Color maximum", _maximum), Field("Normal maximum", _normal)), Columns(Field("Material maximum", _material), Field("Height maximum", _height))),
             Columns(_large, _characters),
@@ -177,7 +184,7 @@ public sealed class MainWindow : Window
             Field("Workers (1–32)", _workers),
             new Expander { Header = "Locations and custom rules", Content = advanced, HorizontalAlignment = HorizontalAlignment.Stretch },
             Text("Quality: color 2K, normal/material/height 1K. Balanced: color 2K, normal 1K, material/height 512. Compact: color 1K, normal/material 512, height 256. Saved custom limits are preserved."),
-            Text("Fresh runs use enabled original sources and the selected limits. Generated LOD, interface and shader resources remain protected. Review material bindings, previews and unresolved originals before building. Estimates are texture payload, not live VRAM. Profile scans need an unmounted original Data directory.") } };
+            Text("Fresh runs use enabled original sources and the selected limits. Generated LOD, interface and shader resources remain protected. Review material bindings, previews and unresolved originals before building. Estimates are texture payload, not live VRAM.") } };
     }
     private Control ReplacementReview()
     {
@@ -208,7 +215,7 @@ public sealed class MainWindow : Window
             Rules = JsonSerializer.Deserialize<PathRule[]>(_rules.Text ?? "[]", JsonFiles.Options) ?? [] };
         policy.Validate();
         var source = new SourceOptions(_mode.SelectedIndex == 0 ? Value(_source) : null, _mode.SelectedIndex == 1 ? Value(_source) : null,
-            Value(_profile), Value(_game), Value(_mods), Value(_profileRoot), Value(_overwrite), Value(_wine), Value(_ini), Value(_exclude)?.Split('|'), Value(_data))
+            Value(_profile), Value(_game), Value(_mods), Value(_profileRoot), Value(_overwrite), OperatingSystem.IsWindows() ? null : Value(_wine), Value(_ini), Value(_exclude)?.Split('|'), Value(_data))
         { ReferenceFolder = _compareReference.IsChecked == true ? Value(_reference) : null, ReplaceMod = _compareReference.IsChecked == true ? Value(_replaceMod) : null };
         return new() { Source = source, Policy = policy, CompareReference = _compareReference.IsChecked == true, Output = _output.Text?.Trim() ?? "", Cache = _cache.Text?.Trim() ?? "", Workers = int.Parse(_workers.Text ?? "2") };
     }

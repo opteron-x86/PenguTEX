@@ -12,6 +12,7 @@ acceptance remain separate from implementation. No unmeasured performance claims
 | M4 — Integration and distribution | Portable/AppImage, distro compatibility, manifests, PenguLOD workflow | Extracted packages run; reproducible benchmarks; source/licenses/checksums |
 | M5 — Measured compatibility | Game visuals/frame times and optional physical GPU acceleration | Repeatable shader/hardware evidence; measured benefit before automatic GPU selection |
 | M6 — Native source coverage | Fresh source coverage, material-aware completion, bounded DDS recovery and optional comparison | Enabled originals only; explainable exceptions; independent file checks; game acceptance tracked under M5 |
+| M7 — Windows and Linux alpha distribution | Native Windows ZIP, Linux packages, manager-neutral setup and external alpha feedback | Native CI and extracted-package checks gate a paired prerelease; game acceptance remains under M5 |
 
 M1–M2 form the first useful alpha. M3 is opt-in; format-preserving mip reduction stays
 the default. M4 makes the application distributable. M5 remains open until evidence
@@ -37,7 +38,7 @@ The [game acceptance protocol](GAME-VALIDATION.md) defines the evidence required
 14. Optional GPU backend and physical-device quality/performance acceptance.
 
 Runtime-wide material inference, automated VRAM-budget fitting, runtime hooks, archive
-repacking, Windows distribution and other games are later candidates, not hidden
+repacking and other games are later candidates, not hidden
 first-alpha requirements. Every scope expansion needs an issue and acceptance checks.
 
 Track execution in [issues](https://github.com/opteron-x86/PenguTEX/issues) and
@@ -78,7 +79,7 @@ Track execution in [issues](https://github.com/opteron-x86/PenguTEX/issues) and
 - [#14 — Validate in-game texture quality and performance](https://github.com/opteron-x86/PenguTEX/issues/14)
 - [#15 — Evaluate optional GPU acceleration on physical devices](https://github.com/opteron-x86/PenguTEX/issues/15)
 
-### [M6 — Optimizer replacement parity](https://github.com/opteron-x86/PenguTEX/milestone/7)
+### [M6 — Native source coverage](https://github.com/opteron-x86/PenguTEX/milestone/7)
 
 - [#25 — Compare optimizer baselines to prevent larger replacement textures](https://github.com/opteron-x86/PenguTEX/issues/25)
 - [#26 — Extend native DDS mip copying to verified uncompressed layouts and BC6H](https://github.com/opteron-x86/PenguTEX/issues/26)
@@ -100,3 +101,12 @@ are distinct acceptance stages; preserve the previous playable setup until both 
 
 
 Fresh-run behavior and bounded material inference are specified in [MATERIALS.md](MATERIALS.md).
+
+### [M7 — Windows and Linux alpha distribution](https://github.com/opteron-x86/PenguTEX/milestone/8)
+
+- [#53 — Package Windows x64 and gate releases on native Windows CI](https://github.com/opteron-x86/PenguTEX/issues/53)
+- [#54 — Make alpha setup manager-neutral across Windows and Linux](https://github.com/opteron-x86/PenguTEX/issues/54)
+- [#55 — Publish the first paired Windows and Linux alpha](https://github.com/opteron-x86/PenguTEX/issues/55)
+
+The [alpha testing guide](ALPHA-TESTING.md) covers fresh setup and useful feedback.
+Packaging and native startup checks do not close the hardware/game acceptance work.
