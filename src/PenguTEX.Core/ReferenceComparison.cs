@@ -13,10 +13,11 @@ public sealed record ReferenceReport(string Folder, string Placement, string Fin
     public int LargerCount => Items.Count(i => i.Status == "Larger");
     public int UnknownCount => Items.Count(i => i.Status is "UnknownReference" or "UnknownSource" or "MissingSource");
     public int CarriedCount => Items.Count(i => i.Status == "ReferenceRetained");
+    public int IncompleteMipCount => Items.Count(i => i.Status == "IncompleteMips");
     public long KnownPayloadChange => Items.Sum(i => i.ChangeBytes ?? 0);
-    public bool HasUnresolved => LargerCount != 0 || UnknownCount != 0;
-    public string Assessment => HasUnresolved ? "Replacement has larger or unassessed textures. Keep the prior output until reviewed."
-        : $"No larger dimensions or texture payload found in this comparison. {CarriedCount:N0} reference files carried unchanged; these are not native optimizations. In-game appearance and performance still require validation.";
+    public bool HasUnresolved => LargerCount != 0 || UnknownCount != 0 || IncompleteMipCount != 0;
+    public string Assessment => HasUnresolved ? "Replacement has larger, incomplete or unassessed textures. Keep the prior output until reviewed."
+        : $"No larger dimensions/payload or reduced mip coverage found in this comparison. {CarriedCount:N0} reference files carried unchanged; these are not native optimizations. In-game appearance and performance still require validation.";
 }
 
 public static class ReferenceComparison
@@ -26,7 +27,7 @@ public static class ReferenceComparison
         var report = Compare(catalog, items, references)!;
         var referenceAssets = catalog.Reference!.Assets.ToDictionary(a => a.Path, StringComparer.Ordinal);
         var positions = items.Select((item, index) => (item.Path, index)).ToDictionary(x => x.Path, x => x.index, StringComparer.Ordinal);
-        foreach (var gap in report.Items.Where(i => i.Status is "Larger" or "UnknownSource" or "MissingSource"))
+        foreach (var gap in report.Items.Where(i => i.Status is "Larger" or "IncompleteMips" or "UnknownSource" or "MissingSource"))
         {
             if (references[gap.Path].Info is not { } info) continue;
             bool exists = positions.TryGetValue(gap.Path, out int position);
@@ -74,8 +75,13 @@ public static class ReferenceComparison
     public static bool Fits(DdsInfo proposed, int drop, bool rebuild, DdsInfo reference)
     {
         var target = Target(proposed, drop, rebuild);
-        return target.Width <= reference.Width && target.Height <= reference.Height && target.PayloadBytes <= reference.PayloadBytes;
+        return target.Width <= reference.Width && target.Height <= reference.Height && target.PayloadBytes <= reference.PayloadBytes
+            && CoversReferenceMips(target, reference);
     }
+
+    public static bool CoversReferenceMips(DdsInfo proposed, DdsInfo reference) =>
+        Math.Max(1, proposed.Width >> (proposed.MipCount - 1)) <= Math.Max(1, reference.Width >> (reference.MipCount - 1))
+        && Math.Max(1, proposed.Height >> (proposed.MipCount - 1)) <= Math.Max(1, reference.Height >> (reference.MipCount - 1));
 
     public static DdsInfo Target(DdsInfo input, int drop, bool rebuild)
     {
@@ -101,8 +107,10 @@ public static class ReferenceComparison
             DdsInfo? proposed = item.Input is null ? null : ReferenceComparison.Target(item.Input, item.DropMips, item.Decision == Decision.Rebuild);
             string status = old.Info is null ? "UnknownReference" : proposed is null ? "UnknownSource"
                 : proposed.Width > old.Info.Width || proposed.Height > old.Info.Height || proposed.PayloadBytes > old.Info.PayloadBytes ? "Larger"
+                : !CoversReferenceMips(proposed, old.Info) ? "IncompleteMips"
                 : proposed.PayloadBytes < old.Info.PayloadBytes ? "Smaller" : "SamePayload";
-            differences.Add(new(item.Path, item.Origin, status, old.Problem ?? item.Reason, old.Info, proposed, old.Info?.PayloadBytes, proposed?.PayloadBytes));
+            string reason = status == "IncompleteMips" ? "The retained chain stops before the reference's smallest mip levels. " + item.Reason : old.Problem ?? item.Reason;
+            differences.Add(new(item.Path, item.Origin, status, reason, old.Info, proposed, old.Info?.PayloadBytes, proposed?.PayloadBytes));
         }
         foreach (var item in plan.Where(i => !references.ContainsKey(i.Path) && i.Decision is Decision.Reduce or Decision.Rebuild))
         {

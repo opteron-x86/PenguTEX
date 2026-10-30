@@ -230,7 +230,7 @@ public sealed class MainWindow : Window
         foreach (var diagnostic in _plan.Diagnostics) AppendLog(diagnostic.Severity + ": " + diagnostic.Message);
         if (_plan.Comparison is { } comparison)
         {
-            _comparisonSummary.Text = $"Replace at: {comparison.Placement} • {comparison.LargerCount:N0} larger • {comparison.UnknownCount:N0} unassessed • {comparison.CarriedCount:N0} carried unchanged\n{comparison.Assessment}\nOnly this installation priority is compared. Keep other settings fixed for the in-game test.";
+            _comparisonSummary.Text = $"Replace at: {comparison.Placement} • {comparison.LargerCount:N0} larger • {comparison.UnknownCount:N0} unassessed • {comparison.IncompleteMipCount:N0} incomplete mip chains • {comparison.CarriedCount:N0} carried unchanged\n{comparison.Assessment}\nOnly this installation priority is compared. Keep other settings fixed for the in-game test.";
             _comparisonTable.ItemsSource = comparison.Items.OrderByDescending(i => i.ChangeBytes ?? long.MaxValue).Select(i => new ReferenceRow(i)).ToArray();
             AppendLog(_comparisonSummary.Text);
         }
@@ -313,6 +313,7 @@ public sealed class MainWindow : Window
         public string Status => Item.Status switch
         {
             "ReferenceRetained" => "Carried unchanged", "MissingSource" => "Missing original",
+            "IncompleteMips" => "Missing mip levels",
             "UnknownSource" => "Unreadable original", "UnknownReference" => "Unreadable reference",
             "HigherPriority" => "Higher priority wins", "SamePayload" => "Same payload", "NewReduction" => "New reduction", _ => Item.Status,
         };
@@ -321,6 +322,6 @@ public sealed class MainWindow : Window
         public string Change => Item.ChangeBytes is not { } bytes ? "Unknown" : bytes != 0 && Math.Abs(bytes) < 10485.76
             ? (bytes > 0 ? "+<0.01" : "-<0.01") : (bytes / 1048576d).ToString("+0.00;-0.00;0");
         public string Reason => Item.Reason;
-        private static string Describe(DdsInfo? info) => info is null ? "Unknown" : $"{info.Width}×{info.Height} {info.Format}";
+        private static string Describe(DdsInfo? info) => info is null ? "Unknown" : $"{info.Width}×{info.Height} {info.Format}\n{info.MipCount} mip levels";
     }
 }

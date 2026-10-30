@@ -34,7 +34,9 @@ limits. Missing HeightMaximum in older policies uses MaterialMaximum. Landscape,
 character, generated LOD, interface and shader protections still apply by default.
 
 Fit reference selects a retained mip no larger than the reference in either dimension
-or total texture payload. It preserves the source's format and channels; when the
+or total texture payload, and requires its chain to reach at least as small a final
+mip in both dimensions. A smaller base texture with fewer required tail levels is
+still an incomplete replacement. It preserves the source's format and channels; when the
 reference uses denser compression, fitting may require a smaller resolution. Review
 those visual tradeoffs. Fitting protected reference textures is a separate opt-in for
 landscape and character paths already covered by the reference. It does not bypass
@@ -61,7 +63,7 @@ shows those remaining native gaps again.
 ## Acceptance
 
 The report includes format, dimensions, mip count, payload and decision reason.
-Larger dimensions or payload, missing originals and unreadable DDS layouts require
+Larger dimensions or payload, incomplete mip coverage, missing originals and unreadable DDS layouts require
 review. A changed reference path set, file length or DDS layout invalidates the
 comparison before publication. This metadata fingerprint is not a pixel-content
 hash or an assertion of visual equivalence. Reference and source folders are protected
