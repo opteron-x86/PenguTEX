@@ -163,7 +163,13 @@ public static class CatalogLoader
         {
             materials = MaterialReader.Read(assets.Values.Where(a => a.Path.StartsWith("meshes/")).ToArray(), diagnostics, progress, ct);
             var freshOptions = options with { ReferenceFolder = null, ReplaceMod = null };
-            materials = materials with { RefreshFingerprint = token => Load(freshOptions, progress, token, false, true).Materials!.Fingerprint };
+            materials = materials with { RefreshFingerprint = token =>
+            {
+                var refreshed = Load(freshOptions, progress, token, false, true);
+                if (refreshed.Diagnostics.Any(d => d.Severity == "Error"))
+                    throw new IOException("Original source inventory became incomplete during material recheck. Analyze again.");
+                return refreshed.Materials!.Fingerprint;
+            } };
         }
         return new(options, roots, assets.Values.Where(a => a.Path.StartsWith("textures/")).OrderBy(a => a.Path, StringComparer.Ordinal).ToArray(), diagnostics)
         { Reference = reference, Materials = materials };

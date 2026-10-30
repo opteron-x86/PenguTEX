@@ -60,6 +60,15 @@ public class SourceTests
         Assert.False(plan.Comparison!.HasUnresolved);
         Assert.True(JobRunner.Build(catalog, plan, f.Dir("output"), f.Dir("cache")).Manifest.OriginalsOnly);
     }
+    [Fact] public void MissingEnabledRootStopsPublicationEvenWhenMeshFingerprintWouldBeUnchanged()
+    {
+        using var f = new Fixture(); var source = Setup(f); f.File("instance/mods/Low/textures/test.dds", Fixture.Dds());
+        var catalog = CatalogLoader.Load(source, inspectMaterials: true);
+        var plan = Planner.Analyze(catalog, Policy.Preset("balanced") with { Maximum = 8 });
+        Directory.Delete(f.Dir("instance/mods/High"), true);
+        var error = Assert.Throws<IOException>(() => JobRunner.Build(catalog, plan, f.Dir("output"), f.Dir("cache")));
+        Assert.Contains("inventory became incomplete", error.Message); Assert.Empty(Directory.EnumerateFiles(f.Dir("output")));
+    }
     [Fact] public void MissingEnabledModIsExplicit()
     {
         using var f = new Fixture(); var source = Setup(f); f.Text("instance/profiles/Example/modlist.txt", "+Missing\n");
