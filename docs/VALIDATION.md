@@ -6,15 +6,20 @@ dimensions. Compare retained mip bytes exactly and inspect output independently.
 
 Profile fixtures cover enabled/disabled mods/plugins, reversed modlist priority,
 INI archives, duplicate archives/members, loose priority, Overwrite, case collisions,
-hidden files, Wine paths and optimizer-output exclusion. Real profile scans are
+hidden files, Wine paths, portable/global-style locations, spaces/Unicode, Windows
+case aliases and optimizer-output exclusion. Real profile scans are
 supplementary and read-only.
 
 Jobs cover content changes with unchanged size/mtime, corrupted cache, cancellation,
 retry, concurrency, missing sources, interrupted publication, stale output, overlap,
 path traversal and symlinks. No incomplete output is reported as complete.
 
-Rendered desktop checks exercise controls and services. X11 smoke tests open packaged
-apps with isolated settings. Extracted CLI packages run analyze → build → verify.
+Rendered desktop checks exercise controls and services on Windows and Linux. Native
+Windows and X11 smoke tests open packaged apps with isolated settings. Extracted
+CLI packages run analyze → build → verify. Windows-native jobs validate the ZIP;
+Linux compatibility jobs validate portable archives and AppImages. Symbolic-link
+creation fixtures run on Linux; ordinary output locking and Windows case-alias
+locking run on Windows without requiring an extra symlink privilege.
 
 Re-encoding checks independent decoding, color ramps, normal angular error, packed
 channels and opacity coverage. Synthetic metrics do not prove universal appearance.
@@ -30,8 +35,8 @@ VRAM telemetry and screenshots. Disk totals do not establish FPS or resident VRA
 Run `PENGUTEX_ORACLE_FIXTURES="$PWD/.artifacts/oracle" bash tools/test.sh`, then
 `python3 tools/independent-dds.py .artifacts/oracle` with Pillow 13.0.0 installed.
 The synthetic rebuild fixtures cover BC1/2/3/4/5/7 and raw RGBA, including DX10,
-legacy headers and zero-alpha data. The separate Pillow decoder checks all 51 mip
-levels, channel values and exact payload lengths. BC1 sRGB payload uses Pillow's
+legacy headers and zero-alpha data. The separate Pillow decoder checks every emitted
+mip level, channel values and exact payload lengths. BC1 sRGB payload uses Pillow's
 UNORM alias because Pillow lacks that DDS header alias; the .NET tests separately
 check preservation of the original DXGI value. No game assets are needed.
 

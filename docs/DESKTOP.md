@@ -1,10 +1,14 @@
 # Desktop workflow
 
-Start `PenguTEX.Desktop` in a portable distribution, or run
+Start `PenguTEX.Desktop.exe` on Windows or `PenguTEX.Desktop` on Linux in an extracted portable distribution, or run
 `dotnet run --project src/PenguTEX.Desktop -c Release` from source.
 
-1. Select a texture folder, or an MO2/Fluorine instance and profile. Load profile
-   names after choosing the instance. Folder sources contain loose textures only.
+1. Select Texture folder or Mod-manager profile. Profile mode reads the instance
+   folder containing `ModOrganizer.ini`: MO2 on Windows, MO2 through Wine/Proton on
+   Linux, or Fluorine on Linux. Load profile names after choosing the instance.
+   For MO2 global instances, select the configuration instance folder rather than
+   the manager executable's folder. Folder sources contain loose textures only.
+   See [source setup](ALPHA-TESTING.md#source-setup) for locations and overrides.
 2. Choose Quality, Balanced or Compact and review the maximum dimensions and
    protection switches. Import/save JSON policies; advanced path rules use the same
    schema as the CLI. Later matching rules win. Previously saved numeric limits
@@ -52,9 +56,12 @@ A missing folder or desktop-launcher failure is reported without changing output
 The application version appears beside the title; hover over it for the full build
 identifier when reporting a problem.
 
-Preferences use `$XDG_CONFIG_HOME/PenguTEX/settings.json`, or
-`~/.config/PenguTEX/settings.json`. Cache defaults to `$XDG_CACHE_HOME/PenguTEX`, or
-`~/.cache/PenguTEX`. `--settings FILE` selects an isolated preferences file.
+On Windows, preferences use `%LOCALAPPDATA%\PenguTEX\settings.json` and cache
+uses `%LOCALAPPDATA%\PenguTEX\Cache`. On Linux, preferences use
+`$XDG_CONFIG_HOME/PenguTEX/settings.json`, or `~/.config/PenguTEX/settings.json`;
+cache defaults to `$XDG_CACHE_HOME/PenguTEX`, or `~/.cache/PenguTEX`.
+Saved custom cache locations remain unchanged. `--settings FILE` selects an
+isolated preferences file.
 `--smoke` opens the real native window and exits after two seconds for startup tests.
 
 If Fluorine has mounted a merged Data directory, stop that VFS session before a

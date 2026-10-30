@@ -104,7 +104,7 @@ public static class Program
         --recover-mip-counts true           Recover a complete BC chain with an underreported count
 
         inspect texture.dds                 Validate a DDS header and payload size
-        profiles --instance PATH            List MO2/Fluorine profiles
+        profiles --instance PATH            List mod-manager profiles (MO2; Fluorine on Linux)
         preset --preset balanced            Print a JSON policy (quality/balanced/compact)
         analyze --folder PATH [options]     Analyze a mod/Data/textures folder
         analyze --instance PATH --profile NAME [options]

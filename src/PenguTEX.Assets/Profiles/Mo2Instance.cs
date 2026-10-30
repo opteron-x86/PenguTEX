@@ -88,7 +88,7 @@ public sealed class Mo2Instance
         if (File.Exists(iniPath)) ini = ReadIni(iniPath);
         else if (typed is { CanStandAlone: true }) ini = new(StringComparer.OrdinalIgnoreCase);
         else
-            throw new FileNotFoundException($"No ModOrganizer.ini in \"{instanceFolder}\". Pick the MO2 instance folder (where ModOrganizer.exe or ModOrganizer.ini lives), "
+            throw new FileNotFoundException($"No ModOrganizer.ini in \"{instanceFolder}\". Pick the mod-manager instance folder containing ModOrganizer.ini, "
                                             + "or type the game, mods and profiles folders under Locations.");
         var instance = new Mo2Instance(Path.GetFullPath(instanceFolder), ini, typed);
         if (!Directory.Exists(instance.GameDataFolder))

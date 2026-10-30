@@ -1,0 +1,34 @@
+name: Alpha test feedback
+description: Share a successful run or a reproducible Windows/Linux alpha problem
+body:
+  - type: input
+    id: version
+    attributes:
+      label: PenguTEX version and package
+      description: Version beside the title (hover for full build), plus Windows ZIP, Linux portable, AppImage or source.
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Operating system and source setup
+      description: Windows edition/build or Linux distro and desktop session; manager/version (Windows MO2, Linux MO2 through Wine/Proton, Fluorine on Linux, or loose folder). Omit personal physical paths.
+    validations:
+      required: true
+  - type: textarea
+    id: generation
+    attributes:
+      label: Generation settings and result
+      description: Preset/overrides, new or reused cache, elapsed time and changed/protected/unresolved counts, if available. For a failure, include steps and the exact error after redacting personal paths.
+    validations:
+      required: true
+  - type: textarea
+    id: gameplay
+    attributes:
+      label: In-game result, if tested
+      description: GPU/VRAM, driver, resolution, frame generation/upscaling, shader setup and scene. Report enabled/disabled comparisons under the same conditions, visible issues or stable results. Leave blank if not tested.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Additional evidence
+      description: Redact personal paths and review mod names before sharing logs or screenshots. Do not upload proprietary textures, archives, meshes or game files. A game-relative texture path or synthetic reproduction is useful.

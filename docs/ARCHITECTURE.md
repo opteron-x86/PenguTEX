@@ -2,9 +2,10 @@
 
 ## Product and workflow
 
-PenguTEX is an offline Linux texture optimizer with a native desktop and CLI. Initial
+PenguTEX is an offline, Linux-first texture optimizer with native Windows/Linux desktop and CLI applications. Initial
 game support targets Skyrim Special Edition / Anniversary Edition. A folder source
-supports mod authors. VR, Windows packages and other games need separate validation.
+supports mod authors. VR and other games need separate validation. Windows alpha
+packages have native CI; game and hardware acceptance are tracked separately.
 The program does not modify plugins, game INIs or load order.
 
 The workflow is **Source → Analyze → Review → Build → Validate → Install**. Choose a
@@ -105,13 +106,14 @@ redaction. Do not upload local diagnostics automatically.
 ## Frontends and distribution
 
 Desktop: source/profile setup, preset editor, analysis table, texture inspection,
-progress/cancel and final installation/result view. Use XDG preferences, actionable
+progress/cancel and final installation/result view. Use Windows LocalAppData or Linux XDG preferences, actionable
 errors and background work. CLI: inspect/analyze/build/verify, JSON reports and
 documented exit codes, independent of desktop preferences.
 
-Ship self-contained Linux x64 portable packages first, then AppImage. Check extracted
-packages on Ubuntu, Debian and Fedora. Include guides, licenses, corresponding
-source, version and checksums. CI uses synthetic fixtures and native X11 startup.
+Ship self-contained Windows x64 ZIP and Linux x64 portable/AppImage packages. Check
+extracted packages on Windows, Ubuntu, Debian and Fedora. Include guides, licenses,
+corresponding source, version and checksums. CI uses synthetic fixtures and native
+Windows/X11 startup; every platform gates tagged releases.
 
 PenguLOD handoff uses a versioned manifest or normal mod priority. Keep ownership of
 generated LOD separate; explicitly choose original versus optimized full-texture

@@ -1,4 +1,5 @@
 using PenguTEX.Assets;
+using PenguTEX.Assets.Paths;
 using PenguTEX.Core;
 
 namespace PenguTEX.Tests;
@@ -64,7 +65,7 @@ public class WorkflowTests
         var catalog = CatalogLoader.Load(new(Folder: f.Dir("source"))); var plan = Planner.Analyze(catalog, Small);
         string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
         var previous = JobRunner.Build(catalog, plan, output, cache);
-        string stage = Path.Combine(f.Root, ".pengutex-stage-" + JsonFiles.Hash(output)[..20]);
+        string stage = Path.Combine(f.Root, ".pengutex-stage-" + JsonFiles.Hash(HostPath.ComparisonKey(output))[..20]);
         using var cancel = new CancellationTokenSource(); var events = new List<JobProgress>();
         var progress = new CallbackProgress(p =>
         {
@@ -100,7 +101,7 @@ public class WorkflowTests
         using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds());
         var catalog = CatalogLoader.Load(new(Folder: f.Dir("source"))); var plan = Planner.Analyze(catalog, Small);
         string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
-        string backup = f.Dir(".pengutex-previous-" + JsonFiles.Hash(output)[..20]);
+        string backup = f.Dir(".pengutex-previous-" + JsonFiles.Hash(HostPath.ComparisonKey(output))[..20]);
         Assert.ThrowsAny<OperationCanceledException>(() => JobRunner.Build(catalog, plan, output, cache, ct: new CancellationToken(true)));
         Assert.True(Directory.Exists(output)); Assert.Empty(Directory.EnumerateFileSystemEntries(output)); Assert.False(Directory.Exists(backup));
         Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache).Files);
@@ -183,21 +184,48 @@ public class WorkflowTests
         var catalog = CatalogLoader.Load(new(Folder: f.Dir("source"))); var plan = Planner.Analyze(catalog, Small);
         string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
         var first = JobRunner.Build(catalog, plan, output, cache);
-        string backup = Path.Combine(f.Root, ".pengutex-previous-" + JsonFiles.Hash(output)[..20]); Directory.Move(output, backup);
+        string backup = Path.Combine(f.Root, ".pengutex-previous-" + JsonFiles.Hash(HostPath.ComparisonKey(output))[..20]); Directory.Move(output, backup);
         using var cancel = new CancellationTokenSource(); cancel.Cancel();
         Assert.ThrowsAny<OperationCanceledException>(() => JobRunner.Build(catalog, plan, output, cache, ct: cancel.Token));
         Assert.Equal(first.Manifest.Files[0].OutputHash, JobRunner.Verify(output).Files[0].OutputHash);
         Assert.False(Directory.Exists(backup)); Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache).Reused);
     }
-    [Fact] public void OutputLockAndSymbolicLinksPreventConflictingWrites()
+    [Fact] public void OutputLockPreventsConflictingWritesIncludingWindowsCaseAliases()
     {
-        if (OperatingSystem.IsWindows()) return;
         using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds());
         var catalog = CatalogLoader.Load(new(Folder: f.Dir("source"))); var plan = Planner.Analyze(catalog, Small);
         string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
-        string lockPath = Path.Combine(f.Root, ".pengutex-" + JsonFiles.Hash(output)[..20] + ".lock");
+        var built = JobRunner.Build(catalog, plan, output, cache);
+        string lockPath = Assert.Single(Directory.EnumerateFiles(f.Root, ".pengutex-*.lock"));
         using (var held = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+        {
             Assert.Throws<IOException>(() => JobRunner.Build(catalog, plan, output, cache));
+            if (OperatingSystem.IsWindows())
+                Assert.Throws<IOException>(() => JobRunner.Build(catalog, plan, output.ToUpperInvariant(), cache));
+        }
+        Assert.Equal(built.Manifest.Files[0].OutputHash, JobRunner.Verify(output).Files[0].OutputHash);
+    }
+    [Fact] public void WindowsOpenOutputBlocksReplacementAndPreservesThePublishedMod()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds());
+        var catalog = CatalogLoader.Load(new(Folder: f.Dir("source"))); var plan = Planner.Analyze(catalog, Small);
+        string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
+        var built = JobRunner.Build(catalog, plan, output, cache);
+        using (var reader = File.OpenRead(Path.Combine(output, "textures/a.dds")))
+        {
+            Assert.Throws<IOException>(() => JobRunner.Build(catalog, plan, output, cache));
+            Assert.Equal(built.Manifest.Files[0].OutputHash, JobRunner.Verify(output).Files[0].OutputHash);
+        }
+        Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache).Reused);
+        Assert.Equal(built.Manifest.Files[0].OutputHash, JobRunner.Verify(output).Files[0].OutputHash);
+    }
+    [Fact] public void SymbolicLinksPreventWritesOutsideOwnedOutput()
+    {
+        if (OperatingSystem.IsWindows()) return; // Creating symlinks requires an additional Windows privilege.
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds());
+        var catalog = CatalogLoader.Load(new(Folder: f.Dir("source"))); var plan = Planner.Analyze(catalog, Small);
+        string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
         JobRunner.Build(catalog, plan, output, cache);
         var external = f.Text("outside/keep.txt", "preserve"); File.CreateSymbolicLink(Path.Combine(output, "link.txt"), external);
         Assert.Throws<IOException>(() => JobRunner.Build(catalog, plan, output, cache)); Assert.Equal("preserve", File.ReadAllText(external));

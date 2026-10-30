@@ -15,7 +15,7 @@ public static class CatalogLoader
     private static Catalog Load(SourceOptions options, IProgress<JobProgress>? progress, CancellationToken ct, bool comparisonOnly, bool inspectMaterials = false)
     {
         if ((options.Folder is null) == (options.Instance is null))
-            throw new ArgumentException("Choose exactly one folder or MO2/Fluorine instance.");
+            throw new ArgumentException("Choose exactly one texture folder or mod-manager instance.");
         var roots = new List<string>(); var diagnostics = new List<Diagnostic>();
         var priorities = new Dictionary<string, int>(StringComparer.Ordinal);
         string? referenceRoot = options.ReferenceFolder is null ? null : HostPath.Canonical(HostPath.Resolve(options.ReferenceFolder));
@@ -30,9 +30,7 @@ public static class CatalogLoader
             if (!Directory.Exists(root)) throw new DirectoryNotFoundException(root);
             if (!comparisonOnly && IsOptimizerOutput(root))
                 throw new InvalidDataException("This folder is marked as previous optimizer output. Choose original textures as the source and use this folder only as Reference.");
-            if (referenceRoot is not null && (referenceRoot == HostPath.Canonical(root)
-                || referenceRoot.StartsWith(HostPath.Canonical(root) + Path.DirectorySeparatorChar, StringComparison.Ordinal)
-                || HostPath.Canonical(root).StartsWith(referenceRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal)))
+            if (referenceRoot is not null && (HostPath.IsWithin(referenceRoot, root) || HostPath.IsWithin(root, referenceRoot)))
                 throw new ArgumentException("Reference and original source folders must not overlap.");
             roots.Add(root);
         }
@@ -46,7 +44,7 @@ public static class CatalogLoader
             if (referenceRoot is not null)
             {
                 string? replace = options.ReplaceMod;
-                if (replace is null && Path.GetDirectoryName(referenceRoot) == HostPath.Canonical(instance.ModsFolder)) replace = Path.GetFileName(referenceRoot);
+                if (replace is null && HostPath.ComparisonKey(Path.GetDirectoryName(referenceRoot) ?? referenceRoot) == HostPath.ComparisonKey(instance.ModsFolder)) replace = Path.GetFileName(referenceRoot);
                 if (replace is null || !ranks.TryGetValue(replace, out referencePriority))
                     throw new ArgumentException("For a profile comparison, select the installed reference mod folder or specify ReplaceMod / --replace-mod with its profile mod name.");
                 referencePlacement = replace; options = options with { ReplaceMod = replace };
@@ -63,7 +61,7 @@ public static class CatalogLoader
                 { diagnostics.Add(new("Info", "Excluded requested mod: " + mod)); continue; }
                 var path = GamePath.ResolveExisting(instance.ModsFolder, mod);
                 if (path is null || !Directory.Exists(path)) { diagnostics.Add(new("Error", "Enabled mod folder is missing: " + mod)); continue; }
-                if (referenceRoot is not null && (mod.Equals(referencePlacement, StringComparison.OrdinalIgnoreCase) || HostPath.Canonical(path) == referenceRoot))
+                if (referenceRoot is not null && (mod.Equals(referencePlacement, StringComparison.OrdinalIgnoreCase) || HostPath.ComparisonKey(path) == HostPath.ComparisonKey(referenceRoot)))
                 { diagnostics.Add(new("Info", "Reference output excluded from original inputs: " + mod)); continue; }
                 if (IsOptimizerOutput(path)) { diagnostics.Add(new("Info", "Excluded prior optimizer output: " + mod)); continue; }
                 roots.Add(path); priorities[path] = ranks[mod];
