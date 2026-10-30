@@ -101,11 +101,14 @@ public sealed class DesktopTests
             Assert.Contains("In-game", window.Status);
             f.File("source/a.dds", Fixture.Dds(mipCount: 1));
             window.GetVisualDescendants().OfType<TabControl>().Single().SelectedIndex = 0;
-            Control<CheckBox>(window, "CarryReference").IsChecked = true;
-            await window.AnalyzeAsync(); Assert.Equal(1, window.CurrentPlan!.Comparison!.CarriedCount);
-            Capture(window, "replacement-carried");
-            await window.BuildAsync(); Assert.Equal("ReferenceCopy", window.LastBuild!.Manifest.Files[0].Operation);
-            Assert.Contains("1 reference files carried unchanged", window.Status);
+            window.SetSettings(settings with { Policy = settings.Policy with { CarryReference = true, FitReference = true } });
+            Assert.Contains("reference copying was disabled", window.Status);
+            await window.AnalyzeAsync(); Assert.True(window.CurrentPlan!.Comparison!.HasUnresolved);
+            Assert.False(window.CurrentPlan.Policy.CarryReference);
+            Capture(window, "replacement-originals-only");
+            await window.BuildAsync(); Assert.True(window.LastBuild!.Manifest.OriginalsOnly);
+            Assert.Empty(window.LastBuild.Manifest.Files);
+            Assert.Contains("unassessed", window.Status);
             f.File("reference/a.dds", Fixture.Dds(8, 8));
             await window.BuildAsync(); Assert.Contains("Analyze again", window.Status);
         }

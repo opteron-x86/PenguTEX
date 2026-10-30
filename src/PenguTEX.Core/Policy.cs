@@ -18,11 +18,13 @@ public sealed record Policy
     public bool ProtectCharacters { get; init; } = true;
     public bool FitReference { get; init; }
     public bool FitProtectedReference { get; init; }
+    // Retained only to reject legacy policies explicitly, rather than ignore their intent.
     public bool CarryReference { get; init; }
     public PathRule[] Rules { get; init; } = [];
 
     public void Validate()
     {
+        if (CarryReference) throw new ArgumentException("Reference copying is no longer supported. Disable CarryReference and rebuild from original textures.");
         if (Schema != 1) throw new InvalidDataException("Unsupported policy schema.");
         if (FitProtectedReference && !FitReference) throw new ArgumentException("Protected reference fitting requires FitReference.");
         foreach (int value in new[] { Maximum, NormalMaximum, MaterialMaximum, HeightMaximum ?? MaterialMaximum }.Concat(Rules.Where(r => r.Maximum.HasValue).Select(r => r.Maximum!.Value)))
@@ -93,7 +95,7 @@ public static class Planner
     public static OptimizationPlan Analyze(Catalog catalog, Policy policy, IProgress<JobProgress>? progress = null, CancellationToken ct = default)
     {
         policy.Validate(); var items = new List<PlanItem>();
-        if ((policy.FitReference || policy.CarryReference) && catalog.Reference is null) throw new ArgumentException("Choose a reference output before enabling reference fitting or carry-forward.");
+        if (policy.FitReference && catalog.Reference is null) throw new ArgumentException("Choose a reference output before enabling reference fitting.");
         var references = ReferenceComparison.Read(catalog.Reference, progress, ct);
         foreach (var asset in catalog.Assets.OrderBy(a => a.Path, StringComparer.Ordinal))
         {
@@ -133,7 +135,7 @@ public static class Planner
                     }
                 }
                 else if (policy.FitReference && reference?.Info is { } previousCopy && !ReferenceComparison.Fits(info, drop, false, previousCopy))
-                { decision = Decision.Keep; reason = "No existing mip fits the reference dimensions, payload and mip coverage; an explicit rebuild or reviewed reference carry-forward is needed."; drop = 0; }
+                { decision = Decision.Keep; reason = "No existing mip fits the reference dimensions, payload and mip coverage; an explicit rebuild from the original is needed."; drop = 0; }
                 else if (Math.Max(width, height) > maximum) { decision = Decision.Keep; reason = "No existing mip reaches the selected maximum; use explicit mip rebuilding when available."; drop = 0; }
                 else if (drop > 0) { decision = Decision.Reduce; reason = $"Retain existing mip {drop} and its smaller levels; {category.ToLowerInvariant()} cap {maximum}." + (policy.FitReference && reference?.Info is not null ? " Also fits reference dimensions and payload without changing format." : ""); }
                 else { decision = Decision.Keep; reason = "Already within the selected maximum."; }
@@ -146,7 +148,6 @@ public static class Planner
             if (items.Count % 100 == 0 || items.Count == catalog.Assets.Count)
                 progress?.Report(new("Analyze", items.Count, catalog.Assets.Count, asset.Path, "Inspecting winning textures"));
         }
-        if (policy.CarryReference) ReferenceComparison.CarryForward(catalog, items, references, policy);
         return new(1, catalog.Source, policy, DateTimeOffset.UtcNow, items, catalog.Diagnostics)
         { Comparison = ReferenceComparison.Compare(catalog, items, references) };
     }

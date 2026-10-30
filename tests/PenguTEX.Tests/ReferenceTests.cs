@@ -46,9 +46,9 @@ public sealed class ReferenceTests
         Assert.Equal(0, plain.Comparison!.LargerCount); Assert.Equal(1, plain.Comparison.IncompleteMipCount); Assert.True(plain.Comparison.HasUnresolved);
         Assert.False(ReferenceComparison.Fits(plain.Items[0].Input!, 1, false, plain.Comparison.Items[0].Previous!));
         Assert.True(ReferenceComparison.Fits(plain.Items[0].Input!, 1, true, plain.Comparison.Items[0].Previous!));
-        var carried = Planner.Analyze(catalog, Small with { FitReference = true, CarryReference = true });
-        Assert.Equal(1, carried.Comparison!.CarriedCount); Assert.False(carried.Comparison.HasUnresolved);
-        Assert.Equal(Decision.ReferenceCopy, carried.Items[0].Decision);
+        var fitted = Planner.Analyze(catalog, Small with { FitReference = true });
+        Assert.True(fitted.Comparison!.HasUnresolved);
+        Assert.DoesNotContain(fitted.Items, i => i.Decision == Decision.ReferenceCopy);
     }
     [Fact] public void SmallerCompleteChainsAndEquivalentPartialTailsAreNotFalseGaps()
     {
@@ -134,39 +134,53 @@ public sealed class ReferenceTests
         using var f = new Fixture(); Assert.Throws<ArgumentException>(() => Planner.Analyze(CatalogLoader.Load(new(Folder: f.Root)), quality with { FitReference = true }));
     }
     [Theory] [InlineData("missing")] [InlineData("invalid")] [InlineData("missing-mips")]
-    public void CarryForwardIsOptInAndCopiesOnlyValidatedReferenceFilesExactly(string kind)
+    public void UnresolvedOriginalsNeverBecomeReferenceCopies(string kind)
     {
-        using var f = new Fixture(); var previous = Fixture.Dds(4, 4); f.File("reference/a.dds", previous);
-        f.Dir("source");
+        using var f = new Fixture(); f.File("reference/a.dds", Fixture.Dds(4, 4)); f.Dir("source");
         if (kind != "missing") f.File("source/a.dds", kind == "invalid" ? [1, 2, 3] : Fixture.Dds(mipCount: 1));
         var catalog = Catalog(f); var policy = Small with { FitReference = true };
-        Assert.True(Planner.Analyze(catalog, policy).Comparison!.HasUnresolved);
-        var plan = Planner.Analyze(catalog, policy with { CarryReference = true });
-        Assert.Equal(1, plan.Comparison!.CarriedCount); Assert.False(plan.Comparison.HasUnresolved);
-        Assert.Equal(Decision.ReferenceCopy, Assert.Single(plan.Items).Decision);
-        string output = f.Dir("output"), cache = f.Dir("cache"); var result = JobRunner.Build(catalog, plan, output, cache);
-        Assert.Equal(previous, System.IO.File.ReadAllBytes(Path.Combine(output, "textures/a.dds")));
-        Assert.Equal(previous, System.IO.File.ReadAllBytes(Path.Combine(f.Root, "reference/a.dds")));
-        Assert.Equal("ReferenceCopy", Assert.Single(result.Manifest.Files).Operation);
-        Assert.Equal(result.Manifest.Files[0].SourceHash, result.Manifest.Files[0].OutputHash);
-        Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache).Reused);
+        var plan = Planner.Analyze(catalog, policy);
+        Assert.True(plan.Comparison!.HasUnresolved); Assert.Equal(0, plan.Comparison.CarriedCount);
+        Assert.DoesNotContain(plan.Items, i => i.Decision == Decision.ReferenceCopy);
+        Assert.Contains("no longer supported", Assert.Throws<ArgumentException>(() => Planner.Analyze(catalog, policy with { CarryReference = true })).Message);
     }
-    [Fact] public void CarryForwardKeepsProtectionAndUnreadableReferenceGapsVisible()
+    [Fact] public void StaleReferenceCopyPlansAreRejectedBeforeAnyWrites()
     {
-        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds()); f.File("reference/a.dds", [1, 2, 3]);
-        f.File("reference/terrain/lod.dds", Fixture.Dds()); f.File("reference/protected.dds", Fixture.Dds());
-        var plan = Planner.Analyze(Catalog(f), Small with { CarryReference = true, Rules = [new("*/protected.dds", Protect: true)] });
-        Assert.Equal(0, plan.Comparison!.CarriedCount); Assert.Equal(3, plan.Comparison.UnknownCount);
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds()); f.File("reference/a.dds", Fixture.Dds(4, 4));
+        var catalog = Catalog(f); var plan = Planner.Analyze(catalog, Small);
+        var stale = plan with { Items = [plan.Items[0] with { Decision = Decision.ReferenceCopy, Container = catalog.Reference!.Assets[0].Container }] };
+        string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
+        Assert.Throws<InvalidDataException>(() => JobRunner.Build(catalog, stale, output, cache));
+        Assert.False(Directory.Exists(output)); Assert.False(Directory.Exists(cache));
+        Assert.Throws<ArgumentException>(() => JobRunner.Build(catalog, plan with { Policy = Small with { CarryReference = true } }, output, cache));
+        Assert.False(Directory.Exists(cache));
     }
-    [Fact] public void ChangingReferencePixelsDuringCopyNeverPublishesOrPoisonsCache()
+    [Fact] public void ReferenceAssetsCannotBeDisguisedAsOriginalCatalogWinners()
     {
-        using var f = new Fixture(); var original = Fixture.Dds(4, 4); var changed = (byte[])original.Clone(); changed[^1] ^= 33;
-        f.File("reference/a.dds", original); var catalog = Catalog(f);
-        var plan = Planner.Analyze(catalog, Small with { CarryReference = true }); int opens = 0;
-        catalog = catalog with { Reference = catalog.Reference! with { Refresh = null,
-            Assets = [catalog.Reference.Assets[0] with { Open = () => new MemoryStream(++opens <= 2 ? original : changed) }] } };
-        string output = Path.Combine(f.Root, "output"), cache = f.Dir("cache");
-        Assert.ThrowsAny<Exception>(() => JobRunner.Build(catalog, plan, output, cache));
-        Assert.False(Directory.Exists(output)); Assert.Empty(Directory.GetFiles(cache, "*.dds"));
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds()); f.File("reference/a.dds", Fixture.Dds(4, 4));
+        var catalog = Catalog(f); var plan = Planner.Analyze(catalog, Small);
+        string cache = Path.Combine(f.Root, "cache");
+        Assert.Throws<InvalidDataException>(() => JobRunner.Build(catalog with { Assets = catalog.Reference!.Assets }, plan, Path.Combine(f.Root, "output"), cache));
+        Assert.False(Directory.Exists(cache));
+    }
+    [Fact] public void CachedReferenceOperationIsRegeneratedFromTheOriginal()
+    {
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds()); f.File("reference/a.dds", Fixture.Dds(4, 4));
+        var catalog = Catalog(f); var plan = Planner.Analyze(catalog, Small);
+        string output = f.Dir("output"), cache = f.Dir("cache");
+        var first = JobRunner.Build(catalog, plan, output, cache);
+        var entry = Assert.Single(first.Manifest.Files); Assert.Equal(catalog.Assets[0].Container, entry.SourceContainer);
+        JsonFiles.Write(Path.Combine(cache, entry.Recipe + ".dds.json"), entry with { Operation = "ReferenceCopy" });
+        var rebuilt = JobRunner.Build(catalog, plan, output, cache);
+        Assert.Equal(0, rebuilt.Reused); Assert.True(rebuilt.Manifest.OriginalsOnly);
+        Assert.Equal(catalog.Assets[0].Container, rebuilt.Manifest.Files[0].SourceContainer);
+        var cached = JobRunner.Build(catalog, plan, output, cache);
+        Assert.Equal(1, cached.Reused); Assert.Equal(catalog.Assets[0].Container, cached.Manifest.Files[0].SourceContainer);
+        var legacy = first.Manifest with { Files = [entry with { Operation = "ReferenceCopy" }] };
+        JsonFiles.Write(Path.Combine(output, JobRunner.ManifestName), legacy);
+        Assert.False(JobRunner.Verify(output).OriginalsOnly);
+        var report = plan.Comparison! with { Items = [plan.Comparison.Items[0] with { Status = "ReferenceRetained" }] };
+        Assert.True(report.HasUnresolved); Assert.Contains("originals-only", report.Assessment);
+        Assert.True(JobRunner.Build(catalog, plan, output, cache).Manifest.OriginalsOnly);
     }
 }
