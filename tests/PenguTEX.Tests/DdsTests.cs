@@ -7,7 +7,7 @@ public class DdsTests
 {
     [Theory]
     [InlineData(71)] [InlineData(72)] [InlineData(74)] [InlineData(75)] [InlineData(77)] [InlineData(78)]
-    [InlineData(80)] [InlineData(81)] [InlineData(83)] [InlineData(84)] [InlineData(98)] [InlineData(99)]
+    [InlineData(80)] [InlineData(81)] [InlineData(83)] [InlineData(84)] [InlineData(95)] [InlineData(96)] [InlineData(98)] [InlineData(99)]
     public void ReductionRetainsExactMipBytes(int dxgi)
     {
         byte[] source = Fixture.Dds(32, 8, dxgi); using var input = new MemoryStream(source);
@@ -55,5 +55,54 @@ public class DdsTests
     {
         byte[] data = Fixture.Dds(); using var cancel = new CancellationTokenSource(); cancel.Cancel();
         Assert.Throws<OperationCanceledException>(() => Dds.Reduce(new MemoryStream(data), new MemoryStream(), 1, data.Length, cancel.Token));
+    }
+    [Theory]
+    [InlineData(8, 1)] [InlineData(8, 4)] [InlineData(16, 1)] [InlineData(16, 4)]
+    [InlineData(24, 1)] [InlineData(24, 4)] [InlineData(32, 1)]
+    public void RawMipReductionPreservesMasksRowsAndPadding(int bits, int alignment)
+    {
+        byte[] source = Fixture.RawDds(9, 5, bits, alignment);
+        int firstLevel = ((9 * bits / 8 + alignment - 1) / alignment * alignment) * 5;
+        using var output = new MemoryStream(); Dds.Reduce(new MemoryStream(source), output, 1, source.Length);
+        byte[] bytes = output.ToArray(); output.Position = 0; var info = Dds.Inspect(output).Info;
+        Assert.Equal(4, info.Width); Assert.Equal(2, info.Height); Assert.False(info.IsBlockCompressed);
+        Assert.Equal(source[76..108], bytes[76..108]);
+        Assert.Equal(source[(128 + firstLevel)..], bytes[128..]);
+        Assert.Equal(8u, BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(8)) & (8u | 0x80000u));
+        Assert.Equal((uint)(((4 * bits / 8 + alignment - 1) / alignment) * alignment), BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(20)));
+    }
+    [Theory]
+    [InlineData(28, 32)] [InlineData(29, 32)] [InlineData(87, 32)] [InlineData(91, 32)] [InlineData(49, 16)]
+    [InlineData(61, 8)] [InlineData(65, 8)] [InlineData(56, 16)] [InlineData(10, 64)] [InlineData(2, 128)]
+    public void Dx10RawFormatsKeepTheirTypedHeader(int dxgi, int bits)
+    {
+        byte[] source = Fixture.RawDds(8, 4, bits, dxgi: dxgi); using var output = new MemoryStream();
+        Dds.Reduce(new MemoryStream(source), output, 1, source.Length); output.Position = 0;
+        var info = Dds.Inspect(output).Info;
+        Assert.Equal(dxgi, info.Dxgi); Assert.Equal(bits, info.BitsPerPixel); Assert.Equal(4, info.Width);
+        Assert.Equal(source[128..148], output.ToArray()[128..148]);
+        Assert.Equal(source[(148 + 8 * 4 * bits / 8)..], output.ToArray()[148..]);
+    }
+    [Fact] public void IndependentDecoderReadsRawOutputAndEveryMip()
+    {
+        byte[] source = Fixture.RawDds(8, 4, dxgi: 28); using var output = new MemoryStream();
+        Dds.Reduce(new MemoryStream(source), output, 1, source.Length); output.Position = 0;
+        var mips = new BCnEncoder.Decoder.BcDecoder().DecodeAllMipMaps2D(output);
+        Assert.Equal(3, mips.Length); Assert.Equal(4, mips[0].Width); Assert.Equal(2, mips[0].Height);
+        Assert.Equal(1, mips[^1].Width); Assert.Equal(1, mips[^1].Height);
+        Assert.Equal(source[148 + 8 * 4 * 4], mips[0].Span[0, 0].r);
+    }
+    [Theory] [InlineData(96, 0xffu)] [InlineData(92, 0x55u)] [InlineData(88, 7u)]
+    public void RawAmbiguousLayoutsAreRejected(int offset, uint value)
+    {
+        byte[] source = Fixture.RawDds(); BinaryPrimitives.WriteUInt32LittleEndian(source.AsSpan(offset), value);
+        Assert.ThrowsAny<Exception>(() => Dds.Inspect(new MemoryStream(source)));
+    }
+    [Fact] public void RawLengthAndCancellationAreChecked()
+    {
+        byte[] source = Fixture.RawDds();
+        Assert.Throws<InvalidDataException>(() => Dds.Inspect(new MemoryStream(source[..^1])));
+        Assert.Throws<InvalidDataException>(() => Dds.Inspect(new MemoryStream(source.Concat(new byte[1]).ToArray())));
+        Assert.Throws<OperationCanceledException>(() => Dds.Reduce(new MemoryStream(source), new MemoryStream(), 1, source.Length, new CancellationToken(true)));
     }
 }

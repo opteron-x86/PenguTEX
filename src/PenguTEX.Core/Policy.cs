@@ -43,6 +43,9 @@ public sealed record Policy
 
     public static string? RebuildRestriction(DdsInfo info, TextureSemantic semantic)
     {
+        if (info.Format == "BC6H") return "HDR BC6H currently supports existing-mip copying only; rebuilding requires an HDR filter.";
+        if (!info.IsBlockCompressed && !info.HasByteChannels) return "This uncompressed layout supports existing-mip copying only; rebuilding requires a precision-preserving decoder.";
+        if (!info.IsBlockCompressed) return "Uncompressed mip rebuilding is not available yet; existing-mip copying is supported.";
         if (info.Signed || info.Premultiplied) return "CPU rebuilding does not support signed channels or premultiplied alpha; use existing-mip copying.";
         if ((long)info.Width * info.Height > 4096L * 4096) return "CPU rebuilding is limited to 16 million source pixels to bound decoded memory.";
         if (info.Srgb && semantic is not (TextureSemantic.SrgbColor or TextureSemantic.OpacitySrgb)) return "sRGB headers require an sRGB color semantic; changing the format is not supported.";

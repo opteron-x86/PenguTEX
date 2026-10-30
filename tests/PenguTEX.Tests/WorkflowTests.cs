@@ -6,6 +6,19 @@ namespace PenguTEX.Tests;
 public class WorkflowTests
 {
     private static Policy Small => new() { Maximum = 8, NormalMaximum = 8, MaterialMaximum = 8 };
+    [Fact] public void RawAndHdrTexturesBuildAndReuseVerifiedCache()
+    {
+        using var f = new Fixture(); f.File("source/raw.dds", Fixture.RawDds(32, 8, bits: 24, alignment: 4));
+        f.File("source/hdr.dds", Fixture.Dds(32, 8, dxgi: 95));
+        var catalog = CatalogLoader.Load(new(Folder: f.Dir("source"))); var plan = Planner.Analyze(catalog, Small);
+        Assert.Equal(2, plan.ChangedCount);
+        string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
+        Assert.Equal(2, JobRunner.Build(catalog, plan, output, cache).Files);
+        Assert.Equal(2, JobRunner.Verify(output).Files.Count);
+        Assert.Equal(2, JobRunner.Build(catalog, plan, output, cache).Reused);
+        var rebuild = Planner.Analyze(catalog, Small with { Rules = [new("*", 8, RebuildMips: true, Semantic: TextureSemantic.LinearData)] });
+        Assert.All(rebuild.Items, item => Assert.Equal(Decision.Unsupported, item.Decision));
+    }
     [Fact] public void FirstBuildAcceptsAnExistingEmptyDirectory()
     {
         using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds());

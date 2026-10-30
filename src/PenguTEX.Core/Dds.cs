@@ -6,8 +6,21 @@ public sealed record DdsInfo(int Width, int Height, int MipCount, int BlockBytes
     int Dxgi, int HeaderBytes, long PayloadBytes, bool Srgb, bool Signed)
 {
     public bool Premultiplied { get; init; }
-    public long MipBytes(int mip) => checked((long)((Math.Max(1, Width >> mip) + 3) / 4)
-        * ((Math.Max(1, Height >> mip) + 3) / 4) * BlockBytes);
+    public int BitsPerPixel { get; init; }
+    public int RowAlignment { get; init; } = 1;
+    public uint RedMask { get; init; }
+    public uint GreenMask { get; init; }
+    public uint BlueMask { get; init; }
+    public uint AlphaMask { get; init; }
+    public bool Luminance { get; init; }
+    public bool IsBlockCompressed => BlockBytes != 0;
+    public bool HasByteChannels => !IsBlockCompressed && !Signed && (RedMask | GreenMask | BlueMask | AlphaMask) != 0
+        && new[] { RedMask, GreenMask, BlueMask, AlphaMask }.All(m => System.Numerics.BitOperations.PopCount(m) <= 8);
+    public long RowBytes(int mip) => IsBlockCompressed
+        ? checked((long)((Math.Max(1, Width >> mip) + 3) / 4) * BlockBytes)
+        : checked((((long)Math.Max(1, Width >> mip) * BitsPerPixel + 7) / 8 + RowAlignment - 1) / RowAlignment * RowAlignment);
+    public long MipBytes(int mip) => checked(RowBytes(mip) * (IsBlockCompressed
+        ? (Math.Max(1, Height >> mip) + 3) / 4 : Math.Max(1, Height >> mip)));
     public long RemovedBytes(int drop) => Enumerable.Range(0, drop).Sum(MipBytes);
     public int DropFor(int maximum)
     {
@@ -35,10 +48,10 @@ public static class Dds
             throw new InvalidDataException("DDS mip count exceeds its dimensions.");
         if ((U(112) & (0xfe00 | 0x200000)) != 0 || U(24) > 1)
             throw new NotSupportedException("Cube maps and volume textures are protected.");
-        if ((U(80) & 4) == 0) throw new NotSupportedException("This mode requires a block-compressed DDS.");
         string cc = System.Text.Encoding.ASCII.GetString(header, 84, 4);
-        int dxgi = 0, block; bool srgb = false, signed = false; string format;
-        if (cc == "DX10")
+        int dxgi = 0, block = 0, bits = 0; bool srgb = false, signed = false, luminance = false; string format;
+        uint red = 0, green = 0, blue = 0, alpha = 0;
+        if ((U(80) & 4) != 0 && cc == "DX10")
         {
             Array.Resize(ref header, 148); input.ReadExactly(header.AsSpan(128));
             if (U(132) != 3 || U(140) != 1 || (U(136) & 4) != 0)
@@ -47,12 +60,34 @@ public static class Dds
             (format, block) = dxgi switch
             {
                 71 or 72 => ("BC1", 8), 74 or 75 => ("BC2", 16), 77 or 78 => ("BC3", 16),
-                80 or 81 => ("BC4", 8), 83 or 84 => ("BC5", 16), 98 or 99 => ("BC7", 16),
-                _ => throw new NotSupportedException($"DXGI format {dxgi} is not supported by this operation."),
+                80 or 81 => ("BC4", 8), 83 or 84 => ("BC5", 16), 95 or 96 => ("BC6H", 16), 98 or 99 => ("BC7", 16),
+                _ => ("DXGI " + dxgi, 0),
             };
-            srgb = dxgi is 72 or 75 or 78 or 99; signed = dxgi is 81 or 84;
+            if (block == 0)
+            {
+                bits = dxgi switch
+                {
+                    2 => 128, 10 or 11 or 16 => 64,
+                    24 or 26 or 28 or 29 or 31 or 34 or 35 or 37 or 41 or 67 or 87 or 88 or 91 or 93 => 32,
+                    49 or 51 or 54 or 56 or 58 or 85 or 86 or 115 => 16,
+                    61 or 63 or 65 => 8,
+                    _ => throw new NotSupportedException($"DXGI format {dxgi} is not supported by this operation."),
+                };
+                (red, green, blue, alpha) = dxgi switch
+                {
+                    28 or 29 => (0xffu, 0xff00u, 0xff0000u, 0xff000000u),
+                    87 or 91 => (0xff0000u, 0xff00u, 0xffu, 0xff000000u),
+                    88 or 93 => (0xff0000u, 0xff00u, 0xffu, 0u),
+                    49 => (0xffu, 0xff00u, 0u, 0u), 61 => (0xffu, 0u, 0u, 0u), 65 => (0u, 0u, 0u, 0xffu),
+                    85 => (0xf800u, 0x7e0u, 0x1fu, 0u), 86 => (0x7c00u, 0x3e0u, 0x1fu, 0x8000u),
+                    115 => (0xf00u, 0xf0u, 0xfu, 0xf000u),
+                    _ => (0u, 0u, 0u, 0u),
+                };
+            }
+            srgb = dxgi is 29 or 72 or 75 or 78 or 91 or 93 or 99;
+            signed = dxgi is 31 or 37 or 51 or 58 or 63 or 81 or 84 or 96;
         }
-        else
+        else if ((U(80) & 4) != 0)
         {
             (format, block) = cc switch
             {
@@ -63,10 +98,45 @@ public static class Dds
             };
             signed = cc is "BC4S" or "BC5S";
         }
+        else
+        {
+            uint pixelFlags = U(80);
+            if ((pixelFlags & ~(0x40u | 0x20000u | 0x2u | 0x1u)) != 0
+                || (pixelFlags & (0x40u | 0x20000u | 0x2u)) == 0)
+                throw new NotSupportedException("Unsupported uncompressed DDS pixel flags.");
+            bits = checked((int)U(88)); red = U(92); green = U(96); blue = U(100); alpha = U(104);
+            if (bits is not (8 or 16 or 24 or 32)) throw new NotSupportedException("Unsupported uncompressed DDS bit depth.");
+            uint used = 0;
+            foreach (uint mask in new[] { red, green, blue, alpha })
+            {
+                if (mask == 0) continue;
+                uint shifted = mask >> System.Numerics.BitOperations.TrailingZeroCount(mask);
+                if ((used & mask) != 0 || (bits < 32 && (mask >> bits) != 0) || (shifted & unchecked(shifted + 1)) != 0)
+                    throw new InvalidDataException("Invalid or overlapping DDS channel masks.");
+                used |= mask;
+            }
+            if (used == 0 || ((pixelFlags & 3) != 0 && alpha == 0)) throw new InvalidDataException("Missing DDS channel masks.");
+            luminance = (pixelFlags & 0x20000) != 0;
+            if (luminance && (red == 0 || green != 0 || blue != 0)) throw new NotSupportedException("Unsupported luminance layout.");
+            format = (luminance ? "Luminance" : "Raw") + bits;
+        }
         var info = new DdsInfo((int)width, (int)height, mips, block, format, dxgi, header.Length, 0, srgb, signed)
-        { Premultiplied = cc is "DXT2" or "DXT4" || (cc == "DX10" && (U(144) & 7) == 2) };
+        { Premultiplied = cc is "DXT2" or "DXT4" || (header.Length == 148 && (U(144) & 7) == 2),
+            BitsPerPixel = bits, RedMask = red, GreenMask = green, BlueMask = blue, AlphaMask = alpha, Luminance = luminance };
         long payload = Enumerable.Range(0, mips).Sum(info.MipBytes);
         long? actualLength = length ?? (input.CanSeek ? input.Length : null);
+        if (!info.IsBlockCompressed)
+        {
+            // Legacy writers use either tight rows or DWORD-aligned rows, including mip tails.
+            // Infer only a layout justified by the complete payload; the top-level pitch alone is ambiguous.
+            if (!actualLength.HasValue) throw new NotSupportedException("Uncompressed DDS inspection requires the complete file length.");
+            if (actualLength.Value != header.Length + payload)
+            {
+                var aligned = info with { RowAlignment = 4 };
+                long padded = Enumerable.Range(0, mips).Sum(aligned.MipBytes);
+                if (actualLength.Value == header.Length + padded) { info = aligned; payload = padded; }
+            }
+        }
         if (actualLength.HasValue && actualLength.Value != header.Length + payload)
             throw new InvalidDataException($"DDS payload length is {actualLength.Value - header.Length}; expected {payload}.");
         return (info with { PayloadBytes = payload }, header);
@@ -92,8 +162,8 @@ public static class Dds
         uint flags = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(8));
         uint caps = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(108));
         var output = info with { Width = width, Height = height };
-        Set(12, (uint)height); Set(16, (uint)width); Set(20, checked((uint)output.MipBytes(0))); Set(28, (uint)mips);
-        Set(8, (flags & ~(8u | 0x20000u)) | 0x80000u | (mips > 1 ? 0x20000u : 0u));
+        Set(12, (uint)height); Set(16, (uint)width); Set(20, checked((uint)(info.IsBlockCompressed ? output.MipBytes(0) : output.RowBytes(0)))); Set(28, (uint)mips);
+        Set(8, (flags & ~(8u | 0x80000u | 0x20000u)) | (info.IsBlockCompressed ? 0x80000u : 8u) | (mips > 1 ? 0x20000u : 0u));
         Set(108, mips > 1 ? caps | 0x8u | 0x400000u : caps & ~(0x8u | 0x400000u));
     }
 
