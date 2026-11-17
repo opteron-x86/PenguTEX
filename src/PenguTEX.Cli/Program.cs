@@ -88,11 +88,7 @@ public static class Program
     {
         string[] known = ["folder", "instance", "profile", "game", "mods", "profiles", "overwrite", "wine-prefix",
             "ini", "exclude-mods", "preset", "policy", "max", "report", "output", "cache", "workers", "data",
-<<<<<<< HEAD
             "reference", "replace-mod", "fit-reference", "fit-protected", "carry-reference", "require-parity", "recover-mip-counts", "complete-materials", "require-complete", "recover-mip-records", "days", "dry-run", "analyze-workers"];
-=======
-            "reference", "replace-mod", "fit-reference", "fit-protected", "carry-reference", "require-parity", "recover-mip-counts", "complete-materials", "require-complete", "recover-mip-records", "days", "dry-run"];
->>>>>>> origin/master
         var options = new Dictionary<string, string>();
         for (int i = 0; i < args.Length; i += 2)
         {

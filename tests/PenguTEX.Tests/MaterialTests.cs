@@ -88,7 +88,6 @@ public sealed class MaterialTests
         Assert.Equal(before, File.ReadAllText(Path.Combine(output, JobRunner.ManifestName)));
         Assert.Throws<IOException>(() => JobRunner.Build(catalog with { Materials = null }, plan, output, cache, processor: new CpuMipProcessor()));
     }
-<<<<<<< HEAD
     [Fact] public void AnalysisIsIdenticalAtAnyDegreeOfParallelism()
     {
         using var f = new Fixture(); var random = new Random(3);
@@ -139,8 +138,6 @@ public sealed class MaterialTests
     }
     private sealed class CallbackProgress(Action<JobProgress> callback) : IProgress<JobProgress>
     { public void Report(JobProgress progress) => callback(progress); }
-=======
->>>>>>> origin/master
     [Fact] public void TruncatedAndOversizedMaterialMetadataIsReported()
     {
         using var f = new Fixture(); f.File("source/meshes/broken.nif", Fixture.Mesh()[..70]);
