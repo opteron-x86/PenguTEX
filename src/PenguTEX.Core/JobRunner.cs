@@ -181,7 +181,7 @@ public static class JobRunner
             if (generated)
             {
                 string temporary = cached + "." + Guid.NewGuid().ToString("N") + ".tmp";
-                try { File.Copy(dest, temporary); File.Move(temporary, cached, true); JsonFiles.Write(metadata, entry); }
+                try { File.Copy(dest, temporary); TransientIo.Replace(temporary, cached); JsonFiles.Write(metadata, entry); }
                 finally { if (File.Exists(temporary)) File.Delete(temporary); }
             }
             entries[i] = entry;
