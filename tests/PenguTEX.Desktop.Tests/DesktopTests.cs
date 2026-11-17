@@ -108,7 +108,7 @@ public sealed class DesktopTests
             await window.BuildAsync(); Assert.NotNull(window.LastBuild); Assert.Equal(1, window.LastBuild.Files);
             Assert.Single(JobRunner.Verify(settings.Output, TestContext.Current.CancellationToken).Files); Assert.False(window.IsWorking);
             Capture(window, "output-built");
-            await window.BuildAsync(); Assert.Equal(1, window.LastBuild!.Reused);
+            await window.BuildAsync(); Assert.Equal(1, window.LastBuild!.Files);
             Assert.Equal(settings.Policy with { HeightMaximum = settings.Policy.MaterialMaximum }, new SettingsStore(Path.Combine(f.Root, "settings.json")).Load().Policy with { Rules = settings.Policy.Rules });
         }
         finally { window.Close(); }
@@ -204,6 +204,27 @@ public sealed class DesktopTests
             Control<TextBox>(window, "SourcePath").Text = Path.Combine(f.Root, "missing"); await window.AnalyzeAsync();
             Assert.Contains("Failed:", window.Status); Assert.False(window.IsWorking); Assert.True(Control<Button>(window, "Analyze").IsEnabled);
             window.SetSettings(settings); await window.AnalyzeAsync(); Assert.NotNull(window.CurrentPlan);
+        }
+        finally { window.Close(); }
+    }
+    [AvaloniaFact]
+    public async Task CacheCleaningCountsFirstAndRemovesOnlyAfterASecondClick()
+    {
+        using var f = new Fixture(); string cache = f.Dir("cache"), legacy = f.File("cache/" + new string('A', 64) + ".dds", new byte[2048]), mine = f.File("cache/notes.txt", new byte[3]);
+        var window = new MainWindow(new SettingsStore(Path.Combine(f.Root, "settings.json"))); window.SetSettings(Settings(f)); window.Show();
+        try
+        {
+            var button = Control<Button>(window, "CleanCache"); Assert.Equal("Clean work cache…", button.Content);
+            await window.CleanCacheAsync(); Assert.True(File.Exists(legacy));
+            Assert.StartsWith("Remove 1 file (", (string)button.Content!); Assert.Contains("Click the button again", window.Status); Assert.True(button.IsEnabled);
+            // Choosing another folder withdraws the pending confirmation.
+            Control<TextBox>(window, "CachePath").Text = cache + Path.DirectorySeparatorChar; Assert.Equal("Clean work cache…", button.Content);
+            await window.CleanCacheAsync(); Assert.True(File.Exists(legacy)); Assert.StartsWith("Remove 1 file (", (string)button.Content!);
+            await window.CleanCacheAsync(); Assert.False(File.Exists(legacy)); Assert.True(File.Exists(mine));
+            Assert.StartsWith("Work cache: removed 1 file (", window.Status); Assert.Equal("Clean work cache…", button.Content);
+            await window.CleanCacheAsync(); Assert.Equal("Work cache: nothing to remove.", window.Status);
+            Control<TextBox>(window, "CachePath").Text = f.File("cache-as-output/" + JobRunner.ManifestName, [1])[..^(JobRunner.ManifestName.Length + 1)];
+            await window.CleanCacheAsync(); Assert.StartsWith("Could not clean the work cache", window.Status); Assert.True(button.IsEnabled);
         }
         finally { window.Close(); }
     }

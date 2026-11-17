@@ -76,7 +76,7 @@ public sealed class Bc7EncoderTests
         Assert.NotEqual(basic.Identity, new CpuMipProcessor(Bc7Backend.Managed).Identity);
         Assert.Equal(0, JobRunner.Build(catalog, plan, output, cache, workers: 2, processor: basic).Reused);
         Assert.Equal(2, JobRunner.Build(catalog, plan, output, cache, workers: 2, processor: basic).Reused);
-        string cached = Directory.GetFiles(cache, "*.dds")[0];
+        string cached = Directory.GetFiles(CacheStore.Folder(cache), "*.dds")[0];
         byte[] corrupted = File.ReadAllBytes(cached); corrupted[^1] ^= 1; File.WriteAllBytes(cached, corrupted);
         Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache, workers: 2, processor: basic).Reused);
         Assert.Equal(2, JobRunner.Verify(output).Files.Count);

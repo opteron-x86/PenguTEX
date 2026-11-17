@@ -7,7 +7,7 @@ namespace PenguTEX.Tests;
 public class WorkflowTests
 {
     private static Policy Small => new() { Maximum = 8, NormalMaximum = 8, MaterialMaximum = 8 };
-    [Fact] public void RawAndHdrTexturesBuildAndReuseVerifiedCache()
+    [Fact] public void RawAndHdrTexturesBuildWithoutCachingMipCopies()
     {
         using var f = new Fixture(); f.File("source/raw.dds", Fixture.RawDds(32, 8, bits: 24, alignment: 4));
         f.File("source/hdr.dds", Fixture.Dds(32, 8, dxgi: 95));
@@ -16,7 +16,9 @@ public class WorkflowTests
         string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
         Assert.Equal(2, JobRunner.Build(catalog, plan, output, cache).Files);
         Assert.Equal(2, JobRunner.Verify(output).Files.Count);
-        Assert.Equal(2, JobRunner.Build(catalog, plan, output, cache).Reused);
+        var first = JobRunner.Verify(output).Files.Select(e => e.OutputHash).ToArray();
+        var again = JobRunner.Build(catalog, plan, output, cache); Assert.Equal(2, again.Files); Assert.Equal(0, again.Reused);
+        Assert.Equal(first, again.Manifest.Files.Select(e => e.OutputHash)); Assert.Empty(Directory.GetFiles(CacheStore.Folder(cache)));
         var rebuild = Planner.Analyze(catalog, Small with { Rules = [new("*", 8, RebuildMips: true, Semantic: TextureSemantic.LinearData)] });
         Assert.Equal(Decision.Unsupported, rebuild.Items.Single(i => i.Input!.Format == "BC6H").Decision);
         Assert.Equal(Decision.Rebuild, rebuild.Items.Single(i => !i.Input!.IsBlockCompressed).Decision);
@@ -28,7 +30,7 @@ public class WorkflowTests
         string output = f.Dir("chosen output"), cache = Path.Combine(f.Root, "cache");
         var result = JobRunner.Build(catalog, plan, output + Path.DirectorySeparatorChar, cache);
         Assert.Equal(1, result.Files); Assert.Single(JobRunner.Verify(output).Files);
-        Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache).Reused);
+        Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache).Files);
     }
     private sealed class CallbackProgress(Action<JobProgress> callback) : IProgress<JobProgress>
     { public void Report(JobProgress value) => callback(value); }
@@ -54,7 +56,7 @@ public class WorkflowTests
         Assert.Equal(new[] { "Build", "Verify", "Publish" }, events.Select(p => p.Phase).Distinct());
         Assert.Equal(1, events[^1].Done);
         events.Clear();
-        Assert.Equal(count, JobRunner.Build(catalog, plan, output, cache, workers: 8, progress: new CallbackProgress(events.Add)).Reused);
+        Assert.Equal(count, JobRunner.Build(catalog, plan, output, cache, workers: 8, progress: new CallbackProgress(events.Add)).Files);
         Assert.Equal(new[] { "Build", "Verify", "Publish", "Cleanup" }, events.Select(p => p.Phase).Distinct());
         Assert.Equal(1, events[^1].Done);
     }
@@ -114,7 +116,7 @@ public class WorkflowTests
         string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
         var result = JobRunner.Build(catalog, plan, output, cache); Assert.Equal(1, result.Files); Assert.Equal(0, result.Reused);
         Assert.Single(JobRunner.Verify(output).Files);
-        Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache).Reused);
+        Assert.Equal(result.Manifest.Files[0].OutputHash, JobRunner.Build(catalog, plan, output, cache).Manifest.Files[0].OutputHash);
         var time = File.GetLastWriteTimeUtc(input); byte[] changed = File.ReadAllBytes(input); changed[^1] ^= 31;
         File.WriteAllBytes(input, changed); File.SetLastWriteTimeUtc(input, time);
         var rebuilt = JobRunner.Build(catalog, plan, output, cache); Assert.Equal(0, rebuilt.Reused);
@@ -123,11 +125,14 @@ public class WorkflowTests
     [Fact] public void CorruptCacheIsRebuiltAndCorruptPublishedOutputIsDetected()
     {
         using var f = new Fixture(); var source = f.Dir("source"); f.File("source/a.dds", Fixture.Dds());
-        var catalog = CatalogLoader.Load(new(Folder: source)); var plan = Planner.Analyze(catalog, Small);
-        string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
-        var first = JobRunner.Build(catalog, plan, output, cache);
-        File.WriteAllBytes(Directory.GetFiles(cache, "*.dds")[0], new byte[9]);
-        Assert.Equal(0, JobRunner.Build(catalog, plan, output, cache).Reused);
+        var catalog = CatalogLoader.Load(new(Folder: source)); var plan = Planner.Analyze(catalog, Small with { Rules = [new("*", 8, RebuildMips: true, Semantic: TextureSemantic.LinearData)] });
+        string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache"); var cpu = new PenguTEX.Imaging.CpuMipProcessor();
+        var first = JobRunner.Build(catalog, plan, output, cache, processor: cpu);
+        Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache, processor: cpu).Reused);
+        File.WriteAllBytes(Directory.GetFiles(CacheStore.Folder(cache), "*.dds")[0], new byte[9]);
+        var repaired = JobRunner.Build(catalog, plan, output, cache, processor: cpu); Assert.Equal(0, repaired.Reused);
+        Assert.Equal(first.Manifest.Files[0].OutputHash, repaired.Manifest.Files[0].OutputHash);
+        Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache, processor: cpu).Reused);
         File.WriteAllBytes(Path.Combine(output, "textures/a.dds"), new byte[2]);
         Assert.ThrowsAny<IOException>(() => JobRunner.Verify(output));
     }
@@ -148,7 +153,7 @@ public class WorkflowTests
         string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
         JobRunner.Build(catalog, plan, output, cache); using var cancel = new CancellationTokenSource(); cancel.Cancel();
         Assert.ThrowsAny<OperationCanceledException>(() => JobRunner.Build(catalog, plan, output, cache, ct: cancel.Token));
-        JobRunner.Verify(output); Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache).Reused);
+        JobRunner.Verify(output); Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache).Files);
     }
     [Fact] public void RejectsForeignOutputAndSourceOverlap()
     {
@@ -188,7 +193,7 @@ public class WorkflowTests
         using var cancel = new CancellationTokenSource(); cancel.Cancel();
         Assert.ThrowsAny<OperationCanceledException>(() => JobRunner.Build(catalog, plan, output, cache, ct: cancel.Token));
         Assert.Equal(first.Manifest.Files[0].OutputHash, JobRunner.Verify(output).Files[0].OutputHash);
-        Assert.False(Directory.Exists(backup)); Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache).Reused);
+        Assert.False(Directory.Exists(backup)); Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache).Files);
     }
     [Fact] public void OutputLockPreventsConflictingWritesIncludingWindowsCaseAliases()
     {
@@ -217,7 +222,7 @@ public class WorkflowTests
             Assert.Throws<IOException>(() => JobRunner.Build(catalog, plan, output, cache));
             Assert.Equal(built.Manifest.Files[0].OutputHash, JobRunner.Verify(output).Files[0].OutputHash);
         }
-        Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache).Reused);
+        Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache).Files);
         Assert.Equal(built.Manifest.Files[0].OutputHash, JobRunner.Verify(output).Files[0].OutputHash);
     }
     [Fact] public void SymbolicLinksPreventWritesOutsideOwnedOutput()
@@ -311,7 +316,7 @@ public class WorkflowTests
         output.Write(data, 0, 10); output.Write(data.AsSpan(10)); Assert.Equal(expected, output.Complete());
         Assert.Equal(data.Length, output.BytesWritten); Assert.Equal(data, file.ToArray());
     }
-    [Fact] public void BuildReadsEachSourceTwiceWhenGeneratingAndOnceWhenReusing()
+    [Fact] public void BuildReadsRebuildSourcesTwiceOrOnceWhenReusedAndMipCopySourcesOnce()
     {
         using var f = new Fixture(); byte[] original = Fixture.Dds(); f.File("source/a.dds", original);
         var catalog = CatalogLoader.Load(new(Folder: f.Dir("source"))); int opens = 0;
@@ -324,6 +329,58 @@ public class WorkflowTests
         Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(original)), entry.SourceHash);
         Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(output, "textures/a.dds")))), entry.OutputHash);
         opens = 0; Assert.Equal(1, JobRunner.Build(counted, plan, output, cache, processor: new PenguTEX.Imaging.CpuMipProcessor()).Reused); Assert.Equal(1, opens);
+        // A mip copy is not cached: one read produces both the output and the source hash.
+        var copy = Planner.Analyze(counted, Small); opens = 0; string copies = Path.Combine(f.Root, "copies");
+        var copied = JobRunner.Build(counted, copy, copies, cache); Assert.Equal(1, opens); Assert.Equal("MipCopy", copied.Manifest.Files[0].Operation);
+        Assert.Equal(entry.SourceHash, copied.Manifest.Files[0].SourceHash);
+        opens = 0; Assert.Equal(0, JobRunner.Build(counted, copy, copies, cache).Reused); Assert.Equal(1, opens);
+    }
+    [Fact] public void RebuildsAreReusedAcrossPolicyChangesThatDoNotAffectTheirBytes()
+    {
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds()); f.File("source/b.dds", Fixture.Dds(32, 32));
+        var catalog = CatalogLoader.Load(new(Folder: f.Dir("source"))); var cpu = new PenguTEX.Imaging.CpuMipProcessor();
+        var policy = Small with { Name = "First", Rules = [new("*", 8, RebuildMips: true, Semantic: TextureSemantic.LinearData)] };
+        string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
+        var first = JobRunner.Build(catalog, Planner.Analyze(catalog, policy), output, cache, processor: cpu); Assert.Equal(0, first.Reused);
+        // A new name, an unrelated cap and an extra rule that matches nothing leave both textures' recipes unchanged.
+        var renamed = policy with { Name = "Second", NormalMaximum = 4, Rules = [new("textures/unrelated/*", Protect: true), ..policy.Rules] };
+        var second = JobRunner.Build(catalog, Planner.Analyze(catalog, renamed), output, cache, processor: cpu);
+        Assert.Equal(2, second.Reused); Assert.NotEqual(first.Manifest.PolicyHash, second.Manifest.PolicyHash);
+        Assert.Equal(first.Manifest.Files.Select(e => (e.Recipe, e.OutputHash)), second.Manifest.Files.Select(e => (e.Recipe, e.OutputHash)));
+        // Anything that changes the bytes changes the recipe.
+        var smaller = policy with { Rules = [new("*", 4, RebuildMips: true, Semantic: TextureSemantic.LinearData)] };
+        Assert.Equal(0, JobRunner.Build(catalog, Planner.Analyze(catalog, smaller), output, cache, processor: cpu).Reused);
+        var semantic = policy with { Rules = [new("*", 8, RebuildMips: true, Semantic: TextureSemantic.SrgbColor)] };
+        Assert.Equal(0, JobRunner.Build(catalog, Planner.Analyze(catalog, semantic), output, cache, processor: cpu).Reused);
+        Assert.Equal(2, JobRunner.Build(catalog, Planner.Analyze(catalog, policy), output, cache, processor: cpu).Reused);
+    }
+    [Fact] public void PruningRemovesOnlyOlderLayoutFilesAndEntriesNoBuildUsedRecently()
+    {
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds()); f.File("source/b.dds", Fixture.Dds(32, 32));
+        var catalog = CatalogLoader.Load(new(Folder: f.Dir("source"))); var cpu = new PenguTEX.Imaging.CpuMipProcessor();
+        var plan = Planner.Analyze(catalog, Small with { Rules = [new("*", 8, RebuildMips: true, Semantic: TextureSemantic.LinearData)] });
+        string output = Path.Combine(f.Root, "output"), cache = f.Dir("cache"), store = CacheStore.Folder(cache);
+        JobRunner.Build(catalog, plan, output, cache, processor: cpu); Assert.Equal(4, Directory.GetFiles(store).Length);
+        string hex = new('A', 64), legacy = f.File("cache/" + hex + ".dds", new byte[100]), legacyMeta = f.File("cache/" + hex + ".dds.json", new byte[10]);
+        string journal = f.File("cache/job-0123456789ABCDEF0123.json", new byte[20]), stray = f.File("cache/" + hex + ".dds." + new string('b', 32) + ".tmp", new byte[5]);
+        string mine = f.File("cache/notes.txt", new byte[7]), foreign = f.File("cache/v2/keep.dds", new byte[9]), other = f.File("cache/saves/" + hex + ".dds", new byte[3]);
+        string fresh = f.File("cache/v2/" + hex + ".dds." + new string('c', 32) + ".tmp", new byte[4]);
+        var preview = CacheStore.Prune(cache, dryRun: true);
+        Assert.True(preview.DryRun); Assert.Equal(4, preview.Files); Assert.Equal(135, preview.Bytes); Assert.Equal(5, preview.KeptFiles); Assert.Equal(2, preview.OtherFiles);
+        Assert.True(File.Exists(legacy)); Assert.Equal(preview with { DryRun = false }, CacheStore.Prune(cache));
+        Assert.All(new[] { legacy, legacyMeta, journal, stray }, path => Assert.False(File.Exists(path)));
+        Assert.All(new[] { mine, foreign, other, fresh }, path => Assert.True(File.Exists(path)));
+        Assert.Equal(2, JobRunner.Build(catalog, plan, output, cache, processor: cpu).Reused);
+        // Entries age by their last use: a reused entry survives, the other one and the stale temporary go.
+        var later = DateTime.UtcNow.AddDays(40); string[] metadata = Directory.GetFiles(store, "*.dds.json");
+        File.SetLastWriteTimeUtc(metadata[0], later.AddDays(-1));
+        var aged = CacheStore.Prune(cache, 30, now: later); Assert.Equal(3, aged.Files); Assert.Equal(2, aged.KeptFiles);
+        Assert.True(File.Exists(metadata[0])); Assert.True(File.Exists(metadata[0][..^5])); Assert.False(File.Exists(metadata[1])); Assert.False(File.Exists(fresh));
+        Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache, processor: cpu).Reused);
+        Assert.Equal(4, CacheStore.Prune(cache, 0).Files); Assert.True(File.Exists(foreign)); Assert.True(File.Exists(mine));
+        Assert.Equal(new PruneResult(0, 0, 0, 0, 0, false), CacheStore.Prune(Path.Combine(f.Root, "missing")));
+        Assert.Throws<IOException>(() => CacheStore.Prune(output)); Assert.Throws<ArgumentException>(() => CacheStore.Prune(cache, -1));
+        JobRunner.Verify(output);
     }
     [Fact] public void MissingMipsAreKeptWithReason()
     {

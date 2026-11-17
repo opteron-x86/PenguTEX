@@ -51,8 +51,16 @@ Analyze is read-only. Build creates an output mod and reusable cache in separate
 directories outside the inputs. An existing empty output folder is accepted for a first build. A nonempty output
 folder must be owned by PenguTEX; extra untracked files prevent replacement. Build
 checks the output location before scanning sources and again before publication. Keep the manifest with the output. Cancel with
-Ctrl+C and rerun the same command to reuse validated cached textures. Install the
-output as a high-priority mod; disable the old optimizer output to compare results.
+Ctrl+C and rerun the same command: cached CPU-generated textures are reused and mip
+copies are made again. Install the output as a high-priority mod; disable the old
+optimizer output to compare results.
+
+The cache stores only rebuilt and completed textures, under `v2/` in the cache folder,
+keyed by what determines their bytes (source hash, encoder, operation, size and
+semantics) and not by the policy. `PenguTEX prune-cache --cache PATH` removes files
+left by older versions and entries no build has used for 30 days (`--days N`;
+`--days 0` empties it). `--dry-run true` only reports. Files with other names are
+left alone.
 
 Build reports generation, per-texture verification, publication and previous-output
 cleanup separately. Each phase has its own count; generation reaching its total

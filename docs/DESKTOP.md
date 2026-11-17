@@ -15,8 +15,10 @@ Start `PenguTEX.Desktop.exe` on Windows or `PenguTEX.Desktop` on Linux in an ext
    remain unchanged and appear as Custom / saved limits when they differ from a preset.
    Hover over Complete missing mipmaps, Repair mipmap counts or Recover supported
    DDS layouts for an explanation of each option. Saved choices are preserved.
-3. Choose separate output/cache folders. Output is a removable mod; cache is reusable
-   work. They must be outside all source folders and separate from each other.
+3. Choose separate output/cache folders. Output is a removable mod; the cache holds
+   CPU-generated textures (rebuilt and completed mip chains) for reuse. **Clean work
+   cache…** counts files left by older versions and entries unused for 30 days; a
+   second click removes them. Other files in that folder are never touched. They must be outside all source folders and separate from each other.
    Creating an empty output folder in the file picker is supported. Nonempty folders
    must be previous PenguTEX output; personal files prevent replacement.
 4. Analyze. Review changed, protected, unsupported and invalid textures; search by
@@ -35,7 +37,7 @@ Start `PenguTEX.Desktop.exe` on Windows or `PenguTEX.Desktop` on Linux in an ext
    Preview decoding is capped at 16 million pixels per image.
 6. Select Build output mod. Source winners/headers and optional reference metadata are checked again before work; full
    source hashes are checked during processing. Cancellation preserves previously
-   published output and verified cache. Re-running reuses verified files.
+   published output and verified cache. Re-running reuses cached CPU work and copies existing mips again.
    After Build reaches its texture count, Verify reads every staged texture and
    checks its hash. Publish then moves the verified output into place; Cleanup
    removes the previous generated output when replacing it. Each phase has its

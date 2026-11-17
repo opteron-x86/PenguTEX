@@ -166,21 +166,22 @@ public sealed class ReferenceTests
     [Fact] public void CachedReferenceOperationIsRegeneratedFromTheOriginal()
     {
         using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds()); f.File("reference/a.dds", Fixture.Dds(4, 4));
-        var catalog = Catalog(f); var plan = Planner.Analyze(catalog, Small);
-        string output = f.Dir("output"), cache = f.Dir("cache");
-        var first = JobRunner.Build(catalog, plan, output, cache);
+        // Only CPU-generated textures are cached, so the planted legacy entry belongs to a rebuild.
+        var catalog = Catalog(f); var plan = Planner.Analyze(catalog, Small with { Rules = [new("*", 8, RebuildMips: true, Semantic: TextureSemantic.LinearData)] });
+        string output = f.Dir("output"), cache = f.Dir("cache"); var cpu = new PenguTEX.Imaging.CpuMipProcessor();
+        var first = JobRunner.Build(catalog, plan, output, cache, processor: cpu);
         var entry = Assert.Single(first.Manifest.Files); Assert.Equal(catalog.Assets[0].Container, entry.SourceContainer);
-        JsonFiles.Write(Path.Combine(cache, entry.Recipe + ".dds.json"), entry with { Operation = "ReferenceCopy" });
-        var rebuilt = JobRunner.Build(catalog, plan, output, cache);
+        JsonFiles.Write(Path.Combine(CacheStore.Folder(cache), entry.Recipe + ".dds.json"), entry with { Operation = "ReferenceCopy" });
+        var rebuilt = JobRunner.Build(catalog, plan, output, cache, processor: cpu);
         Assert.Equal(0, rebuilt.Reused); Assert.True(rebuilt.Manifest.OriginalsOnly);
         Assert.Equal(catalog.Assets[0].Container, rebuilt.Manifest.Files[0].SourceContainer);
-        var cached = JobRunner.Build(catalog, plan, output, cache);
+        var cached = JobRunner.Build(catalog, plan, output, cache, processor: cpu);
         Assert.Equal(1, cached.Reused); Assert.Equal(catalog.Assets[0].Container, cached.Manifest.Files[0].SourceContainer);
         var legacy = first.Manifest with { Files = [entry with { Operation = "ReferenceCopy" }] };
         JsonFiles.Write(Path.Combine(output, JobRunner.ManifestName), legacy);
         Assert.False(JobRunner.Verify(output).OriginalsOnly);
         var report = plan.Comparison! with { Items = [plan.Comparison.Items[0] with { Status = "ReferenceRetained" }] };
         Assert.True(report.HasUnresolved); Assert.Contains("originals-only", report.Assessment);
-        Assert.True(JobRunner.Build(catalog, plan, output, cache).Manifest.OriginalsOnly);
+        Assert.True(JobRunner.Build(catalog, plan, output, cache, processor: cpu).Manifest.OriginalsOnly);
     }
 }

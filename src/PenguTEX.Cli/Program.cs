@@ -42,6 +42,15 @@ public static class Program
             Print(Mo2Instance.Open(Get("instance") ?? throw new ArgumentException("--instance is required."),
                 new(Get("game"), Get("mods"), Get("profiles"), Get("overwrite"), Get("wine-prefix"))).ListProfiles()); return 0;
         }
+        if (args[0] == "prune-cache")
+        {
+            var pruned = CacheStore.Prune(Get("cache") ?? throw new ArgumentException("--cache is required."),
+                int.Parse(Get("days") ?? "30"), bool.Parse(Get("dry-run") ?? "false"), ct: ct);
+            Print(pruned);
+            Console.Error.WriteLine($"{(pruned.DryRun ? "Would remove" : "Removed")} {pruned.Files:N0} files ({pruned.Bytes / 1073741824d:N2} GiB); "
+                + $"kept {pruned.KeptFiles:N0} recent files ({pruned.KeptBytes / 1073741824d:N2} GiB); {pruned.OtherFiles:N0} other files untouched.");
+            return 0;
+        }
         if (args[0] is not ("analyze" or "build")) throw new ArgumentException("Unknown command. Use --help.");
         var source = new SourceOptions(Get("folder"), Get("instance"), Get("profile"), Get("game"), Get("mods"),
             Get("profiles"), Get("overwrite"), Get("wine-prefix"), Get("ini"), Get("exclude-mods")?.Split('|'), Get("data"))
@@ -78,7 +87,7 @@ public static class Program
     {
         string[] known = ["folder", "instance", "profile", "game", "mods", "profiles", "overwrite", "wine-prefix",
             "ini", "exclude-mods", "preset", "policy", "max", "report", "output", "cache", "workers", "data",
-            "reference", "replace-mod", "fit-reference", "fit-protected", "carry-reference", "require-parity", "recover-mip-counts", "complete-materials", "require-complete", "recover-mip-records"];
+            "reference", "replace-mod", "fit-reference", "fit-protected", "carry-reference", "require-parity", "recover-mip-counts", "complete-materials", "require-complete", "recover-mip-records", "days", "dry-run"];
         var options = new Dictionary<string, string>();
         for (int i = 0; i < args.Length; i += 2)
         {
@@ -111,6 +120,9 @@ public static class Program
         analyze --instance PATH --profile NAME [options]
         build <source options> --output PATH --cache PATH [options]
         verify output-folder                Verify a published manifest and every texture
+        prune-cache --cache PATH [--days N] [--dry-run true]
+                                            Remove cache files from older versions and entries
+                                            unused for N days (default 30)
 
         Options: --preset NAME, --policy FILE, --max N, --report FILE, --workers N
         Fresh runs: --complete-materials true|false, --require-complete true|false.

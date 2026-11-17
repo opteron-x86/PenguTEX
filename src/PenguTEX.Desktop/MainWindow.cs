@@ -47,11 +47,14 @@ public sealed class MainWindow : Window
         _build = new() { Content = "Build output mod", Name = "Build", IsEnabled = false, Padding = new Thickness(20, 10) },
         _cancelButton = new() { Content = "Cancel", Name = "Cancel", IsEnabled = false },
         _openOutput = new() { Content = "Open output folder", Name = "OpenOutput", IsEnabled = false },
+        _cleanCache = new() { Content = CleanCacheLabel, Name = "CleanCache" },
         _preview = new() { Content = "Inspect texture", IsEnabled = false }, _export = new() { Content = "Export analysis", IsEnabled = false };
     private readonly TabControl _tabs = new(); private Control? _setup; private CancellationTokenSource? _cancel;
     private Catalog? _catalog; private OptimizationPlan? _plan; private bool _loading; private string _policyName = "Balanced";
     private DateTime _lastLog; private string _lastPhase = "";
     private bool _openingOutput;
+    private const string CleanCacheLabel = "Clean work cache…";
+    private string? _pruneConfirmation;
     public bool IsWorking { get; private set; }
     public string Status => _status.Text ?? "";
     public OptimizationPlan? CurrentPlan => _plan;
@@ -75,7 +78,7 @@ public sealed class MainWindow : Window
         _tabs.ItemsSource = new[] { new TabItem { Header = "1  Source & policy", Content = new ScrollViewer { Content = _setup } },
             new TabItem { Header = "2  Review textures", Content = Review() }, new TabItem { Header = "3  Coverage", Content = ReplacementReview() },
             new TabItem { Header = "4  Run log", Content = _log } };
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { _analyze, _build, _cancelButton, _export, _openOutput } };
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { _analyze, _build, _cancelButton, _export, _openOutput, _cleanCache } };
         var footer = new StackPanel { Spacing = 10, Children = { actions, _progress, _status } };
         var root = new Grid { Margin = new Thickness(24), RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto"), RowSpacing = 18 };
         root.Children.Add(title); Grid.SetRow(_summary, 1); root.Children.Add(_summary); Grid.SetRow(_tabs, 2); root.Children.Add(_tabs);
@@ -83,6 +86,9 @@ public sealed class MainWindow : Window
         _analyze.Click += async (_, _) => await AnalyzeAsync(); _build.Click += async (_, _) => await BuildAsync();
         _cancelButton.Click += (_, _) => _cancel?.Cancel(); _export.Click += async (_, _) => await ExportAsync();
         _openOutput.Click += async (_, _) => await OpenOutputFolderAsync();
+        _cleanCache.Click += async (_, _) => await CleanCacheAsync();
+        _cache.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) ResetCacheCleaning(); };
+        Tip(_cleanCache, "Remove cache files left by older versions and cached textures no build has used for 30 days. The first click only counts them; a second click removes them. Other files in the folder are never touched.");
         _output.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) UpdateOutputFolderAction(); };
         _preview.Click += async (_, _) =>
         {
@@ -274,6 +280,31 @@ public sealed class MainWindow : Window
         catch (Exception e) { _status.Text = "Could not open output folder: " + e.GetBaseException().Message; AppendLog(_status.Text); }
         finally { _openingOutput = false; UpdateOutputFolderAction(); }
     }
+    private void ResetCacheCleaning() { _pruneConfirmation = null; _cleanCache.Content = CleanCacheLabel; }
+    public async Task CleanCacheAsync()
+    {
+        if (IsWorking || !_cleanCache.IsEnabled) return;
+        string path = _cache.Text?.Trim() ?? ""; bool confirmed = _pruneConfirmation == path;
+        _cleanCache.IsEnabled = false;
+        try
+        {
+            var result = await Task.Run(() => CacheStore.Prune(path, 30, dryRun: !confirmed));
+            string size = $"{result.Files:N0} {(result.Files == 1 ? "file" : "files")} ({result.Bytes / 1073741824d:N2} GiB)";
+            if (confirmed || result.Files == 0)
+            {
+                ResetCacheCleaning();
+                _status.Text = result.Files == 0 ? "Work cache: nothing to remove." : $"Work cache: removed {size}; {result.KeptFiles:N0} recent files kept.";
+            }
+            else
+            {
+                _pruneConfirmation = path; _cleanCache.Content = $"Remove {size}";
+                _status.Text = $"Work cache: {size} left from older versions or unused for 30 days can be removed. Click the button again to remove them; {result.KeptFiles:N0} recent files stay.";
+            }
+        }
+        catch (Exception e) { ResetCacheCleaning(); _status.Text = "Could not clean the work cache: " + e.GetBaseException().Message; }
+        finally { _cleanCache.IsEnabled = !IsWorking; }
+        AppendLog(_status.Text);
+    }
     private void Filter()
     {
         if (_plan is null) return; string query = _search.Text ?? "", filter = _filter.SelectedItem as string ?? "Changed";
@@ -316,14 +347,15 @@ public sealed class MainWindow : Window
             if (Signature(fresh) != Signature(previous)) throw new IOException("Source or reference winners/metadata changed. Analyze again to review the new plan.");
             return JobRunner.Build(catalog, fresh, settings.Output, settings.Cache, settings.Workers, progress, ct, processor);
         }, ct);
-        _status.Text = $"Complete: {LastBuild.Files:N0} verified textures ({LastBuild.Reused:N0} reused). Output: {LastBuild.Output}. "
+        _status.Text = $"Complete: {LastBuild.Files:N0} verified textures ({LastBuild.Reused:N0} cached rebuilds reused). Output: {LastBuild.Output}. "
             + (LastBuild.Manifest.Comparison?.Assessment ?? "Built from selected originals. Review the Coverage tab for protected or unresolved textures.");
         AppendLog(_status.Text); _summary.Text = $"Output built • {LastBuild.Files:N0} verified textures • {LastBuild.Bytes / 1048576d:N1} MiB of overrides • {LastBuild.Seconds:F1} seconds";
     });
     private async Task RunAsync(Func<DesktopSettings, IProgress<JobProgress>, CancellationToken, Task> run)
     {
         if (IsWorking) return;
-        IsWorking = true; _cancel = new(); _analyze.IsEnabled = _build.IsEnabled = _preview.IsEnabled = _export.IsEnabled = _openOutput.IsEnabled = false;
+        IsWorking = true; _cancel = new(); _analyze.IsEnabled = _build.IsEnabled = _preview.IsEnabled = _export.IsEnabled = _openOutput.IsEnabled = _cleanCache.IsEnabled = false;
+        ResetCacheCleaning();
         _cancelButton.IsEnabled = true; _setup!.IsEnabled = false; _progress.Value = 0;
         _lastPhase = ""; _lastLog = default; bool acceptingProgress = true;
         try
@@ -346,7 +378,7 @@ public sealed class MainWindow : Window
             acceptingProgress = false;
             IsWorking = false; _setup.IsEnabled = true; _cancelButton.IsEnabled = false; _analyze.IsEnabled = true;
             _build.IsEnabled = _plan?.CompleteSource == true; _export.IsEnabled = _plan is not null; _preview.IsEnabled = (_table.SelectedItem as PlanRow)?.Item.Input is not null;
-            UpdateOutputFolderAction();
+            UpdateOutputFolderAction(); _cleanCache.IsEnabled = true;
             _cancel.Dispose(); _cancel = null;
         }
     }

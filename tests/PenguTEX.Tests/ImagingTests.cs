@@ -96,11 +96,11 @@ public sealed class ImagingTests
     {
         using var f = new Fixture(); byte[] original = Fixture.Dds(), changed = (byte[])original.Clone(); changed[^20] ^= 99;
         f.File("source/a.dds", original); var catalog = CatalogLoader.Load(new(Folder: f.Dir("source")));
-        var plan = Planner.Analyze(catalog, new() { Maximum = 8 }); int opens = 0;
+        var plan = Planner.Analyze(catalog, new() { Maximum = 8, Rules = [new("*", 8, RebuildMips: true, Semantic: TextureSemantic.LinearData)] }); int opens = 0;
         var unstable = catalog with { Assets = [catalog.Assets[0] with { Open = () => new MemoryStream(++opens == 1 ? original : changed) }] };
         string cache = Path.Combine(f.Root, "cache"), output = Path.Combine(f.Root, "output");
-        Assert.ThrowsAny<Exception>(() => JobRunner.Build(unstable, plan, output, cache));
-        Assert.Empty(Directory.GetFiles(cache, "*.dds")); Assert.False(Directory.Exists(output));
-        Assert.Equal(0, JobRunner.Build(catalog, plan, output, cache).Reused);
+        Assert.ThrowsAny<Exception>(() => JobRunner.Build(unstable, plan, output, cache, processor: new CpuMipProcessor()));
+        Assert.Empty(Directory.GetFiles(CacheStore.Folder(cache), "*.dds")); Assert.False(Directory.Exists(output));
+        Assert.Equal(0, JobRunner.Build(catalog, plan, output, cache, processor: new CpuMipProcessor()).Reused);
     }
 }

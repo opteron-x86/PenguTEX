@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reproducible synthetic end-to-end timings and cache-recovery checks, not game FPS."""
+"""Reproducible synthetic end-to-end timings and output-recovery checks, not game FPS."""
 import argparse
 import hashlib
 import json
@@ -45,13 +45,13 @@ with tempfile.TemporaryDirectory(prefix='pengutex-benchmark-') as temp:
                               'files':data['Files'], 'reused':data['Reused'], 'bytes':data['Bytes']})
         subprocess.run([binary,'verify',str(root/'output')], check=True, capture_output=True)
         return data
-    assert build('cold')['Reused'] == 0
-    assert build('warm')['Reused'] == a.files
-    cache = next((root/'cache').glob('*.dds')); content = bytearray(cache.read_bytes()); content[-1] ^= 1; cache.write_bytes(content)
-    assert build('corrupt-cache-recovery')['Reused'] == a.files-1
+    # Mip copies are regenerated on every build; only CPU-generated textures use the work cache.
+    assert build('first')['Reused'] == 0
+    assert build('repeat')['Reused'] == 0
+    assert not list((root/'cache').rglob('*.dds'))
     generated = root/'output/textures/armor/fixture-000.dds'; generated.write_bytes(b'broken')
     assert subprocess.run([binary,'verify',str(root/'output')], capture_output=True).returncode != 0
-    assert build('output-recovery')['Reused'] == a.files
+    assert build('output-recovery')['Files'] == a.files
     for name, digest in originals.items():
         assert hashlib.sha256((source/name).read_bytes()).hexdigest() == digest
     (source/'fixture-000.dds').unlink()
@@ -59,6 +59,6 @@ with tempfile.TemporaryDirectory(prefix='pengutex-benchmark-') as temp:
     assert not generated.exists()
     report['sourcePayloadBytes'] = payload_bytes*a.files
     report['outputPayloadBytes'] = report['runs'][0]['bytes']-148*a.files
-    report['validation'] = 'All runs verified; source hashes preserved; cache/output damage and stale output recovered.'
+    report['validation'] = 'All runs verified; source hashes preserved; output damage and stale output recovered.'
 path = pathlib.Path(a.report); path.parent.mkdir(parents=True, exist_ok=True)
 path.write_text(json.dumps(report, indent=2)+'\n'); print(json.dumps(report, indent=2))

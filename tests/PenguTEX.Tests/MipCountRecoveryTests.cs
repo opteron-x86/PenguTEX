@@ -27,7 +27,7 @@ public sealed class MipCountRecoveryTests
         Assert.Equal(data[(item.Input.HeaderBytes + (int)item.Input.RemovedBytes(item.DropMips))..], result[info.HeaderBytes..]);
         Assert.Equal(data, File.ReadAllBytes(catalog.Assets[0].Container));
         Assert.Equal(item.TargetWidth, TexturePreview.Decode(new MemoryStream(data), item.DropMips, data.Length, recoverMipCount: true).Width);
-        var reused = JobRunner.Build(catalog, plan, output, cache); Assert.Equal(1, reused.Reused);
+        var reused = JobRunner.Build(catalog, plan, output, cache); Assert.Equal(0, reused.Reused); Assert.Equal(file.OutputHash, reused.Manifest.Files[0].OutputHash);
         Assert.Equal(2, reused.Manifest.Files[0].DeclaredSourceMipCount); Assert.True(reused.Manifest.OriginalsOnly);
     }
     [Fact] public void PartialChainsTrailersRawLayoutsAndProtectionsRemainStrict()

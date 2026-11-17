@@ -30,7 +30,7 @@ public sealed class RecordRecoveryTests
         var output = File.ReadAllBytes(Path.Combine(built.Output, "textures/a.dds"));
         Assert.Equal(canonical[(128 + (int)item.Input.RemovedBytes(drop))..], output[128..]);
         Assert.Null(Dds.Inspect(new MemoryStream(output)).Info.RecordLayout);
-        Assert.Equal(1, JobRunner.Build(catalog, plan, f.Dir("output"), f.Dir("cache")).Reused);
+        Assert.Equal(entry.OutputHash, JobRunner.Build(catalog, plan, f.Dir("output"), f.Dir("cache")).Manifest.Files[0].OutputHash);
         using var forward = new ForwardOnly(source); using var streamed = new MemoryStream();
         Dds.Reduce(forward, streamed, drop, source.Length, expected: item.Input); Assert.Equal(output, streamed.ToArray());
     }

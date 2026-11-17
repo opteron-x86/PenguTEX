@@ -88,8 +88,8 @@ installed texture totals do not predict resident VRAM or FPS.
 ## Jobs, cache and output
 
 Bound workers and decoded-memory use. Read loose files directly and extract selected
-archive entries only. Cache by source-content hash, settings/schema and encoder
-identity. Same-size/mtime changes must invalidate output. Verify cached hashes and
+archive entries only. Cache CPU-generated textures by source-content hash, encoder identity and
+the operation's own parameters; copy existing mips again instead of caching them. Same-size/mtime changes must invalidate output. Verify cached hashes and
 headers. An interrupted or failed job is simply run again; verified cached work is reused.
 
 Stage on the destination filesystem. Reject source overlap, unsafe relative paths,

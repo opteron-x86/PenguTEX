@@ -72,8 +72,9 @@ wrong colour. A block far worse than a bounded range fit of the same texels is
 replaced by that fit; other blocks stay as encoded. Source compression format,
 DXGI/FourCC, sRGB flag and alpha metadata are preserved. Every encoded level is
 decoded before publication, then the DDS structure, payload and output hash are
-verified. The content cache includes source hash, policy, semantic and encoder/filter
-identity. Rebuilding is limited to 64 million decoded source pixels (including
+verified. The content cache holds only these CPU-generated textures. Its key is the
+source hash, encoder/filter identity, operation, dropped mips, target size, semantic
+and alpha cutoff; the policy's name and unrelated settings do not invalidate it. Rebuilding is limited to 64 million decoded source pixels (including
 8192×8192) per texture, and to the same total across textures rebuilt at once: small
 textures share the workers, a maximum-size texture runs alone, and requests are
 served in arrival order. Streaming workers may continue other files.

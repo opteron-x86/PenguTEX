@@ -121,6 +121,7 @@ public static class JobRunner
         var changed = plan.Items.Where(i => i.Decision is Decision.Reduce or Decision.Rebuild).ToArray();
         if (changed.Any(i => i.Decision == Decision.Rebuild) && processor is null) throw new InvalidOperationException("This plan requires a CPU texture processor.");
         var entries = new OutputEntry[changed.Length]; int done = 0, reused = 0;
+        string store = CacheStore.Folder(cache); Directory.CreateDirectory(store);
         var progressGate = new object();
         progress?.Report(new("Build", 0, changed.Length, "", "Generating textures"));
         Parallel.For(0, changed.Length, new ParallelOptions { MaxDegreeOfParallelism = workers, CancellationToken = ct }, i =>
@@ -128,14 +129,22 @@ public static class JobRunner
             var item = changed[i]; ct.ThrowIfCancellationRequested();
             if (!lookup.TryGetValue(item.Path, out var asset) || asset.Container != item.Container)
                 throw new IOException("Source winner changed; analyze again: " + item.Path);
-            string hash;
-            using (var stream = asset.Open()) hash = Hash(stream, ct);
-            string processorIdentity = item.Decision == Decision.Rebuild ? processor!.Identity : RecipeVersion;
-            string recipe = JsonFiles.Hash(hash + "|" + processorIdentity + "|" + item.DropMips + "|" + item.Semantic + "|" + item.AlphaCutoff + "|" + item.Operation + "|" + policyHash);
-            string cached = Path.Combine(cache, recipe + ".dds"), metadata = cached + ".json";
+            // Only CPU-generated textures are cached. A mip copy costs as much to reuse as to regenerate,
+            // so it is produced in one pass and its source hash is known when that pass ends.
+            bool cacheable = item.Decision == Decision.Rebuild;
+            string processorIdentity = cacheable ? processor!.Identity : RecipeVersion;
+            // Everything that determines the output bytes, and nothing else: no policy name or unrelated rule.
+            string Recipe(string sourceHash) => JsonFiles.Hash(string.Join('|', sourceHash, processorIdentity, item.Operation, item.DropMips,
+                item.Semantic, item.AlphaCutoff, item.TargetWidth, item.TargetHeight, item.Input?.MipCount, item.Input?.DeclaredMipCount));
+            string? hash = null; string recipe = "", cached = "", metadata = "";
             string dest = Resolve(stage, item.Path); Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
             OutputEntry? entry = null;
-            if (File.Exists(cached) && File.Exists(metadata))
+            if (cacheable)
+            {
+                using (var stream = asset.Open()) hash = Hash(stream, ct);
+                recipe = Recipe(hash); cached = Path.Combine(store, recipe + ".dds"); metadata = cached + ".json";
+            }
+            if (cacheable && File.Exists(cached) && File.Exists(metadata))
             {
                 try
                 {
@@ -149,10 +158,12 @@ public static class JobRunner
                 }
                 catch (Exception e) when (e is IOException or InvalidDataException or System.Text.Json.JsonException or NotSupportedException) { }
             }
-            bool generated = entry is null;
+            var reusedEntry = entry;
             if (entry is not null)
             {
                 File.Copy(cached, dest); Interlocked.Increment(ref reused);
+                // Pruning keeps entries a build used recently.
+                try { File.SetLastWriteTimeUtc(metadata, DateTime.UtcNow); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
             }
             else
             {
@@ -166,7 +177,9 @@ public static class JobRunner
                         else Dds.Reduce(source, target, item.DropMips, asset.Length, ct, item.Input);
                         outputHash = target.Complete();
                     }
-                    if (source.Complete(ct) != hash) throw new IOException("Source changed during processing: " + item.Path);
+                    string processed = source.Complete(ct);
+                    if (hash is not null && processed != hash) throw new IOException("Source changed during processing: " + item.Path);
+                    hash = processed; recipe = Recipe(hash);
                 }
                 using var verify = File.OpenRead(dest); var info = Dds.Inspect(verify).Info;
                 if (info.Width != item.TargetWidth || info.Height != item.TargetHeight || info.PayloadBytes != item.OutputPayload
@@ -175,7 +188,7 @@ public static class JobRunner
                 entry = new(item.Path, item.Origin, hash, outputHash, info.Width, info.Height, item.DropMips, verify.Length, recipe)
                 { SourceContainer = asset.Container, DeclaredSourceMipCount = item.Input.DeclaredMipCount, SourceRecordLayout = item.Input.RecordLayout, Operation = item.Operation, Semantic = item.Semantic, AlphaCutoff = item.AlphaCutoff, Material = item.Material, Processor = processorIdentity };
             }
-            if (generated)
+            if (cacheable && reusedEntry is null)
             {
                 string temporary = cached + "." + Guid.NewGuid().ToString("N") + ".tmp";
                 try { File.Copy(dest, temporary); TransientIo.Replace(temporary, cached); JsonFiles.Write(metadata, entry); }

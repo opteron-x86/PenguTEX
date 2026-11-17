@@ -32,7 +32,7 @@ followed by an in-game comparison; retain the working output until that passes.
 - Prefer existing lower mip levels to avoid an additional compression pass.
 - Preserve formats, color space and shader channels by default.
 - Review proposed changes, protection rules and estimated payload reduction.
-- Resume verified work and publish an independently removable output mod.
+- Reuse cached CPU work and publish an independently removable output mod.
 - Use the same engine, presets and validation from the desktop and CLI.
 
 For source builds, install .NET 10, Python 3, CMake and a C++17 compiler

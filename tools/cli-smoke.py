@@ -47,7 +47,7 @@ with tempfile.TemporaryDirectory(prefix="pengutex-cli-") as temporary:
     assert run("inspect", target)["Width"] == 8
     assert len(run("verify", root / "output", progress=("Verify 0/1:", "Verify 1/1:"))["Files"]) == 1
     assert run("build", "--folder", root / "input", "--max", 8,
-               "--output", root / "output", "--cache", root / "cache", progress=("Cleanup 0/1:", "Cleanup 1/1:"))["Reused"] == 1
+               "--output", root / "output", "--cache", root / "cache", progress=("Cleanup 0/1:", "Cleanup 1/1:"))["Reused"] == 0  # mip copies are regenerated, not cached
     assert hashlib.sha256((source / "example.dds").read_bytes()).digest() == hashlib.sha256(original).digest()
     comparison = run("analyze", "--folder", root / "input", "--max", 16, "--reference", root / "output", "--require-parity", "true", expected=3)
     assert comparison["Comparison"]["LargerCount"] == 1
@@ -120,4 +120,10 @@ with tempfile.TemporaryDirectory(prefix="pengutex-cli-") as temporary:
                                "--output", str(root / "foreign"), "--cache", str(root / "cache")], capture_output=True, text=True)
     assert rejected.returncode == 1 and "Choose an empty folder" in rejected.stderr
     assert (root / "foreign" / "keep.txt").read_text() == "keep"
+    old = root / "cache" / ("A" * 64 + ".dds")
+    old.write_bytes(b"left by an older version"); (root / "cache" / "notes.txt").write_text("mine")
+    assert run("prune-cache", "--cache", root / "cache", "--dry-run", "true")["Files"] == 1 and old.exists()
+    pruned = run("prune-cache", "--cache", root / "cache")
+    assert pruned["Files"] == 1 and pruned["OtherFiles"] == 1 and not old.exists()
+    assert (root / "cache" / "notes.txt").read_text() == "mine"
 print("CLI analyze/build/verify/cache/source-preservation smoke passed.")
