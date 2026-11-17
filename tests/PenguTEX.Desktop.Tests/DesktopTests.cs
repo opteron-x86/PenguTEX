@@ -208,6 +208,23 @@ public sealed class DesktopTests
         finally { window.Close(); }
     }
     [AvaloniaFact]
+    public async Task InvalidNumbersAreExplainedInPlainWords()
+    {
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds());
+        var window = new MainWindow(new SettingsStore(Path.Combine(f.Root, "settings.json"))); window.SetSettings(Settings(f)); window.Show();
+        try
+        {
+            foreach (var (name, text, message) in new[] { ("Maximum", "", "Color maximum must be a whole number"), ("NormalMaximum", "1k", "Normal maximum must be a whole number"),
+                ("Maximum", "1000", "powers of two"), ("Workers", "0", "Workers must be from 1 to 32"), ("Workers", "x", "Workers must be a whole number") })
+            {
+                window.SetSettings(Settings(f)); Control<TextBox>(window, name).Text = text;
+                await window.AnalyzeAsync(); Assert.Contains(message, window.Status); Assert.DoesNotContain("input string", window.Status);
+            }
+            window.SetSettings(Settings(f)); await window.AnalyzeAsync(); Assert.NotNull(window.CurrentPlan);
+        }
+        finally { window.Close(); }
+    }
+    [AvaloniaFact]
     public async Task CacheCleaningCountsFirstAndRemovesOnlyAfterASecondClick()
     {
         using var f = new Fixture(); string cache = f.Dir("cache"), legacy = f.File("cache/" + new string('A', 64) + ".dds", new byte[2048]), mine = f.File("cache/notes.txt", new byte[3]);
