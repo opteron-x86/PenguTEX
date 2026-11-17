@@ -99,6 +99,10 @@ whole-profile speed ratio. The paired snapshot is the measured comparison.
 - A separate process without the native library passes the managed fallback CLI
   smoke; requiring native encoding fails before publishing an output.
 
-Windows/packaging CI results are recorded when complete.
+- [Cross-platform CI](https://github.com/opteron-x86/PenguTEX/actions/runs/44115673059)
+  passes on Linux and Windows, including native compilation, engine/desktop tests,
+  independent decoding, portable packages and actual desktop startup. Extracted
+  Linux portable/AppImage checks also pass on Ubuntu 24.04, Debian 13 and Fedora 43.
+
 In-game checks remain under [GAME-VALIDATION.md](GAME-VALIDATION.md). Test outputs
 are separate from original mods and are not automatically enabled in the profile.

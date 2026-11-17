@@ -35,7 +35,10 @@ followed by an in-game comparison; retain the working output until that passes.
 - Resume verified work and publish an independently removable output mod.
 - Use the same engine, presets and validation from the desktop and CLI.
 
-Run the desktop with .NET 10: `dotnet run --project src/PenguTEX.Desktop -c Release`.
+For source builds, install .NET 10, Python 3, CMake and a C++17 compiler
+(MSVC on Windows), then run `python3 tools/build-native.py` (`python` on Windows).
+This builds the fast BC7 encoder; see [native encoding and build details](docs/BC7-ENCODER.md).
+Run the desktop: `dotnet run --project src/PenguTEX.Desktop -c Release`.
 Build the CLI: `dotnet build src/PenguTEX.Cli -c Release`. Run regression tests
 with `bash tools/test.sh` on Linux or `dotnet test PenguTEX.slnx -c Release` on Windows. See [CLI commands and source requirements](docs/CLI.md),
 the [desktop guide](docs/DESKTOP.md), [design](docs/ARCHITECTURE.md), [roadmap](docs/ROADMAP.md),
