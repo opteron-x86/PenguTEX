@@ -58,7 +58,8 @@ public sealed class Bc7EncoderTests
     public void BackendChangesSeparateCachesAndRetainedMipsStayIdentical()
     {
         using var f = new Fixture(); byte[] original = ImagingTests.SolidDds(98);
-        f.File("source/a.dds", original); f.File("source/b.dds", original);
+        byte[] second = (byte[])original.Clone(); second[^1] ^= 1;
+        f.File("source/a.dds", original); f.File("source/b.dds", second);
         var catalog = CatalogLoader.Load(new(Folder: f.Dir("source")));
         var plan = Planner.Analyze(catalog, new() { Rules = [new("*", 16, Semantic: TextureSemantic.LinearData, CompleteMipChain: true)] });
         string output = f.Dir("output"), cache = f.Dir("cache");
@@ -67,6 +68,10 @@ public sealed class Bc7EncoderTests
         Assert.NotEqual(basic.Identity, new CpuMipProcessor(Bc7Backend.Managed).Identity);
         Assert.Equal(0, JobRunner.Build(catalog, plan, output, cache, workers: 2, processor: basic).Reused);
         Assert.Equal(2, JobRunner.Build(catalog, plan, output, cache, workers: 2, processor: basic).Reused);
+        string cached = Directory.GetFiles(cache, "*.dds")[0];
+        byte[] corrupted = File.ReadAllBytes(cached); corrupted[^1] ^= 1; File.WriteAllBytes(cached, corrupted);
+        Assert.Equal(1, JobRunner.Build(catalog, plan, output, cache, workers: 2, processor: basic).Reused);
+        Assert.Equal(2, JobRunner.Verify(output).Files.Count);
         Assert.Equal(0, JobRunner.Build(catalog, plan, output, cache, workers: 2, processor: fast).Reused);
         byte[] result = File.ReadAllBytes(Path.Combine(output, "textures/a.dds"));
         Assert.Equal(original[148..], result[148..original.Length]);

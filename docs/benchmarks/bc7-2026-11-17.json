@@ -363,5 +363,31 @@
     "No in-game acceptance claim.",
     "Whole-build snapshot results are individual pilot runs; extra retained-byte checks contribute to peak process memory.",
     "Full-profile result is recorded separately after validation."
-  ]
+  ],
+  "fullProfile": {
+    "changedOutputs": 27377,
+    "mipCompletions": 6449,
+    "bc7MipCompletions": 2421,
+    "generatedBc7Pixels": 1972243770,
+    "outputBytes": 43158802577,
+    "workers": 16,
+    "initiallyEmptyCacheBuildSeconds": 457.5182915,
+    "withinRunIdenticalContentReused": 1317,
+    "scope": "Build phase only; excludes catalog analysis and material verification. Cache was initially empty.",
+    "independentFullVerify": "27377 outputs passed",
+    "productionSampleEquivalence": "All 36 generated mip tiles match independently decoded benchmark outputs exactly.",
+    "warmCacheBuildSeconds": 188.8332304,
+    "warmCacheReused": 27377,
+    "approximateCommandSeconds": {
+      "cold": 734,
+      "warm": 475,
+      "method": "Log creation to final write; approximately one-second precision; includes analysis and material verification."
+    }
+  },
+  "sse2": {
+    "cAbiTests": "pass",
+    "sampleBlocksCompared": 138104,
+    "stripsDifferentFromAvx2": 535,
+    "worstRealNormalP99Degrees": 8.371636721617952
+  }
 }

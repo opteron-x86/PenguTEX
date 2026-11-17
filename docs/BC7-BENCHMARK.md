@@ -62,6 +62,26 @@ I/O and output verification. Peak process memory in the harness includes its
 extra retained-byte comparisons and runtime GC; it is not the decoded-pixel
 reservation. The unchanged pixel-budget regression suite passes.
 
+## Full profile
+
+The Balanced build with PR #63 enabled completed 27,377 outputs totaling
+40.19 GiB. These include 6,449 mip completions (2,421 BC7 textures), generating
+1.972 billion BC7 pixels. The build phase took **457.52 seconds (7 min 38 s)**
+at 16 workers. This excludes initial catalog analysis and material-evidence
+verification, which take additional time. The application cache began empty;
+1,317 outputs reused identical content already generated earlier in that run.
+An additional full `verify` pass succeeded on all output files.
+The subsequent warm-cache build reused **all 27,377 outputs** and took
+**188.83 seconds (3 min 9 s)** for its build phase. Original hashing, cache/output
+verification and copying roughly 40 GiB remain significant even without encoding.
+Observed command durations were approximately **12 min 14 s cold** and
+**7 min 55 s warm**, including analysis and material verification. These totals
+come from log creation/final-write timestamps, with roughly one-second precision.
+
+PR #63's earlier roughly 45-minute figure was an encoding-cost estimate, not a
+matched measured full build. Do not interpret the difference as a controlled
+whole-profile speed ratio. The paired snapshot is the measured comparison.
+
 ## Validation and remaining acceptance
 
 - 252 engine tests and 13 desktop tests pass locally with native encoding required.
@@ -71,9 +91,14 @@ reservation. The unchanged pixel-budget regression suite passes.
 - AddressSanitizer/UndefinedBehaviorSanitizer pass for the C++ wrapper tests;
   ISPC-generated objects are not sanitizer-instrumented.
 - A forced SSE2 build passes the C ABI tests. SSE2 and AVX2 can produce different
-  blocks, so the actual ISA is included in the cache identity.
+  blocks, so the actual ISA is included in the cache identity. Independent SSE2
+  decoding gives a worst real normal-map p99 of 8.37°, comparable to AVX2.
+- All 36 production-generated sample mip tiles exactly match the independently
+  decoded comparison output, including textures filtered through policy caps.
 - The Linux portable package passes CLI build/cache/source-preservation smoke tests.
+- A separate process without the native library passes the managed fallback CLI
+  smoke; requiring native encoding fails before publishing an output.
 
-Full-profile timings and Windows/packaging CI results are recorded when complete.
+Windows/packaging CI results are recorded when complete.
 In-game checks remain under [GAME-VALIDATION.md](GAME-VALIDATION.md). Test outputs
 are separate from original mods and are not automatically enabled in the profile.

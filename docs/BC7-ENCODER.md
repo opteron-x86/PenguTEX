@@ -43,7 +43,8 @@ Explicit processor constructors used by benchmarks can request a backend directl
 Backend, upstream revision, compiler version, profile and wrapper version enter
 the processor identity and therefore the generated-output cache recipe. Managed
 fallback retains the previous identity. Switching native settings regenerates
-affected processor cache entries; retained-mip copying has its existing identity.
+all CPU-generated entries for this processor, including non-BC7 formats;
+retained-mip copying has its existing identity.
 
 ## Reproduce the comparison
 
