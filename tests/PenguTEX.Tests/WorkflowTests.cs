@@ -382,6 +382,30 @@ public class WorkflowTests
         Assert.Throws<IOException>(() => CacheStore.Prune(output)); Assert.Throws<ArgumentException>(() => CacheStore.Prune(cache, -1));
         JobRunner.Verify(output);
     }
+    [Fact] public void PublishedOutputCarriesNoStageMarkerAndOlderOutputsWithOneStayValid()
+    {
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds());
+        var catalog = CatalogLoader.Load(new(Folder: f.Dir("source"))); var plan = Planner.Analyze(catalog, Small);
+        string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
+        JobRunner.Build(catalog, plan, output, cache); Assert.False(File.Exists(Path.Combine(output, ".pengutex-stage")));
+        File.WriteAllText(Path.Combine(output, ".pengutex-stage"), JobRunner.Product); JobRunner.Verify(output);
+        JobRunner.Build(catalog, plan, output, cache); Assert.False(File.Exists(Path.Combine(output, ".pengutex-stage")));
+    }
+    [Fact] public void ProtectedTexturesCarryNoMaterialHint()
+    {
+        using var f = new Fixture(); f.File("source/textures/interface/a.dds", Fixture.RawDds(mipCount: 1)); f.File("source/textures/armor/b.dds", Fixture.RawDds(mipCount: 1));
+        var plan = Planner.Analyze(CatalogLoader.Load(new(Folder: f.Dir("source")), inspectMaterials: true), Policy.Preset("balanced"));
+        var ui = plan.Items.Single(i => i.Path.Contains("interface")); Assert.Equal(Decision.Protected, ui.Decision); Assert.Null(ui.Material);
+        Assert.DoesNotContain("reviewed rule", ui.Reason);
+        Assert.Equal("Unbound", plan.Items.Single(i => i.Path.Contains("armor")).Material!.Status);
+    }
+    [Fact] public void PathRulePatternsMatchAsBefore()
+    {
+        foreach (var (path, pattern, expected) in new[] { ("textures/Armor/A.dds", "textures/armor/*", true), (@"textures\armor\a.dds", "textures/armor/?.dds", true),
+            ("textures/armor/ab.dds", "textures/armor/?.dds", false), ("textures/armor/a.dds", @"textures\armor\*", true), ("textures/x.(1).dds", "textures/x.(?).dds", true),
+            ("textures/armor/a.dds", "armor/*", false) })
+            for (int i = 0; i < 2; i++) Assert.Equal(expected, Policy.Matches(path, pattern));
+    }
     [Fact] public void MissingMipsAreKeptWithReason()
     {
         using var f = new Fixture(); f.File("input/a.dds", Fixture.Dds(mipCount: 1));

@@ -74,7 +74,14 @@ public static class Program
         if (Get("report") is { } report) JsonFiles.Write(report, plan);
         Console.Error.WriteLine(plan.Coverage.Assessment);
         if (plan.Comparison is { } comparison) Console.Error.WriteLine($"Replacement: {comparison.LargerCount} larger, {comparison.UnknownCount} unassessed, {comparison.IncompleteMipCount} incomplete mip chains. {comparison.Assessment}");
-        if (args[0] == "analyze") { Print(plan); return !plan.CompleteSource ? 2 : requireComplete && !plan.Coverage.MeetsPolicy ? 3 : requireParity && plan.Comparison!.HasUnresolved ? 3 : 0; }
+        if (args[0] == "analyze")
+        {
+            // A full plan for a large profile is hundreds of megabytes; with --report it is already on disk.
+            if (Get("report") is { } written) Print(new { Report = Path.GetFullPath(written), plan.Schema, plan.CompleteSource, TextureCount = plan.Items.Count,
+                plan.ChangedCount, plan.InputPayloadBytes, plan.SavedPayloadBytes, Decisions = plan.Items.GroupBy(i => i.Decision).ToDictionary(g => g.Key.ToString(), g => g.Count()),
+                Coverage = plan.Coverage with { Exceptions = [] }, Comparison = plan.Comparison is { } c ? new { c.LargerCount, c.UnknownCount, c.IncompleteMipCount, c.HasUnresolved, c.Assessment } : null });
+            else Print(plan);
+            return !plan.CompleteSource ? 2 : requireComplete && !plan.Coverage.MeetsPolicy ? 3 : requireParity && plan.Comparison!.HasUnresolved ? 3 : 0; }
         if (requireComplete && !plan.Coverage.MeetsPolicy) { Print(plan.Coverage); return 3; }
         if (requireParity && plan.Comparison!.HasUnresolved) { Print(plan.Comparison); return 3; }
         var processor = new CpuMipProcessor(); Console.Error.WriteLine(processor.EncoderSummary);

@@ -37,6 +37,9 @@ with tempfile.TemporaryDirectory(prefix="pengutex-cli-") as temporary:
     (source / "example.dds").write_bytes(original)
     plan = run("analyze", "--folder", root / "input", "--max", 8)
     assert plan["ChangedCount"] == 1
+    summary = run("analyze", "--folder", root / "input", "--max", 8, "--report", root / "plan.json")
+    assert summary["ChangedCount"] == 1 and "Items" not in summary and summary["Decisions"] == {"Reduce": 1}
+    assert len(json.loads((root / "plan.json").read_text())["Items"]) == 1
     (root / "output").mkdir()  # File-picker users commonly create the destination first.
     built = run("build", "--folder", root / "input", "--max", 8,
                 "--output", root / "output", "--cache", root / "cache",

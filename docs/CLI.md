@@ -78,7 +78,8 @@ existing mips that fit the reference dimensions and payload while preserving for
 textures. Legacy `--carry-reference true` is rejected: every replacement must come from an original source. `--require-parity true` refuses publication if larger or unassessed paths
 remain. See [replacement checks](REPLACEMENT.md) for assumptions and acceptance.
 
-JSON goes to stdout and progress/errors to stderr. Exit codes: 0 file operation
+JSON goes to stdout and progress/errors to stderr. With `--report FILE`, analyze
+writes the full plan to that file and prints only a summary of counts. Exit codes: 0 file operation
 succeeded, 1 failure, 2 incomplete source analysis, 3 required reference parity not
 met, 130 cancellation. Unsupported and invalid textures
 remain unchanged in their original mods and are counted explicitly. Missing or

@@ -227,6 +227,8 @@ public static class JobRunner
             Directory.Move(stage, output);
         }
         catch { if (Directory.Exists(backup) && !Directory.Exists(output)) Directory.Move(backup, output); throw; }
+        // The marker only identifies an unfinished stage; a published mod is identified by its manifest.
+        try { File.Delete(Path.Combine(output, ".pengutex-stage")); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         progress?.Report(new("Publish", 1, 1, output, "Output published"));
         if (Directory.Exists(backup))
         {

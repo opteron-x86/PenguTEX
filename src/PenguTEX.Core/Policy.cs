@@ -56,8 +56,11 @@ public sealed record Policy
         "compact" => new Policy() { Name = "Compact", Maximum = 1024, NormalMaximum = 512, MaterialMaximum = 512, HeightMaximum = 256 },
         _ => throw new ArgumentException("Preset must be Quality, Balanced or Compact."),
     }) with { ProtectLargeSurfaces = false, ProtectCharacters = false, CompleteKnownMaterials = true, RecoverMipCounts = true, RecoverMipRecords = true };
-    public static bool Matches(string path, string pattern) => Regex.IsMatch(path.Replace('\\', '/'),
-        "^" + Regex.Escape(pattern.Replace('\\', '/')).Replace("\\*", ".*").Replace("\\?", ".") + "$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+    // Compiled once per pattern; Regex's own static cache holds only 15 and analysis checks every rule per texture.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Regex> Patterns = new(StringComparer.Ordinal);
+    public static bool Matches(string path, string pattern) => Patterns.GetOrAdd(pattern, p => new Regex(
+        "^" + Regex.Escape(p.Replace('\\', '/')).Replace("\\*", ".*").Replace("\\?", ".") + "$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1))).IsMatch(path.Replace('\\', '/'));
 
     public PathRule? ProcessingRule(string path) => Rules.LastOrDefault(r => Matches(path, r.Pattern));
 
@@ -153,7 +156,8 @@ public static class Planner
                 MaterialHint? hint = null;
                 int fullSourceMips = 1 + (int)Math.Log2(Math.Max(info.Width, info.Height));
                 var rebuild = policy.ProcessingRule(asset.Path);
-                if (policy.CompleteKnownMaterials && info.MipCount < fullSourceMips)
+                // Protected and higher-priority textures stay unchanged, so their bindings are not worth reporting.
+                if (policy.CompleteKnownMaterials && info.MipCount < fullSourceMips && protection is null && !higherPriority)
                 {
                     catalog.Materials!.Textures.TryGetValue(asset.Path, out hint);
                     hint ??= new("Unbound", MaterialRole.Unknown, 128, 0, []);
