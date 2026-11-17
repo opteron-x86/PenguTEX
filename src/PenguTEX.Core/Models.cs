@@ -83,6 +83,8 @@ public sealed record Diagnostic(Severity Severity, string Message);
 public sealed record Asset(string Path, string Origin, string Container, long Length, Func<Stream> Open)
 {
     public int Priority { get; init; }
+    /// <summary>Set when the providing mod is generated LOD output (for example PenguLOD); such textures stay unchanged.</summary>
+    public string? GeneratedBy { get; init; }
 }
 public sealed record Catalog(SourceOptions Source, IReadOnlyList<string> Roots,
     IReadOnlyList<Asset> Assets, IReadOnlyList<Diagnostic> Diagnostics)

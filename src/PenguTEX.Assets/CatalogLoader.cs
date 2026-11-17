@@ -19,6 +19,7 @@ public static class CatalogLoader
             throw new ArgumentException("Choose exactly one texture folder or mod-manager instance.");
         var roots = new List<string>(); var diagnostics = new List<Diagnostic>();
         var priorities = new Dictionary<string, int>(StringComparer.Ordinal);
+        var generated = new Dictionary<string, string>(StringComparer.Ordinal);
         string? referenceRoot = options.ReferenceFolder is null ? null : HostPath.Canonical(HostPath.Resolve(options.ReferenceFolder));
         string referencePlacement = "Above folder sources"; int referencePriority = int.MaxValue - 1;
         var loose = new Dictionary<string, Asset>(StringComparer.Ordinal);
@@ -65,6 +66,12 @@ public static class CatalogLoader
                 if (referenceRoot is not null && (mod.Equals(referencePlacement, StringComparison.OrdinalIgnoreCase) || HostPath.ComparisonKey(path) == HostPath.ComparisonKey(referenceRoot)))
                 { diagnostics.Add(new(Severity.Info, "Reference output excluded from original inputs: " + mod)); continue; }
                 if (IsOptimizerOutput(path)) { diagnostics.Add(new(Severity.Info, "Excluded prior optimizer output: " + mod)); continue; }
+                if (LodGenerator(path) is { } generator)
+                {
+                    // Kept as winners so nothing below them takes their place, but never resized.
+                    generated[path] = generator;
+                    diagnostics.Add(new(Severity.Warning, $"{generator} output is enabled ({mod}). PenguTEX normally runs before LOD generation; these textures stay unchanged. Regenerate LOD after installing the PenguTEX output."));
+                }
                 roots.Add(path); priorities[path] = ranks[mod];
             }
             if (Directory.Exists(instance.OverwriteFolder)) { roots.Add(instance.OverwriteFolder); priorities[instance.OverwriteFolder] = int.MaxValue; }
@@ -101,7 +108,7 @@ public static class CatalogLoader
                         loose[key] = new(key, origin, actual, new FileInfo(actual).Length,
                             // Small buffer: analysis opens every texture for a 148-byte header, and larger reads bypass it anyway.
                             () => new FileStream(actual, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan))
-                        { Priority = priorities.GetValueOrDefault(root) };
+                        { Priority = priorities.GetValueOrDefault(root), GeneratedBy = generated.GetValueOrDefault(root) };
                     }
                 }
             }
@@ -174,6 +181,8 @@ public static class CatalogLoader
         return new(options, roots, assets.Values.Where(a => a.Path.StartsWith("textures/")).OrderBy(a => a.Path, StringComparer.Ordinal).ToArray(), diagnostics)
         { Reference = reference, Materials = materials };
     }
+
+    private static string? LodGenerator(string folder) => GamePath.ResolveExisting(folder, "PenguLOD.output-set.json") is not null ? "PenguLOD" : null;
 
     private static bool IsOptimizerOutput(string folder) => GamePath.ResolveExisting(folder, JobRunner.ManifestName) is not null
         || GamePath.ResolveExisting(folder, "VRAMrOutput.tmp") is not null;

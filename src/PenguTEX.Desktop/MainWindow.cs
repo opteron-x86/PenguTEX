@@ -53,6 +53,8 @@ public sealed class MainWindow : Window
     private Catalog? _catalog; private OptimizationPlan? _plan; private bool _loading; private string _policyName = "Balanced";
     private DateTime _lastLog; private string _lastPhase = "";
     private bool _openingOutput;
+    private readonly Avalonia.Threading.DispatcherTimer _searchDelay = new() { Interval = TimeSpan.FromMilliseconds(250) };
+    private (OptimizationPlan Plan, PlanRow[] Rows, string[] Text)? _rows;
     private const string CleanCacheLabel = "Clean work cache…";
     private string? _pruneConfirmation;
     public bool IsWorking { get; private set; }
@@ -99,7 +101,14 @@ public sealed class MainWindow : Window
                     await new PreviewWindow(asset with { Origin = row.Item.Origin }, row.Item).ShowDialog(this);
             }
         };
-        _search.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) Filter(); }; _filter.SelectionChanged += (_, _) => Filter();
+        // Large plans filter after a short pause in typing; small ones at once.
+        _searchDelay.Tick += (_, _) => { _searchDelay.Stop(); Filter(); };
+        _search.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != TextBox.TextProperty) return;
+            _searchDelay.Stop();
+            if (_plan is { Items.Count: > 5000 }) _searchDelay.Start(); else Filter();
+        }; _filter.SelectionChanged += (_, _) => Filter();
         _table.SelectionChanged += (_, _) =>
         {
             var item = (_table.SelectedItem as PlanRow)?.Item; _preview.IsEnabled = item?.Input is not null && !IsWorking;
@@ -213,8 +222,10 @@ public sealed class MainWindow : Window
     private DesktopSettings ReadSettings()
     {
         static string? Value(TextBox box) => string.IsNullOrWhiteSpace(box.Text) ? null : box.Text.Trim();
-        var policy = new Policy { Name = _policyName, Maximum = int.Parse(_maximum.Text ?? ""), NormalMaximum = int.Parse(_normal.Text ?? ""),
-            MaterialMaximum = int.Parse(_material.Text ?? ""), HeightMaximum = int.Parse(_height.Text ?? ""), ProtectLargeSurfaces = _large.IsChecked == true,
+        static int Number(TextBox box, string label) => int.TryParse(box.Text?.Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int value)
+            ? value : throw new ArgumentException($"{label} must be a whole number, such as 1024.");
+        var policy = new Policy { Name = _policyName, Maximum = Number(_maximum, "Color maximum"), NormalMaximum = Number(_normal, "Normal maximum"),
+            MaterialMaximum = Number(_material, "Material maximum"), HeightMaximum = Number(_height, "Height maximum"), ProtectLargeSurfaces = _large.IsChecked == true,
             RecoverMipCounts = _recoverMips.IsChecked == true, RecoverMipRecords = _recoverRecords.IsChecked == true, CompleteKnownMaterials = _completeMaterials.IsChecked == true,
             ProtectCharacters = _characters.IsChecked == true, FitReference = _compareReference.IsChecked == true && _fitReference.IsChecked == true,
             FitProtectedReference = _compareReference.IsChecked == true && _fitReference.IsChecked == true && _fitProtected.IsChecked == true,
@@ -223,7 +234,7 @@ public sealed class MainWindow : Window
         var source = new SourceOptions(_mode.SelectedIndex == 0 ? Value(_source) : null, _mode.SelectedIndex == 1 ? Value(_source) : null,
             Value(_profile), Value(_game), Value(_mods), Value(_profileRoot), Value(_overwrite), OperatingSystem.IsWindows() ? null : Value(_wine), Value(_ini), Value(_exclude)?.Split('|'), Value(_data))
         { ReferenceFolder = _compareReference.IsChecked == true ? Value(_reference) : null, ReplaceMod = _compareReference.IsChecked == true ? Value(_replaceMod) : null };
-        return new() { Source = source, Policy = policy, CompareReference = _compareReference.IsChecked == true, Output = _output.Text?.Trim() ?? "", Cache = _cache.Text?.Trim() ?? "", Workers = int.Parse(_workers.Text ?? "2") };
+        return new() { Source = source, Policy = policy, CompareReference = _compareReference.IsChecked == true, Output = _output.Text?.Trim() ?? "", Cache = _cache.Text?.Trim() ?? "", Workers = Number(_workers, "Workers") is var workers and >= 1 and <= 32 ? workers : throw new ArgumentException("Workers must be from 1 to 32.") };
     }
     public void SetSettings(DesktopSettings settings)
     {
@@ -308,8 +319,11 @@ public sealed class MainWindow : Window
     private void Filter()
     {
         if (_plan is null) return; string query = _search.Text ?? "", filter = _filter.SelectedItem as string ?? "Changed";
-        var rows = _plan.Items.Where(i => filter == "All" || (filter == "Changed" ? i.Decision is Decision.Reduce or Decision.Rebuild : i.Decision.ToString() == filter))
-            .Where(i => (i.Path + " " + i.Origin + " " + i.Reason).Contains(query, StringComparison.OrdinalIgnoreCase)).Select(i => new PlanRow(i)).ToArray();
+        // Rows and their search text are built once per plan, not on every keystroke.
+        if (_rows?.Plan != _plan) _rows = (_plan, _plan.Items.Select(i => new PlanRow(i)).ToArray(), _plan.Items.Select(i => i.Path + " " + i.Origin + " " + i.Reason).ToArray());
+        var (_, all, text) = _rows.Value;
+        var rows = all.Where((r, n) => (filter == "All" || (filter == "Changed" ? r.Item.Decision is Decision.Reduce or Decision.Rebuild : r.Item.Decision.ToString() == filter))
+            && text[n].Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray();
         VisibleCount = rows.Length; _table.ItemsSource = rows;
     }
     public async Task AnalyzeAsync() => await RunAsync(async (settings, progress, ct) =>
