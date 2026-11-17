@@ -33,7 +33,10 @@ The folder source accepts a mod/Data root containing `textures`, or a texture fo
 It includes loose DDS files only; use a profile for archive activation and conflicts.
 `--max` changes all category caps but does not disable protection rules. An explicit
 policy rule such as `{"Pattern":"textures/armor/*","Maximum":1024}` overrides the
-category cap and protection for matching files. Later rules take precedence.
+category cap and lifts character and large-surface protection for matching files.
+Generated LOD, interface and shader resources stay protected under such a rule; the
+plan names the rule. To include them, add `"OverrideGeneratedProtection": true` to a
+rule that matches them. Later rules take precedence.
 
 `--game`, `--mods`, `--profiles`, `--overwrite`, `--wine-prefix`, `--data` and `--ini`
 override profile locations. `--exclude-mods 'Mod A|Mod B'` excludes exact mod names.
