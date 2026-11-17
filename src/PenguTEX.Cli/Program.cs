@@ -122,8 +122,9 @@ public static class Program
         JSON is written to stdout; progress and errors go to stderr. analyze reads only.
         build writes a separate output mod and cache; originals remain untouched.
         Defaults protect large surfaces, character textures, generated LOD and UI.
-        Explicit JSON path rules can override protections. Estimates are texture payload,
-        not resident VRAM. Reference fitting preserves formats and can choose smaller
+        JSON path rules with a cap lift character/landscape protection; generated LOD,
+        interface and shader files need OverrideGeneratedProtection. Estimates are
+        texture payload, not resident VRAM. Reference fitting preserves formats and can choose smaller
         dimensions to meet the previous payload. Install at the compared mod priority.
         Exit codes: 0 file operation succeeded, 1 failure, 2 incomplete source,
         3 required reference parity not met, 130 cancelled. Game validation is separate.

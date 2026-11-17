@@ -241,6 +241,44 @@ public class WorkflowTests
         Assert.Equal("Normal", custom.Classify("textures/landscape/rocks/a_n.dds").Category);
         Assert.Throws<ArgumentException>(() => (policy with { Maximum = 31 }).Validate());
     }
+    [Fact] public void PlainCapRulesKeepGeneratedProtectionUntilExplicitlyOverridden()
+    {
+        var capped = Small with { Rules = [new("textures/*", Maximum: 8)] };
+        foreach (string path in new[] { "textures/interface/logo.dds", "textures/terrain/world/a.dds", "textures/lod/tree.dds", "textures/dyndolod/lod/a.dds", "textures/shaders/x.dds" })
+        {
+            var generated = capped.Classify(path); Assert.Equal(ProtectionKind.Generated, generated.Kind);
+            Assert.Contains("'textures/*'", generated.Protection); Assert.Contains("OverrideGeneratedProtection", generated.Protection);
+        }
+        Assert.Equal(ProtectionKind.Characters, Small.Classify("textures/actors/character/face.dds").Kind);
+        Assert.Equal(ProtectionKind.None, capped.Classify("textures/actors/character/face.dds").Kind);
+        Assert.Equal(Policy.GeneratedProtection, Small.Classify("textures/interface/logo.dds").Protection);
+        // An explicit override stays in force for a later, broader cap; other generated paths stay protected.
+        var lifted = Small with { Rules = [new("textures/interface/*", OverrideGeneratedProtection: true), new("textures/*", Maximum: 16)] };
+        var logo = lifted.Classify("textures/interface/logo.dds"); Assert.Null(logo.Protection); Assert.Equal(16, logo.Maximum);
+        Assert.Equal(ProtectionKind.Generated, lifted.Classify("textures/lod/tree.dds").Kind);
+        var again = lifted with { Rules = [..lifted.Rules, new("*/logo.dds", Protect: true)] };
+        Assert.Equal(ProtectionKind.Rule, again.Classify("textures/interface/logo.dds").Kind);
+        // A cap after an explicit Protect rule lifts that rule, but not the generated protection beneath it.
+        var layered = Small with { Rules = [new("*/logo.dds", Protect: true), new("textures/*", Maximum: 8)] };
+        Assert.Equal(ProtectionKind.Generated, layered.Classify("textures/interface/logo.dds").Kind);
+        Assert.Equal(ProtectionKind.None, layered.Classify("textures/armor/logo.dds").Kind);
+        Assert.Throws<ArgumentException>(() => (Small with { Rules = [new("*", Protect: true, OverrideGeneratedProtection: true)] }).Validate());
+        // Existing policies keep their JSON text, and therefore their policy hash.
+        Assert.DoesNotContain("OverrideGeneratedProtection", System.Text.Json.JsonSerializer.Serialize(capped, JsonFiles.Options));
+        var parsed = System.Text.Json.JsonSerializer.Deserialize<PathRule>("{\"Pattern\":\"a\",\"OverrideGeneratedProtection\":true}", JsonFiles.Options)!;
+        Assert.True(parsed.OverrideGeneratedProtection); Assert.Contains("OverrideGeneratedProtection", System.Text.Json.JsonSerializer.Serialize(parsed, JsonFiles.Options));
+    }
+    [Fact] public void BroadCapRuleReducesOrdinaryTexturesAndReportsProtectedGeneratedOnes()
+    {
+        using var f = new Fixture(); f.File("source/textures/interface/logo.dds", Fixture.Dds()); f.File("source/textures/armor/a.dds", Fixture.Dds());
+        var catalog = CatalogLoader.Load(new(Folder: f.Dir("source")));
+        var plan = Planner.Analyze(catalog, Small with { Maximum = 16, Rules = [new("textures/*", Maximum: 8)] });
+        var logo = plan.Items.Single(i => i.Path.EndsWith("logo.dds")); Assert.Equal(Decision.Protected, logo.Decision);
+        Assert.Contains("OverrideGeneratedProtection", logo.Reason);
+        Assert.Equal(Decision.Reduce, plan.Items.Single(i => i.Path.EndsWith("a.dds")).Decision);
+        plan = Planner.Analyze(catalog, Small with { Maximum = 16, Rules = [new("textures/*", Maximum: 8, OverrideGeneratedProtection: true)] });
+        Assert.All(plan.Items, i => Assert.Equal(Decision.Reduce, i.Decision));
+    }
     [Fact] public void BrieflyDeniedFileReplacementIsRetriedOnlyWhereItIsTransient()
     {
         int calls = 0; var waits = new List<int>();
