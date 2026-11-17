@@ -118,6 +118,24 @@ public sealed class MaterialTests
         var binding = Assert.Single(MaterialReader.ReadBindings(Fixture.Mesh(slot, flags2: 1u << 23), "mesh", "container")).Use;
         Assert.Equal(role, binding.Role); Assert.Contains("TruePBR", binding.Detail);
     }
+    private const uint DefaultLightingFlags = 0x82400301; // includes Remappable_Textures (bit 25)
+    [Theory] [InlineData(0, MaterialRole.Color)] [InlineData(1, MaterialRole.Normal)]
+    public void DefaultLightingFlagsKeepOrdinarySlotMeaning(int slot, MaterialRole role)
+    {
+        var use = Assert.Single(MaterialReader.ReadBindings(Fixture.Mesh(slot, flags1: DefaultLightingFlags), "mesh", "source")).Use;
+        Assert.Equal(role, use.Role);
+        using var f = new Fixture(); f.File("source/textures/a.dds", Fixture.RawDds(mipCount: 2));
+        f.File("source/meshes/shape.nif", Fixture.Mesh(slot, flags1: DefaultLightingFlags));
+        var item = Assert.Single(Planner.Analyze(CatalogLoader.Load(new(Folder: f.Dir("source")), inspectMaterials: true), Fresh).Items);
+        Assert.Equal("Resolved", item.Material!.Status); Assert.Equal(Decision.Rebuild, item.Decision); Assert.True(item.PreserveExistingMips);
+    }
+    [Theory] [InlineData(1u << 4, 0u)] [InlineData(1u << 5, 0u)] [InlineData(1u << 14, 0u)] [InlineData(1u << 23, 0u)]
+    [InlineData(1u << 24, 0u)] [InlineData(0u, 1u << 19)] [InlineData(0u, 1u << 28)]
+    public void ShaderFlagsThatChangeSlotUseStayUnknown(uint flags1, uint flags2)
+    {
+        var use = Assert.Single(MaterialReader.ReadBindings(Fixture.Mesh(flags1: DefaultLightingFlags | flags1, flags2: flags2), "mesh", "source")).Use;
+        Assert.Equal(MaterialRole.Unknown, use.Role);
+    }
     [Fact] public void Bc1EncodingPreservesThePlannedMaterialMaskAtNonDefaultCutoff()
     {
         byte[] pixels = new byte[8 * 8 * 4]; int[] counts = [1, 3, 2, 2];

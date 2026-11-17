@@ -82,7 +82,10 @@ public static class MaterialReader
             // SSE/LE lighting types with ordinary color/normal slots. Special shader variants stay explicit.
             bool pbr = (flags2 & (1u << 23)) != 0;
             bool ordinary = pbr || type is 0 or 1 or 2 or 3 or 4 or 5 or 6 or 7 or 11 or 12 or 16;
-            bool uncertain = controller != -1 || (flags1 & ((1u << 4) | (1u << 5) | (1u << 14) | (1u << 23) | (1u << 24) | (1u << 25))) != 0
+            // Greyscale palettes, landscape, projected UV and multiple textures change how slots are sampled.
+            // Remappable_Textures (bit 25, part of the usual default flags) only lets a texture set be
+            // swapped; the path this mesh names keeps its slot meaning, so it does not block inference.
+            bool uncertain = controller != -1 || (flags1 & ((1u << 4) | (1u << 5) | (1u << 14) | (1u << 23) | (1u << 24))) != 0
                 || (flags2 & ((1u << 19) | (1u << 28))) != 0;
             var (color, cutoff, alphaDetail) = Alpha(alphaId, flags1);
             s.Skip(20); float shaderAlpha = s.F32();

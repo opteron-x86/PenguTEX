@@ -34,6 +34,9 @@ emissive, displacement and packed RMAOS slots. RMAOS channels are filtered
 independently in linear space, without channel rearrangement. Feature textures,
 effect shaders, unsupported shapes, orphaned sets, conflicting roles and unbound
 paths need explicit rules. Filenames alone never authorize pixel filtering.
+The Remappable_Textures shader flag, part of the usual default flags, does not change
+slot meaning and does not block inference. Greyscale-palette, landscape, projected-UV
+and multiple-texture shaders remain explicit.
 
 Normal filtering renormalizes vectors and averages ancillary alpha; unsigned BC5
 uses XY reconstruction only for tangent normals. sRGB normal/data declarations,
