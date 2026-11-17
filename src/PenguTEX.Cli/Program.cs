@@ -119,8 +119,6 @@ public static class Program
     private const string Help = """
         PenguTEX — native Skyrim texture optimization
 
-        --recover-mip-counts true           Recover a complete BC chain with an underreported count
-
         inspect texture.dds                 Validate a DDS header and payload size
         profiles --instance PATH            List mod-manager profiles (MO2; Fluorine on Linux)
         preset --preset balanced            Print a JSON policy (quality/balanced/compact)
@@ -143,7 +141,8 @@ public static class Program
 
         JSON is written to stdout; progress and errors go to stderr. analyze reads only.
         build writes a separate output mod and cache; originals remain untouched.
-        Defaults protect large surfaces, character textures, generated LOD and UI.
+        Presets always protect generated LOD, interface and shader resources. Character
+        and landscape protection are switches in saved policies, off in new presets.
         JSON path rules with a cap lift character/landscape protection; generated LOD,
         interface and shader files need OverrideGeneratedProtection. Estimates are
         texture payload, not resident VRAM. Reference fitting preserves formats and can choose smaller

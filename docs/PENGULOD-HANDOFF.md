@@ -4,6 +4,10 @@ PenguTEX outputs ordinary loose DDS overrides plus `pengutex-manifest.json` (sch
 1). They can be used through normal mod priority. No private PenguLOD build or
 automatic modification of its settings is required.
 
+The usual order is PenguTEX first, then LOD generation: build and install the
+PenguTEX output, then generate LOD from the optimized textures. Running PenguTEX
+again after LOD exists changes LOD inputs, so regenerate LOD afterwards.
+
 Keep a deliberate input choice for each LOD build:
 
 - **Original textures:** disable the PenguTEX output while resolving full textures for
