@@ -36,9 +36,10 @@ The reader checks Skyrim BSA 104/105 folder and filename tables, counts, metadat
 bounds, physical member offsets, embedded-name prefixes and stored sizes. Unreferenced
 bytes inside the declared filename-table region are reported as metadata padding;
 they cannot alter member names or payload boundaries, and no texture bytes are
-removed. Duplicate
-or overlapping payload ranges and out-of-file sizes produce archive-specific
-errors. A malformed member can remain an explicit invalid source while unrelated
+removed. Identical files stored once are accepted: records naming the same payload
+offset must declare the same size and compression, and every such path reads the
+same bytes. Records sharing an offset with different sizes, overlapping payload
+ranges and out-of-file sizes produce archive-specific errors. A malformed member can remain an explicit invalid source while unrelated
 members retain their priority; an invalid archive index blocks a complete source
 inventory.
 
@@ -53,6 +54,6 @@ There is no generic trailing-byte trim, reference-copy fallback or attempt to
 repair corrupt compression by guessing boundaries. Restore/repack a malformed
 archive or provide a validated original conversion for those exceptions.
 
-Tests use synthetic multi-member archives, compression frames, truncation,
-overlap, size contradictions and descriptor faults. A separate Pillow decoder
+Tests use synthetic multi-member archives, shared payloads, compression frames,
+truncation, overlap, size contradictions and descriptor faults. A separate Pillow decoder
 checks recovered canonical DDS levels; game acceptance remains a separate check.
