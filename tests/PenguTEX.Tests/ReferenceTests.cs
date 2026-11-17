@@ -103,6 +103,18 @@ public sealed class ReferenceTests
         Assert.Throws<IOException>(() => JobRunner.Build(catalog, plan, output, cache, progress: progress));
         Assert.Equal(before, File.ReadAllText(Path.Combine(output, JobRunner.ManifestName)));
     }
+    [Fact] public void ReferenceIsRereadOncePerBuildAndMismatchedPlansAreRejectedBeforeWork()
+    {
+        using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds()); f.File("reference/a.dds", Fixture.Dds(4, 4)); f.File("other/a.dds", Fixture.Dds(4, 4));
+        var catalog = Catalog(f); var plan = Planner.Analyze(catalog, Small); int rereads = 0; var refresh = catalog.Reference!.Refresh!;
+        var counted = catalog with { Reference = catalog.Reference with { Refresh = ct => { rereads++; return refresh(ct); } } };
+        string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
+        Assert.Equal(1, JobRunner.Build(counted, plan, output, cache).Files); Assert.Equal(1, rereads);
+        var elsewhere = CatalogLoader.Load(new(Folder: f.Dir("source")) { ReferenceFolder = f.Dir("other") });
+        Assert.Throws<IOException>(() => JobRunner.Build(elsewhere, plan, Path.Combine(f.Root, "second"), cache)); Assert.False(Directory.Exists(Path.Combine(f.Root, "second")));
+        Assert.Throws<IOException>(() => JobRunner.Build(CatalogLoader.Load(new(Folder: f.Dir("source"))), plan, Path.Combine(f.Root, "second"), cache));
+        Assert.Throws<IOException>(() => JobRunner.Build(catalog, Planner.Analyze(CatalogLoader.Load(new(Folder: f.Dir("source"))), Small), Path.Combine(f.Root, "second"), cache));
+    }
     [Theory] [InlineData(true)] [InlineData(false)]
     public void ProfileReferenceUsesItsActualSlotAndNeverBecomesAnOriginal(bool enabled)
     {

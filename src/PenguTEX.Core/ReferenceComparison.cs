@@ -44,12 +44,20 @@ public static class ReferenceComparison
         JsonFiles.Hash(JsonSerializer.Serialize(new { reference.Folder, reference.Placement, reference.Priority,
             Textures = textures.Values.OrderBy(i => i.Path, StringComparer.Ordinal) }, JsonFiles.Options));
 
+    /// <summary>Checks without touching disk that the plan was made for this catalog's reference.</summary>
+    public static bool VerifyPlanMatches(Catalog catalog, OptimizationPlan plan)
+    {
+        if (catalog.Reference is null && plan.Comparison is null) return false;
+        if (catalog.Reference is null || plan.Comparison is null || catalog.Reference.Folder != plan.Comparison.Folder
+            || catalog.Reference.Placement != plan.Comparison.Placement) throw new IOException("Reference comparison is missing. Analyze again.");
+        return true;
+    }
+
     public static void VerifyUnchanged(Catalog catalog, OptimizationPlan plan, CancellationToken ct)
     {
-        if (catalog.Reference is null && plan.Comparison is null) return;
-        if (catalog.Reference is null || plan.Comparison is null) throw new IOException("Reference comparison is missing. Analyze again.");
-        var current = catalog.Reference.Refresh?.Invoke(ct) ?? catalog.Reference;
-        if (Fingerprint(current, Read(current, null, ct)) != plan.Comparison.Fingerprint)
+        if (!VerifyPlanMatches(catalog, plan)) return;
+        var current = catalog.Reference!.Refresh?.Invoke(ct) ?? catalog.Reference;
+        if (Fingerprint(current, Read(current, null, ct)) != plan.Comparison!.Fingerprint)
             throw new IOException("Reference output changed after analysis. Analyze again before publishing a replacement.");
     }
 

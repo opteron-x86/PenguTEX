@@ -90,12 +90,12 @@ public static class JobRunner
         if (catalog.Reference is { } baseline && catalog.Assets.Any(a => Within(a.Container, baseline.Folder)))
             throw new InvalidDataException("Reference files cannot be used as original texture sources.");
         if (workers is < 1 or > 32) throw new ArgumentException("Workers must be between 1 and 32.");
-        if (plan.MaterialFingerprint is not null)
-        {
-            if (catalog.Materials is null) throw new IOException("Material evidence is missing. Analyze again.");
-            catalog.Materials.VerifyUnchanged(plan.MaterialFingerprint, ct);
-        }
-        ReferenceComparison.VerifyUnchanged(catalog, plan, ct);
+        // The catalog was loaded for this plan moments ago: compare what is in memory here, and re-read the
+        // sources from disk once, after generation and before anything is published.
+        if (plan.MaterialFingerprint is not null && catalog.Materials?.Fingerprint != plan.MaterialFingerprint)
+            throw new IOException(catalog.Materials is null ? "Material evidence is missing. Analyze again."
+                : "Material sources changed or cannot be rechecked. Analyze again to review texture semantics.");
+        ReferenceComparison.VerifyPlanMatches(catalog, plan);
         if (new DirectoryInfo(Path.TrimEndingDirectorySeparator(Path.GetFullPath(output))).LinkTarget is not null
             || new DirectoryInfo(Path.TrimEndingDirectorySeparator(Path.GetFullPath(cache))).LinkTarget is not null)
             throw new IOException("Output/cache roots cannot be symbolic links.");

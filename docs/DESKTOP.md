@@ -35,8 +35,8 @@ Start `PenguTEX.Desktop.exe` on Windows or `PenguTEX.Desktop` on Linux in an ext
    shows RGB, individual RGB channels or alpha/data. RGB is displayed without alpha
    masking. Signed BC4/BC5 preview is unavailable; mip copying still preserves them.
    Preview decoding is capped at 16 million pixels per image.
-6. Select Build output mod. Source winners/headers and optional reference metadata are checked again before work; full
-   source hashes are checked during processing. Cancellation preserves previously
+6. Select Build output mod. The sources are analyzed again and compared with the reviewed plan before work; full
+   source hashes are taken during processing, and mesh evidence and any reference are re-read once more before publication. Cancellation preserves previously
    published output and verified cache. Re-running reuses cached CPU work and copies existing mips again.
    After Build reaches its texture count, Verify reads every staged texture and
    checks its hash. Publish then moves the verified output into place; Cleanup

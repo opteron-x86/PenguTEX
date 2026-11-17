@@ -72,6 +72,22 @@ public sealed class MaterialTests
         Assert.Empty(Directory.EnumerateFiles(f.Dir("output")));
         Assert.ThrowsAny<OperationCanceledException>(() => CatalogLoader.Load(source, ct: new CancellationToken(true), inspectMaterials: true));
     }
+    [Fact] public void MaterialEvidenceIsRereadOncePerBuildAndAPlanForOtherEvidenceIsRejectedBeforeWork()
+    {
+        using var f = new Fixture(); f.File("source/textures/a.dds", Fixture.RawDds(mipCount: 1)); f.File("source/meshes/a.nif", Fixture.Mesh());
+        var source = new SourceOptions(Folder: f.Dir("source")); var catalog = CatalogLoader.Load(source, inspectMaterials: true); var plan = Planner.Analyze(catalog, Fresh);
+        int rereads = 0; var refresh = catalog.Materials!.RefreshFingerprint!;
+        var counted = catalog with { Materials = catalog.Materials with { RefreshFingerprint = ct => { rereads++; return refresh(ct); } } };
+        string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
+        Assert.Equal(1, JobRunner.Build(counted, plan, output, cache, processor: new CpuMipProcessor()).Files); Assert.Equal(1, rereads);
+        // A plan made from different mesh evidence is refused from memory, without rereading or generating anything.
+        f.File("source/meshes/a.nif", Fixture.Mesh(1)); var changed = CatalogLoader.Load(source, inspectMaterials: true);
+        var recounted = changed with { Materials = changed.Materials! with { RefreshFingerprint = ct => { rereads++; return refresh(ct); } } };
+        string before = File.ReadAllText(Path.Combine(output, JobRunner.ManifestName));
+        Assert.Throws<IOException>(() => JobRunner.Build(recounted, plan, output, cache, processor: new CpuMipProcessor())); Assert.Equal(1, rereads);
+        Assert.Equal(before, File.ReadAllText(Path.Combine(output, JobRunner.ManifestName)));
+        Assert.Throws<IOException>(() => JobRunner.Build(catalog with { Materials = null }, plan, output, cache, processor: new CpuMipProcessor()));
+    }
     [Fact] public void TruncatedAndOversizedMaterialMetadataIsReported()
     {
         using var f = new Fixture(); f.File("source/meshes/broken.nif", Fixture.Mesh()[..70]);

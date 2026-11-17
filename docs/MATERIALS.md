@@ -48,8 +48,9 @@ vertex-dependent or nonstandard alpha tests remain unresolved.
 
 Available original mip levels are retained byte-for-byte. Only absent levels are
 filtered/encoded, preserving the DDS format. Source hashes, semantics, threshold and
-binding examples appear in manifests. Mesh fingerprints are rechecked before work
-and publication; changes require analysis again. A malformed mesh is diagnosed,
+binding examples appear in manifests. A build refuses a plan made from
+different mesh evidence, and re-reads the meshes once before publication; changes
+require analysis again. A malformed mesh is diagnosed,
 and any readable texture-set paths are retained as unknown uses. Unreadable meshes
 prevent a complete-coverage claim.
 
