@@ -24,7 +24,7 @@ public sealed class CpuMipProcessor : ITextureProcessor
         // Completion decodes only the smallest original level; a rebuild decodes the top one.
         int decoded = item.PreserveExistingMips ? info.MipCount - 1 : 0;
         using var reservation = Budget.Reserve((long)Math.Max(1, info.Width >> decoded) * Math.Max(1, info.Height >> decoded), ct);
-        int mips = 1 + (int)Math.Log2(Math.Max(item.TargetWidth, item.TargetHeight));
+        int mips = Dds.FullMipCount(item.TargetWidth, item.TargetHeight);
         Dds.ResizeHeader(header, info, item.TargetWidth, item.TargetHeight, mips); target.Write(header);
         PixelImage pixels; int firstGenerated = 0, downsample = item.DropMips;
         if (item.PreserveExistingMips)

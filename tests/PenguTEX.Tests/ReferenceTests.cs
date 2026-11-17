@@ -16,8 +16,8 @@ public sealed class ReferenceTests
         f.File("source/c.dds", [1, 2, 3]); f.File("reference/c.dds", Fixture.Dds());
         var plan = Planner.Analyze(Catalog(f), Small); var report = Assert.IsType<ReferenceReport>(plan.Comparison);
         Assert.Equal(1, report.LargerCount); Assert.Equal(3, report.UnknownCount); Assert.True(report.HasUnresolved);
-        Assert.Contains(report.Items, p => p.Status == "MissingSource");
-        Assert.Contains(report.Items, p => p.Status == "UnknownReference"); Assert.Contains(report.Items, p => p.Status == "UnknownSource");
+        Assert.Contains(report.Items, p => p.Status == ComparisonStatus.MissingSource);
+        Assert.Contains(report.Items, p => p.Status == ComparisonStatus.UnknownReference); Assert.Contains(report.Items, p => p.Status == ComparisonStatus.UnknownSource);
     }
     [Fact] public void ReferenceFittingPreservesFormatAndMeetsPayloadAsWellAsDimensions()
     {
@@ -128,11 +128,11 @@ public sealed class ReferenceTests
         f.File("instance/mods/Low/textures/a.dds", Fixture.Dds(32, 32));
         f.File("instance/mods/High/textures/b.dds", Fixture.Dds(32, 32));
         var options = new SourceOptions(Instance: f.Dir("instance")) { ReferenceFolder = f.Dir("instance/mods/Previous") };
-        var catalog = CatalogLoader.Load(options); Assert.DoesNotContain(catalog.Diagnostics, d => d.Severity == "Error");
+        var catalog = CatalogLoader.Load(options); Assert.DoesNotContain(catalog.Diagnostics, d => d.Severity == Severity.Error);
         Assert.DoesNotContain(catalog.Assets, a => a.Origin == "Previous");
         var plan = Planner.Analyze(catalog, Small with { FitReference = true });
         Assert.Equal(1, plan.ChangedCount); Assert.False(plan.Comparison!.HasUnresolved);
-        Assert.Contains(plan.Comparison.Items, i => i.Path.EndsWith("b.dds") && i.Status == "HigherPriority");
+        Assert.Contains(plan.Comparison.Items, i => i.Path.EndsWith("b.dds") && i.Status == ComparisonStatus.HigherPriority);
         Assert.Equal("Previous", plan.Comparison.Placement);
     }
     [Fact] public void PresetsDeclareSmallerLimitsAndLegacyNumericPoliciesArePreserved()
@@ -183,16 +183,16 @@ public sealed class ReferenceTests
         string output = f.Dir("output"), cache = f.Dir("cache"); var cpu = new PenguTEX.Imaging.CpuMipProcessor();
         var first = JobRunner.Build(catalog, plan, output, cache, processor: cpu);
         var entry = Assert.Single(first.Manifest.Files); Assert.Equal(catalog.Assets[0].Container, entry.SourceContainer);
-        JsonFiles.Write(Path.Combine(CacheStore.Folder(cache), entry.Recipe + ".dds.json"), entry with { Operation = "ReferenceCopy" });
+        JsonFiles.Write(Path.Combine(CacheStore.Folder(cache), entry.Recipe + ".dds.json"), entry with { Operation = TextureOperation.ReferenceCopy });
         var rebuilt = JobRunner.Build(catalog, plan, output, cache, processor: cpu);
         Assert.Equal(0, rebuilt.Reused); Assert.True(rebuilt.Manifest.OriginalsOnly);
         Assert.Equal(catalog.Assets[0].Container, rebuilt.Manifest.Files[0].SourceContainer);
         var cached = JobRunner.Build(catalog, plan, output, cache, processor: cpu);
         Assert.Equal(1, cached.Reused); Assert.Equal(catalog.Assets[0].Container, cached.Manifest.Files[0].SourceContainer);
-        var legacy = first.Manifest with { Files = [entry with { Operation = "ReferenceCopy" }] };
+        var legacy = first.Manifest with { Files = [entry with { Operation = TextureOperation.ReferenceCopy }] };
         JsonFiles.Write(Path.Combine(output, JobRunner.ManifestName), legacy);
         Assert.False(JobRunner.Verify(output).OriginalsOnly);
-        var report = plan.Comparison! with { Items = [plan.Comparison.Items[0] with { Status = "ReferenceRetained" }] };
+        var report = plan.Comparison! with { Items = [plan.Comparison.Items[0] with { Status = ComparisonStatus.ReferenceRetained }] };
         Assert.True(report.HasUnresolved); Assert.Contains("originals-only", report.Assessment);
         Assert.True(JobRunner.Build(catalog, plan, output, cache, processor: cpu).Manifest.OriginalsOnly);
     }

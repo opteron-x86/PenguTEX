@@ -36,6 +36,10 @@ public sealed class ProtectedTextureException(string message) : NotSupportedExce
 
 public static class Dds
 {
+    /// <summary>Levels in a complete chain down to 1×1 for a top level of this size.</summary>
+    public static int FullMipCount(int width, int height) => 1 + (int)Math.Log2(Math.Max(width, height));
+    public static int FullMipCount(uint width, uint height) => 1 + (int)Math.Log2(Math.Max(width, height));
+
     // For validated record recovery on a forward-only stream, inspection consumes the records.
     public static (DdsInfo Info, byte[] Header) Inspect(Stream input, long? length = null, bool recoverMipCount = false,
         bool recoverMipRecords = false, CancellationToken ct = default)
@@ -54,7 +58,7 @@ public static class Dds
         if (width == 0 || height == 0 || width > 16384 || height > 16384)
             throw new InvalidDataException("DDS dimensions must be between 1 and 16384.");
         int mips = (U(8) & 0x20000) == 0 ? 1 : (int)Math.Max(1, rawMips);
-        if (mips < 1 || mips > 1 + (int)Math.Log2(Math.Max(width, height)))
+        if (mips < 1 || mips > Dds.FullMipCount(width, height))
             throw new InvalidDataException("DDS mip count exceeds its dimensions.");
         if ((U(112) & (0xfe00 | 0x200000)) != 0 || U(24) > 1)
             throw new ProtectedTextureException("Cube maps and volume textures are deliberately protected; their surfaces are not assessed or rewritten.");
@@ -137,14 +141,14 @@ public static class Dds
         long? actualLength = length ?? (input.CanSeek ? input.Length : null);
         if (recoverMipCount && info.IsBlockCompressed && actualLength.HasValue && actualLength.Value != header.Length + payload)
         {
-            int fullCount = 1 + (int)Math.Log2(Math.Max(width, height));
+            int fullCount = Dds.FullMipCount(width, height);
             long fullPayload = Enumerable.Range(0, fullCount).Sum(info.MipBytes);
             if (mips < fullCount && actualLength.Value == header.Length + fullPayload)
             { info = info with { MipCount = fullCount, DeclaredMipCount = mips }; payload = fullPayload; }
         }
         if (recoverMipRecords && cc == "DXT1" && info.HeaderBytes == 128 && mips == 1 && actualLength.HasValue)
         {
-            int fullCount = 1 + (int)Math.Log2(Math.Max(width, height));
+            int fullCount = Dds.FullMipCount(width, height);
             long fullPayload = Enumerable.Range(0, fullCount).Sum(info.MipBytes);
             long framedLength = checked(header.Length + fullPayload + 16L * (fullCount - 1) + 5);
             if (fullCount > 1 && actualLength.Value == framedLength)
@@ -216,7 +220,7 @@ public static class Dds
 
     public static void ResizeHeader(byte[] header, DdsInfo info, int width, int height, int mips)
     {
-        if (width < 1 || height < 1 || width > 16384 || height > 16384 || mips < 1 || mips > 1 + (int)Math.Log2(Math.Max(width, height)))
+        if (width < 1 || height < 1 || width > 16384 || height > 16384 || mips < 1 || mips > Dds.FullMipCount(width, height))
             throw new ArgumentException("Invalid output dimensions/mip count.");
         void Set(int at, uint n) => BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(at), n);
         uint flags = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(8));

@@ -78,7 +78,8 @@ public sealed record SourceOptions(string? Folder = null, string? Instance = nul
     public string? ReferenceFolder { get; init; }
     public string? ReplaceMod { get; init; }
 }
-public sealed record Diagnostic(string Severity, string Message);
+public enum Severity { Error, Warning, Info }
+public sealed record Diagnostic(Severity Severity, string Message);
 public sealed record Asset(string Path, string Origin, string Container, long Length, Func<Stream> Open)
 {
     public int Priority { get; init; }
@@ -94,7 +95,8 @@ public sealed record ReferenceCatalog(string Folder, string Placement, int Prior
     public Func<CancellationToken, ReferenceCatalog>? Refresh { get; init; }
 }
 public sealed record JobProgress(string Phase, int Done, int Total, string Path, string Message);
-// ReferenceCopy is a legacy value: readable for reports, rejected by every build.
+// ReferenceCopy values are legacy: readable in old reports and manifests, never produced, rejected by every build.
+public enum TextureOperation { MipCopy, Rebuild, CompleteMips, RepairHeader, RecoverMipRecords, ReferenceCopy }
 public enum Decision { Keep, Reduce, Rebuild, Protected, Unsupported, Invalid, ReferenceCopy }
 public sealed record PlanItem(string Path, string Origin, string Container, string Category, Decision Decision,
     string Reason, DdsInfo? Input, int DropMips, int TargetWidth, int TargetHeight, long OutputPayload)
@@ -103,8 +105,9 @@ public sealed record PlanItem(string Path, string Origin, string Container, stri
     public bool PreserveExistingMips { get; init; }
     public int AlphaCutoff { get; init; } = 128;
     public MaterialHint? Material { get; init; }
-    public string Operation => Input?.RecordLayout is not null && Decision == Decision.Reduce ? "RecoverMipRecords" : Decision == Decision.Rebuild ? PreserveExistingMips ? "CompleteMips" : "Rebuild"
-        : Input?.DeclaredMipCount is not null && DropMips == 0 ? "RepairHeader" : "MipCopy";
+    public TextureOperation Operation => Input?.RecordLayout is not null && Decision == Decision.Reduce ? TextureOperation.RecoverMipRecords
+        : Decision == Decision.Rebuild ? PreserveExistingMips ? TextureOperation.CompleteMips : TextureOperation.Rebuild
+        : Input?.DeclaredMipCount is not null && DropMips == 0 ? TextureOperation.RepairHeader : TextureOperation.MipCopy;
     public long SavedBytes => Input is null ? 0 : Input.PayloadBytes - OutputPayload;
 }
 public sealed record OptimizationPlan(int Schema, SourceOptions Source, Policy Policy, DateTimeOffset Created,
@@ -117,7 +120,7 @@ public sealed record OptimizationPlan(int Schema, SourceOptions Source, Policy P
     public int ChangedCount => Items.Count(x => x.Decision is Decision.Reduce or Decision.Rebuild);
     public long SavedPayloadBytes => Items.Sum(x => x.SavedBytes);
     public long InputPayloadBytes => Items.Sum(x => x.Input?.PayloadBytes ?? 0);
-    public bool CompleteSource => Diagnostics.All(d => d.Severity != "Error");
+    public bool CompleteSource => Diagnostics.All(d => d.Severity != Severity.Error);
 }
 
 public interface ITextureProcessor

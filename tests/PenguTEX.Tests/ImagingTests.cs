@@ -29,7 +29,7 @@ public sealed class ImagingTests
         var plan = Planner.Analyze(catalog, policy); var item = Assert.Single(plan.Items); Assert.Equal(Decision.Rebuild, item.Decision);
         string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
         var result = JobRunner.Build(catalog, plan, output, cache, processor: new CpuMipProcessor());
-        var entry = Assert.Single(result.Manifest.Files); Assert.Equal("Rebuild", entry.Operation); Assert.Equal(semantic, entry.Semantic);
+        var entry = Assert.Single(result.Manifest.Files); Assert.Equal(TextureOperation.Rebuild, entry.Operation); Assert.Equal(semantic, entry.Semantic);
         using (var file = File.OpenRead(Path.Combine(output, "textures/test.dds")))
         {
             var info = Dds.Inspect(file).Info;

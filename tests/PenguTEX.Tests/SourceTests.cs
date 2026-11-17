@@ -24,7 +24,7 @@ public class SourceTests
         var opened = Mo2Instance.Open(instance);
         Assert.Equal("Profile forêt", Assert.Single(opened.ListProfiles()));
         var catalog = CatalogLoader.Load(new(Instance: instance));
-        Assert.DoesNotContain(catalog.Diagnostics, d => d.Severity == "Error");
+        Assert.DoesNotContain(catalog.Diagnostics, d => d.Severity == Severity.Error);
         Assert.Equal("Textures", Assert.Single(catalog.Assets).Origin);
     }
     [Fact] public void LinuxMo2WindowsPathsUseTheSelectedPrefix()
@@ -38,7 +38,7 @@ public class SourceTests
         f.Text("compatdata/pfx/drive_c/Mod library/profiles/Example/skyrim.ini", "[Archive]\nsResourceArchiveList=\nsResourceArchiveList2=\n");
         f.File("compatdata/pfx/drive_c/Mod library/mods/Originals/textures/a.dds", Fixture.Dds());
         var catalog = CatalogLoader.Load(new(Instance: f.Dir("instance"), WinePrefix: f.Dir("compatdata")));
-        Assert.DoesNotContain(catalog.Diagnostics, d => d.Severity == "Error");
+        Assert.DoesNotContain(catalog.Diagnostics, d => d.Severity == Severity.Error);
         Assert.Equal("Originals", Assert.Single(catalog.Assets).Origin);
     }
     [Fact] public void WindowsReferenceFolderAliasesCannotOverlapOriginals()
@@ -56,7 +56,7 @@ public class SourceTests
         f.File("instance/mods/Low/textures/test.dds", Fixture.Dds());
         f.File("instance/mods/High/textures/test.dds", Fixture.Dds(8, 8));
         var catalog = CatalogLoader.Load(source with { ReferenceFolder = f.Dir("instance/mods/High").ToUpperInvariant() });
-        Assert.DoesNotContain(catalog.Diagnostics, d => d.Severity == "Error");
+        Assert.DoesNotContain(catalog.Diagnostics, d => d.Severity == Severity.Error);
         Assert.Equal("Low", Assert.Single(catalog.Assets).Origin);
         Assert.NotNull(catalog.Reference);
         Assert.Single(catalog.Reference.Assets);
@@ -77,7 +77,7 @@ public class SourceTests
         f.File("instance/mods/Low/textures/test.dds", Fixture.Dds());
         f.File("instance/mods/High/Textures/Test.dds", Fixture.Dds(32));
         f.File("instance/mods/LowDisabled/textures/test.dds", Fixture.Dds(64));
-        var catalog = CatalogLoader.Load(source); Assert.DoesNotContain(catalog.Diagnostics, d => d.Severity == "Error");
+        var catalog = CatalogLoader.Load(source); Assert.DoesNotContain(catalog.Diagnostics, d => d.Severity == Severity.Error);
         Assert.Equal("High", Assert.Single(catalog.Assets).Origin);
         f.File("instance/overwrite/textures/test.dds", Fixture.Dds(64));
         Assert.Equal("overwrite", Assert.Single(CatalogLoader.Load(source).Assets).Origin);
@@ -98,7 +98,7 @@ public class SourceTests
         if (OperatingSystem.IsWindows()) return;
         using var f = new Fixture(); f.File("input/textures/A.dds", Fixture.Dds()); f.File("input/textures/a.dds", Fixture.Dds());
         var catalog = CatalogLoader.Load(new(Folder: Path.Combine(f.Root, "input")));
-        Assert.Contains(catalog.Diagnostics, d => d.Severity == "Error" && d.Message.Contains("collision"));
+        Assert.Contains(catalog.Diagnostics, d => d.Severity == Severity.Error && d.Message.Contains("collision"));
         Assert.False(Planner.Analyze(catalog, new()).CompleteSource);
     }
     [Theory] [InlineData("pengutex-manifest.json")] [InlineData("VRAMrOutput.tmp")]
@@ -126,7 +126,7 @@ public class SourceTests
     [Fact] public void MissingEnabledModIsExplicit()
     {
         using var f = new Fixture(); var source = Setup(f); f.Text("instance/profiles/Example/modlist.txt", "+Missing\n");
-        Assert.Contains(CatalogLoader.Load(source).Diagnostics, d => d.Severity == "Error");
+        Assert.Contains(CatalogLoader.Load(source).Diagnostics, d => d.Severity == Severity.Error);
     }
     [Fact] public void ResolvesWineZPathsAndDoesNotInventCMapping()
     {
@@ -148,7 +148,7 @@ public class SourceTests
         f.File("instance/mods/Low/A.bsa", Fixture.Bsa(Fixture.Dds()));
         f.File("instance/mods/High/B.bsa", Fixture.Bsa(Fixture.Dds(32)));
         var catalog = CatalogLoader.Load(options);
-        Assert.DoesNotContain(catalog.Diagnostics, d => d.Severity == "Error");
+        Assert.DoesNotContain(catalog.Diagnostics, d => d.Severity == Severity.Error);
         var winner = Assert.Single(catalog.Assets); Assert.Equal("B.bsa", winner.Origin);
         using (var stream = winner.Open()) Assert.Equal(32, Dds.Inspect(stream, winner.Length).Info.Width);
         f.File("instance/mods/Low/textures/archive.dds", Fixture.Dds(64));
@@ -175,8 +175,8 @@ public class SourceTests
         using var f = new Fixture(); var options = Setup(f);
         f.Text("instance/profiles/Example/skyrim.ini", "[Archive]\nsResourceArchiveList=Required.bsa, Skyrim - Patch.bsa\nsResourceArchiveList2=\n");
         var catalog = CatalogLoader.Load(options);
-        Assert.Contains(catalog.Diagnostics, d => d.Severity == "Error" && d.Message.Contains("Required.bsa"));
-        Assert.Contains(catalog.Diagnostics, d => d.Severity == "Warning" && d.Message.Contains("Patch.bsa"));
+        Assert.Contains(catalog.Diagnostics, d => d.Severity == Severity.Error && d.Message.Contains("Required.bsa"));
+        Assert.Contains(catalog.Diagnostics, d => d.Severity == Severity.Warning && d.Message.Contains("Patch.bsa"));
         Assert.False(Planner.Analyze(catalog, new()).CompleteSource);
     }
 }

@@ -22,7 +22,7 @@ public sealed class RecordRecoveryTests
         f.File("source/a.dds", source); var catalog = CatalogLoader.Load(new(Folder: f.Dir("source")));
         Assert.Equal(Decision.Invalid, Planner.Analyze(catalog, new()).Items[0].Decision);
         var plan = Planner.Analyze(catalog, Recovery(16 >> drop)); var item = Assert.Single(plan.Items);
-        Assert.Equal("RecoverMipRecords", item.Operation); Assert.Equal(5, item.Input!.MipCount);
+        Assert.Equal(TextureOperation.RecoverMipRecords, item.Operation); Assert.Equal(5, item.Input!.MipCount);
         var built = JobRunner.Build(catalog, plan, f.Dir("output"), f.Dir("cache"));
         var entry = Assert.Single(built.Manifest.Files); Assert.True(built.Manifest.OriginalsOnly);
         Assert.Equal("BC1-mip-records16-zero-tail5", entry.SourceRecordLayout); Assert.Equal(1, entry.DeclaredSourceMipCount);

@@ -105,7 +105,7 @@ public sealed class MainWindow : Window
             var item = (_table.SelectedItem as PlanRow)?.Item; _preview.IsEnabled = item?.Input is not null && !IsWorking;
             _detail.Text = item is null ? "Select a texture to inspect its decision."
                 : $"{item.Path}\n{item.Origin} • {item.Category} • {item.Reason}" + (item.Material is { } material
-                    ? $"\nMaterial: {material.Status} • {material.Role} • {material.UseCount} bindings\n" + string.Join("\n", material.Examples.Select(e => $"{e.Mesh} • shape {e.Shape}, shader {e.Shader}, slot {e.Slot}: {e.Detail}")) : "");
+                    ? $"\nMaterial: {material.Status.Text()} • {material.Role} • {material.UseCount} bindings\n" + string.Join("\n", material.Examples.Select(e => $"{e.Mesh} • shape {e.Shape}, shader {e.Shader}, slot {e.Slot}: {e.Detail}")) : "");
         };
         foreach (var box in new[] { _source, _profile, _game, _data, _mods, _profileRoot, _overwrite, _wine, _ini, _exclude, _maximum, _normal, _material, _height, _rules, _reference, _replaceMod })
             box.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) InvalidatePlan(); };
@@ -400,7 +400,7 @@ public sealed class MainWindow : Window
     }
     private sealed record PlanRow(PlanItem Item)
     {
-        public string Path => Item.Path; public string Origin => Item.Origin; public string Decision => Item.PreserveExistingMips ? "Complete mips" : Item.Operation == "RepairHeader" ? "Repair header" : Item.Decision.ToString();
+        public string Path => Item.Path; public string Origin => Item.Origin; public string Decision => Item.PreserveExistingMips ? "Complete mips" : Item.Operation == TextureOperation.RepairHeader ? "Repair header" : Item.Decision.ToString();
         public string Format => (Item.Input?.Format ?? "—") + (Item.Input?.Srgb == true ? " sRGB" : "");
         public string Dimensions => Item.Input is null ? "—" : $"{Item.Input.Width}×{Item.Input.Height} → {Item.TargetWidth}×{Item.TargetHeight}";
         public string Saved => (Item.SavedBytes / 1048576d).ToString("N2");
@@ -419,10 +419,10 @@ public sealed class MainWindow : Window
         public string Path => Item.Path;
         public string Status => Item.Status switch
         {
-            "ReferenceRetained" => "Carried unchanged", "MissingSource" => "Missing original",
-            "IncompleteMips" => "Missing mip levels",
-            "UnknownSource" => "Unreadable original", "UnknownReference" => "Unreadable reference",
-            "HigherPriority" => "Higher priority wins", "SamePayload" => "Same payload", "NewReduction" => "New reduction", _ => Item.Status,
+            ComparisonStatus.ReferenceRetained => "Carried unchanged", ComparisonStatus.MissingSource => "Missing original",
+            ComparisonStatus.IncompleteMips => "Missing mip levels",
+            ComparisonStatus.UnknownSource => "Unreadable original", ComparisonStatus.UnknownReference => "Unreadable reference",
+            ComparisonStatus.HigherPriority => "Higher priority wins", ComparisonStatus.SamePayload => "Same payload", ComparisonStatus.NewReduction => "New reduction", _ => Item.Status.ToString(),
         };
         public string Previous => Describe(Item.Previous);
         public string Proposed => Describe(Item.Proposed);

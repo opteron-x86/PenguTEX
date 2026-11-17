@@ -1,6 +1,4 @@
 // Adapted from PenguLOD / AnvilLOD, GPL-3.0-only. See docs/PROVENANCE.md.
-using PenguTEX.Assets.Paths;
-
 namespace PenguTEX.Assets.Paths;
 
 /// <summary>Host paths and Wine drive mappings. Game-relative paths remain in GamePath.</summary>

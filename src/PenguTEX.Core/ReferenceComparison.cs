@@ -3,17 +3,18 @@ using System.Text.Json;
 namespace PenguTEX.Core;
 
 public sealed record ReferenceTexture(string Path, long FileBytes, DdsInfo? Info, string? Problem);
-public sealed record ReferenceDifference(string Path, string Source, string Status, string Reason,
+public enum ComparisonStatus { Larger, Smaller, SamePayload, NewReduction, IncompleteMips, HigherPriority, UnknownReference, UnknownSource, MissingSource, ReferenceRetained }
+public sealed record ReferenceDifference(string Path, string Source, ComparisonStatus Status, string Reason,
     DdsInfo? Previous, DdsInfo? Proposed, long? PreviousPayload, long? ProposedPayload)
 {
     public long? ChangeBytes => PreviousPayload.HasValue && ProposedPayload.HasValue ? ProposedPayload - PreviousPayload : null;
 }
 public sealed record ReferenceReport(string Folder, string Placement, string Fingerprint, IReadOnlyList<ReferenceDifference> Items)
 {
-    public int LargerCount => Items.Count(i => i.Status == "Larger");
-    public int UnknownCount => Items.Count(i => i.Status is "UnknownReference" or "UnknownSource" or "MissingSource");
-    public int CarriedCount => Items.Count(i => i.Status == "ReferenceRetained");
-    public int IncompleteMipCount => Items.Count(i => i.Status == "IncompleteMips");
+    public int LargerCount => Items.Count(i => i.Status == ComparisonStatus.Larger);
+    public int UnknownCount => Items.Count(i => i.Status is ComparisonStatus.UnknownReference or ComparisonStatus.UnknownSource or ComparisonStatus.MissingSource);
+    public int CarriedCount => Items.Count(i => i.Status == ComparisonStatus.ReferenceRetained);
+    public int IncompleteMipCount => Items.Count(i => i.Status == ComparisonStatus.IncompleteMips);
     public long KnownPayloadChange => Items.Sum(i => i.ChangeBytes ?? 0);
     public bool HasUnresolved => LargerCount != 0 || UnknownCount != 0 || IncompleteMipCount != 0 || CarriedCount != 0;
     public string Assessment => CarriedCount != 0 ? "Legacy output contains reference copies and does not meet the originals-only requirement. Rebuild from original textures."
@@ -76,7 +77,7 @@ public static class ReferenceComparison
     {
         int width = Math.Max(1, input.Width >> drop), height = Math.Max(1, input.Height >> drop);
         var target = input with { Width = width, Height = height, DeclaredMipCount = null,
-            MipCount = rebuild ? 1 + (int)Math.Log2(Math.Max(width, height)) : input.MipCount - drop };
+            MipCount = rebuild ? Dds.FullMipCount(width, height) : input.MipCount - drop };
         return target with { PayloadBytes = Enumerable.Range(0, target.MipCount).Sum(target.MipBytes) };
     }
 
@@ -88,23 +89,23 @@ public static class ReferenceComparison
         foreach (var old in references.Values.OrderBy(i => i.Path, StringComparer.Ordinal))
         {
             if (!items.TryGetValue(old.Path, out var item))
-            { differences.Add(new(old.Path, "", "MissingSource", "No original winner found for a path supplied by the previous output; its removal needs review.", old.Info, null, old.Info?.PayloadBytes, null)); continue; }
+            { differences.Add(new(old.Path, "", ComparisonStatus.MissingSource, "No original winner found for a path supplied by the previous output; its removal needs review.", old.Info, null, old.Info?.PayloadBytes, null)); continue; }
             if (item.Decision == Decision.ReferenceCopy)
-            { differences.Add(new(item.Path, item.Origin, "ReferenceRetained", item.Reason, old.Info, old.Info, old.Info?.PayloadBytes, old.Info?.PayloadBytes)); continue; }
+            { differences.Add(new(item.Path, item.Origin, ComparisonStatus.ReferenceRetained, item.Reason, old.Info, old.Info, old.Info?.PayloadBytes, old.Info?.PayloadBytes)); continue; }
             if (assets[item.Path].Priority > reference.Priority)
-            { differences.Add(new(item.Path, item.Origin, "HigherPriority", "An unchanged higher-priority source wins over both outputs.", item.Input, item.Input, item.Input?.PayloadBytes, item.Input?.PayloadBytes)); continue; }
+            { differences.Add(new(item.Path, item.Origin, ComparisonStatus.HigherPriority, "An unchanged higher-priority source wins over both outputs.", item.Input, item.Input, item.Input?.PayloadBytes, item.Input?.PayloadBytes)); continue; }
             DdsInfo? proposed = item.Input is null || item.Input.DeclaredMipCount is not null && item.Decision is not (Decision.Reduce or Decision.Rebuild) ? null : ReferenceComparison.Target(item.Input, item.DropMips, item.Decision == Decision.Rebuild);
-            string status = old.Info is null ? "UnknownReference" : proposed is null ? "UnknownSource"
-                : proposed.Width > old.Info.Width || proposed.Height > old.Info.Height || proposed.PayloadBytes > old.Info.PayloadBytes ? "Larger"
-                : !CoversReferenceMips(proposed, old.Info) ? "IncompleteMips"
-                : proposed.PayloadBytes < old.Info.PayloadBytes ? "Smaller" : "SamePayload";
-            string reason = status == "IncompleteMips" ? "The retained chain stops before the reference's smallest mip levels. " + item.Reason : old.Problem ?? item.Reason;
+            var status = old.Info is null ? ComparisonStatus.UnknownReference : proposed is null ? ComparisonStatus.UnknownSource
+                : proposed.Width > old.Info.Width || proposed.Height > old.Info.Height || proposed.PayloadBytes > old.Info.PayloadBytes ? ComparisonStatus.Larger
+                : !CoversReferenceMips(proposed, old.Info) ? ComparisonStatus.IncompleteMips
+                : proposed.PayloadBytes < old.Info.PayloadBytes ? ComparisonStatus.Smaller : ComparisonStatus.SamePayload;
+            string reason = status == ComparisonStatus.IncompleteMips ? "The retained chain stops before the reference's smallest mip levels. " + item.Reason : old.Problem ?? item.Reason;
             differences.Add(new(item.Path, item.Origin, status, reason, old.Info, proposed, old.Info?.PayloadBytes, proposed?.PayloadBytes));
         }
         foreach (var item in plan.Where(i => !references.ContainsKey(i.Path) && i.Decision is Decision.Reduce or Decision.Rebuild))
         {
             var proposed = Target(item.Input!, item.DropMips, item.Decision == Decision.Rebuild);
-            differences.Add(new(item.Path, item.Origin, proposed.PayloadBytes > item.Input!.PayloadBytes ? "Larger" : "NewReduction",
+            differences.Add(new(item.Path, item.Origin, proposed.PayloadBytes > item.Input!.PayloadBytes ? ComparisonStatus.Larger : ComparisonStatus.NewReduction,
                 "Compared with the original winner; the reference had no override at this path.", item.Input, proposed, item.Input.PayloadBytes, proposed.PayloadBytes));
         }
         return new(reference.Folder, reference.Placement, Fingerprint(reference, references), differences);

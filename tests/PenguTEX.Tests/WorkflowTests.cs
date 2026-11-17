@@ -325,13 +325,13 @@ public class WorkflowTests
         var plan = Planner.Analyze(counted, Small with { Rules = [new("*", 8, RebuildMips: true, Semantic: TextureSemantic.LinearData)] });
         opens = 0; string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
         var built = JobRunner.Build(counted, plan, output, cache, processor: new PenguTEX.Imaging.CpuMipProcessor());
-        Assert.Equal(2, opens); var entry = Assert.Single(built.Manifest.Files); Assert.Equal("Rebuild", entry.Operation);
+        Assert.Equal(2, opens); var entry = Assert.Single(built.Manifest.Files); Assert.Equal(TextureOperation.Rebuild, entry.Operation);
         Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(original)), entry.SourceHash);
         Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(output, "textures/a.dds")))), entry.OutputHash);
         opens = 0; Assert.Equal(1, JobRunner.Build(counted, plan, output, cache, processor: new PenguTEX.Imaging.CpuMipProcessor()).Reused); Assert.Equal(1, opens);
         // A mip copy is not cached: one read produces both the output and the source hash.
         var copy = Planner.Analyze(counted, Small); opens = 0; string copies = Path.Combine(f.Root, "copies");
-        var copied = JobRunner.Build(counted, copy, copies, cache); Assert.Equal(1, opens); Assert.Equal("MipCopy", copied.Manifest.Files[0].Operation);
+        var copied = JobRunner.Build(counted, copy, copies, cache); Assert.Equal(1, opens); Assert.Equal(TextureOperation.MipCopy, copied.Manifest.Files[0].Operation);
         Assert.Equal(entry.SourceHash, copied.Manifest.Files[0].SourceHash);
         opens = 0; Assert.Equal(0, JobRunner.Build(counted, copy, copies, cache).Reused); Assert.Equal(1, opens);
     }
@@ -397,7 +397,7 @@ public class WorkflowTests
         var plan = Planner.Analyze(CatalogLoader.Load(new(Folder: f.Dir("source")), inspectMaterials: true), Policy.Preset("balanced"));
         var ui = plan.Items.Single(i => i.Path.Contains("interface")); Assert.Equal(Decision.Protected, ui.Decision); Assert.Null(ui.Material);
         Assert.DoesNotContain("reviewed rule", ui.Reason);
-        Assert.Equal("Unbound", plan.Items.Single(i => i.Path.Contains("armor")).Material!.Status);
+        Assert.Equal(MaterialStatus.Unbound, plan.Items.Single(i => i.Path.Contains("armor")).Material!.Status);
     }
     [Fact] public void PathRulePatternsMatchAsBefore()
     {
@@ -405,6 +405,18 @@ public class WorkflowTests
             ("textures/armor/ab.dds", "textures/armor/?.dds", false), ("textures/armor/a.dds", @"textures\armor\*", true), ("textures/x.(1).dds", "textures/x.(?).dds", true),
             ("textures/armor/a.dds", "armor/*", false) })
             for (int i = 0; i < 2; i++) Assert.Equal(expected, Policy.Matches(path, pattern));
+    }
+    [Fact] public void TypedStatesKeepTheirJsonText()
+    {
+        string Json<T>(T value) => System.Text.Json.JsonSerializer.Serialize(value, JsonFiles.Options);
+        Assert.Equal("\"Unsupported binding\"", Json(MaterialStatus.UnsupportedBinding)); Assert.Equal("\"Conflicting bindings\"", Json(MaterialStatus.ConflictingBindings));
+        Assert.Equal(MaterialStatus.ConflictingBindings, System.Text.Json.JsonSerializer.Deserialize<MaterialStatus>("\"Conflicting bindings\"", JsonFiles.Options));
+        Assert.Equal("Unsupported binding", MaterialStatus.UnsupportedBinding.Text()); Assert.Equal("Resolved", MaterialStatus.Resolved.Text());
+        Assert.Equal("\"Error\"", Json(Severity.Error)); Assert.Equal("\"RecoverMipRecords\"", Json(TextureOperation.RecoverMipRecords)); Assert.Equal("\"IncompleteMips\"", Json(ComparisonStatus.IncompleteMips));
+        // Manifests written before the change still read, including legacy reference copies.
+        var entry = System.Text.Json.JsonSerializer.Deserialize<OutputEntry>("{\"Path\":\"textures/a.dds\",\"Source\":\"m\",\"SourceHash\":\"A\",\"OutputHash\":\"B\",\"Width\":4,\"Height\":4,\"DropMips\":1,\"Bytes\":10,\"Recipe\":\"R\",\"Operation\":\"ReferenceCopy\"}", JsonFiles.Options)!;
+        Assert.Equal(TextureOperation.ReferenceCopy, entry.Operation);
+        Assert.Equal(TextureOperation.MipCopy, System.Text.Json.JsonSerializer.Deserialize<OutputEntry>("{\"Path\":\"a\",\"Source\":\"m\",\"SourceHash\":\"A\",\"OutputHash\":\"B\",\"Width\":4,\"Height\":4,\"DropMips\":0,\"Bytes\":1,\"Recipe\":\"R\"}", JsonFiles.Options)!.Operation);
     }
     [Fact] public void MissingMipsAreKeptWithReason()
     {

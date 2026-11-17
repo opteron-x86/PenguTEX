@@ -112,7 +112,7 @@ public static class BoundedBsa
             result.Add(new(path, size, () => Open(archive, archiveLength, version, record, payloadStart, payloadBytes, decodedBytes, decode, memberError, path, prefix)));
         }
         if (nameAt != names.Length)
-            diagnostics?.Add(new("Warning", $"Archive {System.IO.Path.GetFileName(archive)} contains {names.Length - nameAt} unused filename-table bytes inside its declared metadata region. All named members and physical payload boundaries were checked; no texture bytes were trimmed."));
+            diagnostics?.Add(new(Severity.Warning, $"Archive {System.IO.Path.GetFileName(archive)} contains {names.Length - nameAt} unused filename-table bytes inside its declared metadata region. All named members and physical payload boundaries were checked; no texture bytes were trimmed."));
         return result;
     }
 

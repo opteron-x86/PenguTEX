@@ -17,18 +17,14 @@ public sealed class NifFile
     public const uint BsVersionLe = 83;
 
     public byte[] Data { get; }
-    public uint BsVersion { get; }
     public IReadOnlyList<string> Strings { get; }
     public IReadOnlyList<NifBlock> Blocks { get; }
-    public IReadOnlyList<int> Roots { get; }
 
-    private NifFile(byte[] data, uint bsVersion, List<string> strings, List<NifBlock> blocks, List<int> roots)
+    private NifFile(byte[] data, List<string> strings, List<NifBlock> blocks)
     {
         Data = data;
-        BsVersion = bsVersion;
         Strings = strings;
         Blocks = blocks;
-        Roots = roots;
     }
 
     public static NifFile Read(byte[] data)
@@ -51,7 +47,7 @@ public sealed class NifFile
         if (userVersion != UserVersion) throw new NotSupportedException($"NIF user version {userVersion} is not supported (need 12).");
         uint bsVersion = r.U32();
         // Skyrim SE (100) and Skyrim LE / Oldrim (83): the header, nodes and shader blocks are laid out the same; only the geometry differs
-        // (NiTriShape + NiTriShapeData instead of BSTriShape vertex buffers), which NifGeometryReader reads for both.
+        // (NiTriShape + NiTriShapeData instead of BSTriShape vertex buffers).
         if (bsVersion != BsVersionSse && bsVersion != BsVersionLe)
             throw new NotSupportedException($"NIF BS version {bsVersion} is not supported (need 100 / Skyrim SE or 83 / Skyrim LE).");
 
@@ -90,20 +86,8 @@ public sealed class NifFile
         }
         if (pos > data.Length) throw new InvalidDataException("NIF is truncated.");
 
-        r.Position = pos;
-        var roots = new List<int>();
-        if (r.Remaining >= 4)
-        {
-            uint numRoots = r.U32();
-            r.Require(checked((int)numRoots * 4));
-            for (int i = 0; i < numRoots; i++) roots.Add(r.I32());
-        }
-        if (roots.Count == 0 && blocks.Count > 0) roots.Add(0);
-
-        return new NifFile(data, bsVersion, strings, blocks, roots);
+        return new NifFile(data, strings, blocks);
     }
-
-    public string? String(int index) => index >= 0 && index < Strings.Count ? Strings[index] : null;
 
     public NifSpanReader ReaderFor(NifBlock b) => new(Data, b.Offset, b.Size);
 }
@@ -144,9 +128,7 @@ public struct NifSpanReader
     public ushort U16() { Require(2); var v = BitConverter.ToUInt16(_d, Position); _position += 2; return v; }
     public uint U32() { Require(4); var v = BitConverter.ToUInt32(_d, Position); _position += 4; return v; }
     public int I32() { Require(4); var v = BitConverter.ToInt32(_d, Position); _position += 4; return v; }
-    public ulong U64() { Require(8); var v = BitConverter.ToUInt64(_d, Position); _position += 8; return v; }
     public float F32() { Require(4); var v = BitConverter.ToSingle(_d, Position); _position += 4; return v; }
-    public Half F16() { Require(2); var v = BitConverter.ToHalf(_d, Position); _position += 2; return v; }
 
     public string SizedString()
     {

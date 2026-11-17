@@ -1,12 +1,28 @@
+using System.Text.Json.Serialization;
+
 namespace PenguTEX.Core;
 
 public enum MaterialRole { Unknown, Color, Normal, ModelNormal, Height, Data, Cutout, Blend }
 public sealed record MaterialUse(string Mesh, string Container, int Shape, int Shader, int Slot,
     MaterialRole Role, int AlphaCutoff, string Detail);
-public sealed record MaterialHint(string Status, MaterialRole Role, int AlphaCutoff, int UseCount,
+public enum MaterialStatus
+{
+    Resolved, Unbound,
+    [JsonStringEnumMemberName("Unsupported binding")] UnsupportedBinding,
+    [JsonStringEnumMemberName("Conflicting bindings")] ConflictingBindings,
+}
+public static class MaterialStatusText
+{
+    /// <summary>The wording used in plan reasons and the desktop, matching the JSON value.</summary>
+    public static string Text(this MaterialStatus status) => status switch
+    {
+        MaterialStatus.UnsupportedBinding => "Unsupported binding", MaterialStatus.ConflictingBindings => "Conflicting bindings", _ => status.ToString(),
+    };
+}
+public sealed record MaterialHint(MaterialStatus Status, MaterialRole Role, int AlphaCutoff, int UseCount,
     IReadOnlyList<MaterialUse> Examples)
 {
-    public TextureSemantic? Semantic(DdsInfo info) => Status != "Resolved" ? null : Role switch
+    public TextureSemantic? Semantic(DdsInfo info) => Status != MaterialStatus.Resolved ? null : Role switch
     {
         MaterialRole.Color => TextureSemantic.SrgbColor,
         MaterialRole.Cutout => TextureSemantic.OpacitySrgb,
@@ -21,7 +37,7 @@ public sealed record MaterialHint(string Status, MaterialRole Role, int AlphaCut
     {
         var choices = uses.Select(u => (u.Role, u.AlphaCutoff)).Distinct().ToArray();
         bool unknown = uses.Any(u => u.Role == MaterialRole.Unknown);
-        return new(unknown ? "Unsupported binding" : choices.Length != 1 ? "Conflicting bindings" : "Resolved",
+        return new(unknown ? MaterialStatus.UnsupportedBinding : choices.Length != 1 ? MaterialStatus.ConflictingBindings : MaterialStatus.Resolved,
             !unknown && choices.Length == 1 ? choices[0].Role : MaterialRole.Unknown,
             choices.Length == 1 ? choices[0].AlphaCutoff : 128, uses.Count, uses.Take(4).ToArray());
     }
@@ -58,8 +74,8 @@ public sealed record NativeCoverage(int TextureCount, int AboveLimit, int Incomp
             {
                 int cap = plan.Policy.Classify(i.Path).Maximum;
                 if (Math.Max(i.TargetWidth, i.TargetHeight) > cap) { above++; status = "Above limit"; }
-                int mips = i.Decision == Decision.Rebuild ? 1 + (int)Math.Log2(Math.Max(i.TargetWidth, i.TargetHeight)) : info.MipCount - i.DropMips;
-                if (mips < 1 + (int)Math.Log2(Math.Max(i.TargetWidth, i.TargetHeight)))
+                int mips = i.Decision == Decision.Rebuild ? Dds.FullMipCount(i.TargetWidth, i.TargetHeight) : info.MipCount - i.DropMips;
+                if (mips < Dds.FullMipCount(i.TargetWidth, i.TargetHeight))
                 { missing++; status = status is null ? "Missing mip levels" : status + "; missing mips"; }
             }
             if (status is not null) rows.Add(new(i.Path, status, i.Input is { } input ? $"{input.Width}×{input.Height} / {input.MipCount} mips" : "Unreadable",

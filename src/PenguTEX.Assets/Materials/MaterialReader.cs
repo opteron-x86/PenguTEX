@@ -54,7 +54,7 @@ public static class MaterialReader
             var unknown = bytes is null ? [] : UnknownPaths(bytes).Select(path =>
                 (path, new MaterialUse(mesh.Path, mesh.Container, -1, -1, -1, MaterialRole.Unknown, 128, "Material metadata is malformed or unsupported."))).ToArray();
             signatures.Add(mesh.Path + "\0" + mesh.Container + "\0unreadable:" + e.Message);
-            return new(signatures, unknown, new("Warning", $"Material inspection unavailable for {mesh.Path} ({mesh.Origin}): {e.Message}"));
+            return new(signatures, unknown, new(Severity.Warning, $"Material inspection unavailable for {mesh.Path} ({mesh.Origin}): {e.Message}"));
         }
     }
 
@@ -71,7 +71,7 @@ public static class MaterialReader
         foreach (var block in nif.Blocks)
         {
             bool bsShape = block.Type is "BSTriShape" or "BSDynamicTriShape" or "BSSubIndexTriShape" or "BSMeshLODTriShape";
-            bool oldShape = block.Type is "NiTriShape" or "NiTriStrips" or "BSLODTriShape" or "BSSubIndexTriShape";
+            bool oldShape = block.Type is "NiTriShape" or "NiTriStrips" or "BSLODTriShape";
             if (!bsShape && !oldShape) continue;
             var r = nif.ReaderFor(block); ObjectNet(ref r); r.Skip(4 + 52 + 4);
             if (bsShape) r.Skip(16 + 4);

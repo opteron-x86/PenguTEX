@@ -154,28 +154,27 @@ public static class Planner
                     policy.RecoverMipCounts && !higherPriority && protection is null,
                     policy.RecoverMipRecords && !higherPriority && protection is null, ct);
                 MaterialHint? hint = null;
-                int fullSourceMips = 1 + (int)Math.Log2(Math.Max(info.Width, info.Height));
+                int fullSourceMips = Dds.FullMipCount(info.Width, info.Height);
                 var rebuild = policy.ProcessingRule(asset.Path);
                 // Protected and higher-priority textures stay unchanged, so their bindings are not worth reporting.
                 if (policy.CompleteKnownMaterials && info.MipCount < fullSourceMips && protection is null && !higherPriority)
                 {
                     catalog.Materials!.Textures.TryGetValue(asset.Path, out hint);
-                    hint ??= new("Unbound", MaterialRole.Unknown, 128, 0, []);
+                    hint ??= new(MaterialStatus.Unbound, MaterialRole.Unknown, 128, 0, []);
                     if (rebuild is not ({ RebuildMips: true } or { CompleteMipChain: true }) && hint.Semantic(info) is { } inferred)
                         rebuild = new(asset.Path, CompleteMipChain: true, Semantic: inferred, AlphaCutoff: hint.AlphaCutoff);
                 }
-                int drop = info.DropFor(maximum); int width = Math.Max(1, info.Width >> drop), height = Math.Max(1, info.Height >> drop);
+                int drop = info.DropFor(maximum);
                 if (policy.FitReference && reference?.Info is { } previous)
                     while (drop < info.MipCount - 1 && !ReferenceComparison.Fits(info, drop, false, previous)) drop++;
-                width = Math.Max(1, info.Width >> drop); height = Math.Max(1, info.Height >> drop);
+                int width = Math.Max(1, info.Width >> drop), height = Math.Max(1, info.Height >> drop);
                 Decision decision; string reason;
                 if (higherPriority) { decision = Decision.Keep; reason = "Source is above the selected output priority and will remain unchanged."; drop = 0; }
                 else if (protection is not null) { decision = Decision.Protected; reason = protection; drop = 0; }
                 else if (rebuild is { RebuildMips: true } or { CompleteMipChain: true })
                 {
                     bool complete = rebuild.CompleteMipChain;
-                    int fullCount = 1 + (int)Math.Log2(Math.Max(info.Width, info.Height));
-                    if (complete && info.MipCount == fullCount)
+                    if (complete && info.MipCount == fullSourceMips)
                     {
                         decision = drop > 0 ? Decision.Reduce : Decision.Keep;
                         reason = "Original mip chain is complete; retain its existing levels without recompression.";
@@ -189,7 +188,7 @@ public static class Planner
                         if (policy.FitReference && reference?.Info is { } previousRebuild)
                             while (Math.Max(info.Width >> drop, info.Height >> drop) > 1 && !ReferenceComparison.Fits(info, drop, true, previousRebuild)) drop++;
                         width = Math.Max(1, info.Width >> drop); height = Math.Max(1, info.Height >> drop);
-                        var target = info with { Width = width, Height = height, MipCount = 1 + (int)Math.Log2(Math.Max(width, height)) };
+                        var target = info with { Width = width, Height = height, MipCount = Dds.FullMipCount(width, height) };
                         return new(asset.Path, asset.Origin, asset.Container, category, Decision.Rebuild,
                             complete ? $"Complete original mip chain; retain available levels byte-for-byte and generate missing levels with {rebuild.Semantic}; original {info.Format} format retained."
                                 : $"Explicit CPU rebuild from the top mip; {rebuild.Semantic}; original {info.Format} format retained.", info, drop, width, height,
@@ -201,8 +200,8 @@ public static class Planner
                 else if (Math.Max(width, height) > maximum) { decision = Decision.Keep; reason = "No existing mip reaches the selected maximum; use explicit mip rebuilding when available."; drop = 0; }
                 else if (drop > 0) { decision = Decision.Reduce; reason = $"Retain existing mip {drop} and its smaller levels; {category.ToLowerInvariant()} cap {maximum}." + (policy.FitReference && reference?.Info is not null ? " Also fits reference dimensions and payload without changing format." : ""); }
                 else { decision = Decision.Keep; reason = "Already within the selected maximum."; }
-                if (hint is not null && (hint.Status != "Resolved" || hint.Semantic(info) is null))
-                    reason += $" Mip completion needs a reviewed rule: {hint.Status}.";
+                if (hint is not null && (hint.Status != MaterialStatus.Resolved || hint.Semantic(info) is null))
+                    reason += $" Mip completion needs a reviewed rule: {hint.Status.Text()}.";
                 if (info.DeclaredMipCount is { } declared)
                 {
                     if (decision == Decision.Keep) decision = Decision.Reduce;

@@ -44,14 +44,14 @@ public sealed class MaterialTests
         f.File("source/meshes/a.nif", Fixture.Mesh(0)); f.File("source/meshes/b.nif", Fixture.Mesh(1));
         var source = new SourceOptions(Folder: f.Dir("source"));
         var plan = Planner.Analyze(CatalogLoader.Load(source, inspectMaterials: true), Fresh);
-        Assert.Equal("Conflicting bindings", plan.Items[0].Material!.Status); Assert.Equal(Decision.Keep, plan.Items[0].Decision);
+        Assert.Equal(MaterialStatus.ConflictingBindings, plan.Items[0].Material!.Status); Assert.Equal(Decision.Keep, plan.Items[0].Decision);
         Assert.Equal(1, plan.Coverage.AboveLimit); Assert.Equal(1, plan.Coverage.IncompleteMips);
         f.File("source/meshes/b.nif", Fixture.Mesh(bound: false));
         plan = Planner.Analyze(CatalogLoader.Load(source, inspectMaterials: true), Fresh);
-        Assert.Equal("Unsupported binding", plan.Items[0].Material!.Status);
+        Assert.Equal(MaterialStatus.UnsupportedBinding, plan.Items[0].Material!.Status);
         Directory.Delete(f.Dir("source/meshes"), true);
         plan = Planner.Analyze(CatalogLoader.Load(source, inspectMaterials: true), Fresh);
-        Assert.Equal("Unbound", plan.Items[0].Material!.Status);
+        Assert.Equal(MaterialStatus.Unbound, plan.Items[0].Material!.Status);
         var explicitPlan = Planner.Analyze(CatalogLoader.Load(source, inspectMaterials: true), Fresh with { Rules = [new("*", CompleteMipChain: true, Semantic: TextureSemantic.LinearData)] });
         Assert.Equal(Decision.Rebuild, explicitPlan.Items[0].Decision);
     }
@@ -193,7 +193,7 @@ public sealed class MaterialTests
         using var f = new Fixture(); f.File("source/textures/a.dds", Fixture.RawDds(mipCount: 2));
         f.File("source/meshes/shape.nif", Fixture.Mesh(slot, flags1: DefaultLightingFlags));
         var item = Assert.Single(Planner.Analyze(CatalogLoader.Load(new(Folder: f.Dir("source")), inspectMaterials: true), Fresh).Items);
-        Assert.Equal("Resolved", item.Material!.Status); Assert.Equal(Decision.Rebuild, item.Decision); Assert.True(item.PreserveExistingMips);
+        Assert.Equal(MaterialStatus.Resolved, item.Material!.Status); Assert.Equal(Decision.Rebuild, item.Decision); Assert.True(item.PreserveExistingMips);
     }
     [Theory] [InlineData(1u << 4, 0u)] [InlineData(1u << 5, 0u)] [InlineData(1u << 14, 0u)] [InlineData(1u << 23, 0u)]
     [InlineData(1u << 24, 0u)] [InlineData(0u, 1u << 19)] [InlineData(0u, 1u << 28)]

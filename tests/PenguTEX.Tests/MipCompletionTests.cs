@@ -28,7 +28,7 @@ public sealed class MipCompletionTests
         Assert.False(plan.Comparison!.HasUnresolved);
         string output = f.Dir("output"), cache = f.Dir("cache");
         var built = JobRunner.Build(catalog, plan, output, cache, processor: new CpuMipProcessor());
-        Assert.Equal("CompleteMips", built.Manifest.Files[0].Operation); Assert.True(built.Manifest.OriginalsOnly);
+        Assert.Equal(TextureOperation.CompleteMips, built.Manifest.Files[0].Operation); Assert.True(built.Manifest.OriginalsOnly);
         byte[] result = File.ReadAllBytes(Path.Combine(output, "textures/a.dds"));
         Assert.Equal(partial[(info.HeaderBytes + (int)info.MipBytes(0))..], result[info.HeaderBytes..(info.HeaderBytes + (int)info.MipBytes(1))]);
         Assert.Equal(4, Dds.Inspect(new MemoryStream(result)).Info.MipCount);

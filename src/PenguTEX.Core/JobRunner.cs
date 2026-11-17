@@ -10,7 +10,7 @@ public sealed record OutputEntry(string Path, string Source, string SourceHash, 
     public string? SourceContainer { get; init; }
     public int? DeclaredSourceMipCount { get; init; }
     public string? SourceRecordLayout { get; init; }
-    public string Operation { get; init; } = "MipCopy";
+    public TextureOperation Operation { get; init; } = TextureOperation.MipCopy;
     public TextureSemantic? Semantic { get; init; }
     public int AlphaCutoff { get; init; } = 128;
     public MaterialHint? Material { get; init; }
@@ -22,7 +22,7 @@ public sealed record OutputManifest(string Product, int Schema, string Version, 
     public ReferenceReport? Comparison { get; init; }
     public NativeCoverage? Coverage { get; init; }
     public string? MaterialFingerprint { get; init; }
-    public bool OriginalsOnly => Files.All(f => f.Operation is "MipCopy" or "Rebuild" or "CompleteMips" or "RepairHeader" or "RecoverMipRecords");
+    public bool OriginalsOnly => Files.All(f => f.Operation != TextureOperation.ReferenceCopy);
 }
 public sealed record BuildResult(string Output, int Files, int Reused, long Bytes, double Seconds, OutputManifest Manifest);
 
@@ -82,7 +82,7 @@ public static class JobRunner
     public static BuildResult Build(Catalog catalog, OptimizationPlan plan, string output, string cache,
         int workers = 2, IProgress<JobProgress>? progress = null, CancellationToken ct = default, ITextureProcessor? processor = null)
     {
-        if (plan.Schema != 1 || !plan.CompleteSource || catalog.Diagnostics.Any(d => d.Severity == "Error"))
+        if (plan.Schema != 1 || !plan.CompleteSource || catalog.Diagnostics.Any(d => d.Severity == Severity.Error))
             throw new InvalidDataException("Resolve source errors before building an output mod.");
         plan.Policy.Validate();
         if (plan.Items.Any(i => i.Decision == Decision.ReferenceCopy) || plan.Comparison?.CarriedCount > 0)

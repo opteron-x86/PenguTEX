@@ -289,7 +289,7 @@ public sealed class DesktopTests
         try
         {
             await window.AnalyzeAsync(); Assert.Equal(Decision.Rebuild, Assert.Single(window.CurrentPlan!.Items).Decision); Assert.Equal(1, window.VisibleCount);
-            await window.BuildAsync(); Assert.Equal("Rebuild", Assert.Single(window.LastBuild!.Manifest.Files).Operation);
+            await window.BuildAsync(); Assert.Equal(TextureOperation.Rebuild, Assert.Single(window.LastBuild!.Manifest.Files).Operation);
             var catalog = CatalogLoader.Load(settings.Source); var preview = new PreviewWindow(catalog.Assets[0], window.CurrentPlan.Items[0]); preview.Show();
             try { await preview.LoadAsync(); Assert.Contains("Proposed 8×8", preview.Status); } finally { preview.Close(); }
         }

@@ -22,17 +22,6 @@ public sealed class Mo2Profile
 
     public bool UsesLocalInis { get; }
 
-    /// <summary>The folders of the enabled mods that exist on disk, plus Overwrite (lowest priority first, Overwrite last).</summary>
-    public IReadOnlyList<string> EnabledModFolders()
-    {
-        var folders = EnabledModsLowToHigh.Select(m => GamePath.ResolveExisting(Instance.ModsFolder, m)).OfType<string>().Where(Directory.Exists).ToList();
-        if (Directory.Exists(Instance.OverwriteFolder)) folders.Add(Instance.OverwriteFolder);
-        return folders;
-    }
-
-    /// <summary>Plugins ticked in plugins.txt. Base masters and Skyrim.ccc entries are implicit and may legitimately be absent.</summary>
-    public IReadOnlySet<string> ExplicitlyEnabled { get; }
-
     private static readonly string[] BaseMasters =
         ["Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm"];
 
@@ -44,8 +33,7 @@ public sealed class Mo2Profile
         EnabledModsLowToHigh = ReadModList(Path.Combine(folder, "modlist.txt"));
         AllModsLowToHigh = ReadModList(Path.Combine(folder, "modlist.txt"), includeDisabled: true);
         UsesLocalInis = ReadLocalSettingsFlag(Path.Combine(folder, "settings.ini"));
-        EnabledPlugins = ReadPlugins(folder, instance.GamePath, out var explicitSet);
-        ExplicitlyEnabled = explicitSet;
+        EnabledPlugins = ReadPlugins(folder, instance.GamePath);
     }
 
     public static Mo2Profile Open(Mo2Instance instance, string name)
@@ -88,7 +76,7 @@ public sealed class Mo2Profile
     /// Order comes from loadorder.txt (it includes base masters and CC); "enabled" comes from
     /// plugins.txt ("*" prefix) plus the implicitly-active base masters and Skyrim.ccc entries.
     /// </summary>
-    internal static List<string> ReadPlugins(string profileFolder, string gamePath, out HashSet<string> explicitlyEnabled)
+    internal static List<string> ReadPlugins(string profileFolder, string gamePath)
     {
         var enabled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var pluginsTxtOrder = new List<string>();
@@ -105,7 +93,6 @@ public sealed class Mo2Profile
             }
         }
 
-        explicitlyEnabled = new HashSet<string>(enabled, StringComparer.OrdinalIgnoreCase);
         foreach (var m in BaseMasters) enabled.Add(m);
         var ccc = Path.Combine(gamePath, "Skyrim.ccc");
         if (File.Exists(ccc))

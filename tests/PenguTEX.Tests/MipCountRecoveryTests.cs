@@ -21,7 +21,7 @@ public sealed class MipCountRecoveryTests
         var built = JobRunner.Build(catalog, plan, output, cache);
         var file = Assert.Single(built.Manifest.Files); Assert.Equal(2, file.DeclaredSourceMipCount);
         using var original = new MemoryStream(data); Assert.Equal(JobRunner.Hash(original), file.SourceHash);
-        Assert.Equal(maximum == 32 ? "RepairHeader" : "MipCopy", file.Operation);
+        Assert.Equal(maximum == 32 ? TextureOperation.RepairHeader : TextureOperation.MipCopy, file.Operation);
         byte[] result = File.ReadAllBytes(Path.Combine(output, "textures/a.dds"));
         var info = Dds.Inspect(new MemoryStream(result)).Info; Assert.Null(info.DeclaredMipCount);
         Assert.Equal(data[(item.Input.HeaderBytes + (int)item.Input.RemovedBytes(item.DropMips))..], result[info.HeaderBytes..]);

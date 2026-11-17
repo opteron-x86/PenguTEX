@@ -59,12 +59,12 @@ public static class CatalogLoader
             {
                 ct.ThrowIfCancellationRequested();
                 if (options.ExcludeMods?.Contains(mod, StringComparer.OrdinalIgnoreCase) == true)
-                { diagnostics.Add(new("Info", "Excluded requested mod: " + mod)); continue; }
+                { diagnostics.Add(new(Severity.Info, "Excluded requested mod: " + mod)); continue; }
                 var path = GamePath.ResolveExisting(instance.ModsFolder, mod);
-                if (path is null || !Directory.Exists(path)) { diagnostics.Add(new("Error", "Enabled mod folder is missing: " + mod)); continue; }
+                if (path is null || !Directory.Exists(path)) { diagnostics.Add(new(Severity.Error, "Enabled mod folder is missing: " + mod)); continue; }
                 if (referenceRoot is not null && (mod.Equals(referencePlacement, StringComparison.OrdinalIgnoreCase) || HostPath.ComparisonKey(path) == HostPath.ComparisonKey(referenceRoot)))
-                { diagnostics.Add(new("Info", "Reference output excluded from original inputs: " + mod)); continue; }
-                if (IsOptimizerOutput(path)) { diagnostics.Add(new("Info", "Excluded prior optimizer output: " + mod)); continue; }
+                { diagnostics.Add(new(Severity.Info, "Reference output excluded from original inputs: " + mod)); continue; }
+                if (IsOptimizerOutput(path)) { diagnostics.Add(new(Severity.Info, "Excluded prior optimizer output: " + mod)); continue; }
                 roots.Add(path); priorities[path] = ranks[mod];
             }
             if (Directory.Exists(instance.OverwriteFolder)) { roots.Add(instance.OverwriteFolder); priorities[instance.OverwriteFolder] = int.MaxValue; }
@@ -79,7 +79,7 @@ public static class CatalogLoader
                 foreach (var f in Directory.EnumerateFiles(root))
                 {
                     if (f.EndsWith(".mohidden", StringComparison.OrdinalIgnoreCase)) continue;
-                    if (!perRoot.TryAdd(Path.GetFileName(f), f)) diagnostics.Add(new("Error", "Case collision in " + origin + ": " + Path.GetFileName(f)));
+                    if (!perRoot.TryAdd(Path.GetFileName(f), f)) diagnostics.Add(new(Severity.Error, "Case collision in " + origin + ": " + Path.GetFileName(f)));
                 }
                 foreach (var (key, value) in perRoot) rootFiles[key] = value;
                 foreach (string kind in inspectMaterials ? new[] { "textures", "meshes" } : new[] { "textures" })
@@ -93,7 +93,7 @@ public static class CatalogLoader
                         if (!file.EndsWith(kind == "textures" ? ".dds" : ".nif", StringComparison.OrdinalIgnoreCase)) continue;
                         string key = kind + "/" + Path.GetRelativePath(contentRoot, file).Replace('\\', '/').ToLowerInvariant();
                         GamePath.ValidateRelative(key);
-                        if (!layerFiles.TryAdd(key, file)) diagnostics.Add(new("Error", "Case collision in " + origin + ": " + key));
+                        if (!layerFiles.TryAdd(key, file)) diagnostics.Add(new(Severity.Error, "Case collision in " + origin + ": " + key));
                     }
                     foreach (var (key, file) in layerFiles)
                     {
@@ -106,7 +106,7 @@ public static class CatalogLoader
                 }
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
-            { diagnostics.Add(new("Error", $"Cannot index {origin}: {e.Message}")); }
+            { diagnostics.Add(new(Severity.Error, $"Cannot index {origin}: {e.Message}")); }
         }
         var assets = new Dictionary<string, Asset>(StringComparer.Ordinal);
         if (profile is not null)
@@ -114,8 +114,8 @@ public static class CatalogLoader
             var iniArchives = profile.IniArchives(options.Ini);
             foreach (var missing in iniArchives.Where(n => !rootFiles.ContainsKey(n)))
                 diagnostics.Add(missing.Equals("Skyrim - Patch.bsa", StringComparison.OrdinalIgnoreCase)
-                    ? new("Warning", "Optional legacy patch archive is absent: " + missing)
-                    : new("Error", "Active INI archive is missing; restore it or correct the archive list: " + missing));
+                    ? new(Severity.Warning, "Optional legacy patch archive is absent: " + missing)
+                    : new(Severity.Error, "Active INI archive is missing; restore it or correct the archive list: " + missing));
             var archives = SkyrimArchives.Select(GameRelease.SkyrimSE, rootFiles.Values, profile.EnabledPlugins, iniArchives);
             for (int i = 0; i < archives.Count; i++)
             {
@@ -137,7 +137,7 @@ public static class CatalogLoader
                     foreach (var (key, asset) in members) assets[key] = asset;
                 }
                 catch (Exception e) when (e is not OperationCanceledException)
-                { diagnostics.Add(new("Error", $"Cannot index archive {Path.GetFileName(archive)}: {e.Message}")); }
+                { diagnostics.Add(new(Severity.Error, $"Cannot index archive {Path.GetFileName(archive)}: {e.Message}")); }
             }
         }
         foreach (var (key, asset) in loose) assets[key] = asset;
@@ -146,13 +146,13 @@ public static class CatalogLoader
         {
             var referenceFiles = Load(new(Folder: referenceRoot), progress, ct, comparisonOnly: true);
             diagnostics.AddRange(referenceFiles.Diagnostics.Select(d => d with { Message = "Reference: " + d.Message }));
-            if (referenceFiles.Assets.Count == 0) diagnostics.Add(new("Error", "Reference folder contains no loose DDS textures."));
+            if (referenceFiles.Assets.Count == 0) diagnostics.Add(new(Severity.Error, "Reference folder contains no loose DDS textures."));
             reference = new(referenceRoot, referencePlacement, referencePriority, referenceFiles.Assets)
             {
                 Refresh = token =>
                 {
                     var refreshed = Load(new(Folder: referenceRoot), null, token, comparisonOnly: true);
-                    if (refreshed.Diagnostics.Any(d => d.Severity == "Error")) throw new IOException("Reference output cannot be read consistently. Analyze again.");
+                    if (refreshed.Diagnostics.Any(d => d.Severity == Severity.Error)) throw new IOException("Reference output cannot be read consistently. Analyze again.");
                     return new(referenceRoot, referencePlacement, referencePriority, refreshed.Assets);
                 }
             };
@@ -166,7 +166,7 @@ public static class CatalogLoader
             materials = materials with { RefreshFingerprint = token =>
             {
                 var refreshed = Load(freshOptions, progress, token, false, true, workers);
-                if (refreshed.Diagnostics.Any(d => d.Severity == "Error"))
+                if (refreshed.Diagnostics.Any(d => d.Severity == Severity.Error))
                     throw new IOException("Original source inventory became incomplete during material recheck. Analyze again.");
                 return refreshed.Materials!.Fingerprint;
             } };
@@ -204,7 +204,7 @@ public static class CatalogLoader
             {
                 if (skip.Contains(Path.GetFileName(child)) || child.EndsWith(".mohidden", StringComparison.OrdinalIgnoreCase)) continue;
                 if (new DirectoryInfo(child).LinkTarget is not null)
-                { diagnostics.Add(new("Error", "Linked source directory needs an explicit physical source: " + Path.GetFileName(child))); continue; }
+                { diagnostics.Add(new(Severity.Error, "Linked source directory needs an explicit physical source: " + Path.GetFileName(child))); continue; }
                 stack.Push(child);
             }
         }

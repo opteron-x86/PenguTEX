@@ -12,9 +12,6 @@ namespace PenguTEX.Assets.Profiles;
 /// </summary>
 public sealed record Mo2Locations(string? GamePath = null, string? ModsFolder = null, string? ProfilesFolder = null, string? OverwriteFolder = null, string? WinePrefix = null)
 {
-    public bool IsEmpty => string.IsNullOrWhiteSpace(GamePath) && string.IsNullOrWhiteSpace(ModsFolder)
-                           && string.IsNullOrWhiteSpace(ProfilesFolder) && string.IsNullOrWhiteSpace(OverwriteFolder) && string.IsNullOrWhiteSpace(WinePrefix);
-
     /// <summary>Enough to open an instance without a ModOrganizer.ini.</summary>
     public bool CanStandAlone => !string.IsNullOrWhiteSpace(GamePath) && !string.IsNullOrWhiteSpace(ModsFolder) && !string.IsNullOrWhiteSpace(ProfilesFolder);
 }
@@ -33,7 +30,6 @@ public sealed class Mo2Instance
     public string ProfilesFolder { get; }
     public string OverwriteFolder { get; }
     public string? SelectedProfile { get; }
-    public string? GameName { get; }
     public string? WinePrefix { get; }
 
     /// <summary>Directory names MO2 is told to ignore inside mods (Settings/skip_directories).</summary>
@@ -48,7 +44,6 @@ public sealed class Mo2Instance
         string? Get(string section, string key) =>
             ini.TryGetValue(section, out var s) && s.TryGetValue(key, out var v) && v.Length > 0 ? v : null;
 
-        GameName = Get("General", "gameName");
         SelectedProfile = Get("General", "selected_profile");
         GamePath = TypedPath(typed?.GamePath) is { } typedGame
                        ? GameFolderOf(typedGame)
@@ -144,12 +139,5 @@ public sealed class Mo2Instance
         if (m.Success) v = m.Groups[1].Value;
         if (v.Length >= 2 && v[0] == '"' && v[^1] == '"') v = v[1..^1];
         return v.Replace(@"\\", @"\");
-    }
-
-    internal static string ExpandPath(string value, string baseDir, string instanceFolder)
-    {
-        var v = value.Replace("%BASE_DIR%", baseDir, StringComparison.OrdinalIgnoreCase)
-                     .Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
-        return Path.GetFullPath(Path.IsPathRooted(v) ? v : Path.Combine(instanceFolder, v));
     }
 }
