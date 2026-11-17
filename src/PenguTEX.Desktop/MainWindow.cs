@@ -151,7 +151,7 @@ public sealed class MainWindow : Window
     }
     private Control Setup()
     {
-        var load = new Button { Content = "Load profile names" }; load.Click += (_, _) =>
+        var load = new Button { Content = "Load profiles" }; load.Click += (_, _) =>
         {
             try { var source = ReadSettings().Source; _profiles.ItemsSource = Mo2Instance.Open(_source.Text ?? "", new(source.Game, source.Mods, source.Profiles, source.Overwrite, source.WinePrefix)).ListProfiles(); }
             catch (Exception e) { _status.Text = e.Message; }
@@ -173,9 +173,6 @@ public sealed class MainWindow : Window
         };
         var prefix = PathField("Wine / Proton prefix (for Windows paths)", _wine);
         prefix.IsVisible = !OperatingSystem.IsWindows();
-        var sourceHelp = Text(OperatingSystem.IsWindows()
-            ? "Profiles: select the MO2 instance folder containing ModOrganizer.ini. Texture folders work independently of a mod manager."
-            : "Profiles: select the instance folder containing ModOrganizer.ini for MO2 through Wine/Proton or Fluorine on Linux. Texture folders work independently of a mod manager.");
         var advanced = new StackPanel { Spacing = 12, Children = {
             Columns(PathField("Game folder override", _game), PathField("Original Data override", _data)),
             Columns(PathField("Mods override", _mods), PathField("Profiles override", _profileRoot)),
@@ -188,7 +185,6 @@ public sealed class MainWindow : Window
         _comparisonOptions.Children.Add(Columns(_fitReference, _fitProtected));
         return new StackPanel { Spacing = 16, Margin = new Thickness(0, 14, 12, 10), Children = {
             Columns(Field("Source type", _mode), Field("Preset", _preset)), PathField("Texture folder or mod-manager instance", _source),
-            sourceHelp,
             Columns(Field("Profile name (profile sources only)", _profile), profileRow),
             Columns(Columns(Field("Color maximum", _maximum), Field("Normal maximum", _normal)), Columns(Field("Material maximum", _material), Field("Height maximum", _height))),
             Columns(_large, _characters),
@@ -197,9 +193,7 @@ public sealed class MainWindow : Window
             _completeMaterials, _recoverMips, _recoverRecords, _compareReference,
             _comparisonOptions,
             Field("Workers (1–32)", _workers),
-            new Expander { Header = "Locations and custom rules", Content = advanced, HorizontalAlignment = HorizontalAlignment.Stretch },
-            Text("Quality: color 2K, normal/material/height 1K. Balanced: color 2K, normal 1K, material/height 512. Compact: color 1K, normal/material 512, height 256. Saved custom limits are preserved."),
-            Text("Fresh runs use enabled original sources and the selected limits. Generated LOD, interface and shader resources remain protected. Review material bindings, previews and unresolved originals before building. Estimates are texture payload, not live VRAM.") } };
+            new Expander { Header = "Locations and custom rules", Content = advanced, HorizontalAlignment = HorizontalAlignment.Stretch } } };
     }
     private Control ReplacementReview()
     {
