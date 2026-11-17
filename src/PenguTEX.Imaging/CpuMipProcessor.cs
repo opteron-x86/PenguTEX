@@ -7,7 +7,7 @@ namespace PenguTEX.Imaging;
 
 public sealed class CpuMipProcessor : ITextureProcessor
 {
-    public string Identity => "bcn-2.3.0-strips-raw-area-complete-alpha-bc1-v5";
+    public string Identity => "bcn-2.3.0-strips-raw-area-complete-alpha-bc1-colourguard-v6";
     // Decoded pixels across all concurrent rebuilds stay within one maximum-size texture. Small
     // textures run side by side; streaming mip copies are not counted.
     public static PixelBudget Budget { get; } = new(Policy.MaximumRebuildPixels);
@@ -67,6 +67,8 @@ public sealed class CpuMipProcessor : ITextureProcessor
                 var blocks = encoder.EncodeToRawBytes(strip, pixels.Width, rows, PixelFormat.Rgba32)[0];
                 long expected = (long)((pixels.Width + 3) / 4) * info.BlockBytes;
                 if (blocks.Length != expected) throw new InvalidDataException("Encoder returned an unexpected block count.");
+                // The library's BC1 colour encoder can overflow an endpoint on saturated channels.
+                if (info.Format is "BC1" or "BC2" or "BC3") ColorBlockGuard.Repair(strip, pixels.Width, rows, blocks, info.BlockBytes);
                 if (decoder.DecodeRaw(blocks, pixels.Width, rows, format).Length != pixels.Width * rows)
                     throw new InvalidDataException("Generated strip did not decode to its expected dimensions.");
                 target.Write(blocks);
