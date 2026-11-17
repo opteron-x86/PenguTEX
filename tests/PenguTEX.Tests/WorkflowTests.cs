@@ -241,6 +241,24 @@ public class WorkflowTests
         Assert.Equal("Normal", custom.Classify("textures/landscape/rocks/a_n.dds").Category);
         Assert.Throws<ArgumentException>(() => (policy with { Maximum = 31 }).Validate());
     }
+    [Fact] public void BrieflyDeniedFileReplacementIsRetriedOnlyWhereItIsTransient()
+    {
+        int calls = 0; var waits = new List<int>();
+        void Denied(int failures, Exception error) { if (++calls <= failures) throw error; }
+        TransientIo.Retry(() => Denied(2, new UnauthorizedAccessException("Access to the path is denied.")), true, wait: waits.Add);
+        Assert.Equal(3, calls); Assert.Equal([20, 40], waits);
+        calls = 0; TransientIo.Retry(() => Denied(1, new IOException("The process cannot access the file.")), true, wait: waits.Add); Assert.Equal(2, calls);
+        // Persistent denial reports the original error after the bounded attempts, waiting about two seconds in total.
+        calls = 0; waits.Clear();
+        Assert.Throws<UnauthorizedAccessException>(() => TransientIo.Retry(() => Denied(int.MaxValue, new UnauthorizedAccessException()), true, wait: waits.Add));
+        Assert.Equal(10, calls); Assert.Equal(9, waits.Count); Assert.InRange(waits.Sum(), 1500, 2500);
+        // Other platforms, missing files and unrelated failures are not retried.
+        calls = 0; Assert.Throws<UnauthorizedAccessException>(() => TransientIo.Retry(() => Denied(1, new UnauthorizedAccessException()), false, wait: waits.Add)); Assert.Equal(1, calls);
+        calls = 0; Assert.Throws<FileNotFoundException>(() => TransientIo.Retry(() => Denied(1, new FileNotFoundException()), true, wait: waits.Add)); Assert.Equal(1, calls);
+        calls = 0; Assert.Throws<InvalidDataException>(() => TransientIo.Retry(() => Denied(1, new InvalidDataException()), true, wait: waits.Add)); Assert.Equal(1, calls);
+        using var f = new Fixture(); string target = f.File("settings.json", [1]), temporary = f.File("settings.tmp", [2]);
+        TransientIo.Replace(temporary, target); Assert.Equal([2], File.ReadAllBytes(target)); Assert.False(File.Exists(temporary));
+    }
     [Fact] public void MissingMipsAreKeptWithReason()
     {
         using var f = new Fixture(); f.File("input/a.dds", Fixture.Dds(mipCount: 1));
