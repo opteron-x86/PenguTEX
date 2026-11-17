@@ -13,6 +13,7 @@ acceptance remain separate from implementation. No unmeasured performance claims
 | M5 — Measured compatibility | Game visuals/frame times and optional physical GPU acceleration | Repeatable shader/hardware evidence; measured benefit before automatic GPU selection |
 | M6 — Native source coverage | Fresh source coverage, material-aware completion, bounded DDS recovery and optional comparison | Enabled originals only; explainable exceptions; independent file checks; game acceptance tracked under M5 |
 | M7 — Windows and Linux alpha distribution | Native Windows ZIP, Linux packages, manager-neutral setup and external alpha feedback | Native CI and extracted-package checks gate a paired prerelease; game acceptance remains under M5 |
+| M8 — Build efficiency | Fewer reads and rescans per build, a cache limited to CPU work with pruning, parallel analysis | Same output bytes and manifests for the same plan; measured on synthetic and real profiles |
 
 M1–M2 form the first useful alpha. M3 is opt-in; format-preserving mip reduction stays
 the default. M4 makes the application distributable. M5 remains open until evidence
@@ -116,3 +117,11 @@ Fresh-run behavior and bounded material inference are specified in [MATERIALS.md
 
 The [alpha testing guide](ALPHA-TESTING.md) covers fresh setup and useful feedback.
 Packaging and native startup checks do not close the hardware/game acceptance work.
+
+### [M8 — Build efficiency](https://github.com/opteron-x86/PenguTEX/milestone/9)
+
+- [#71 — Remove the unused job journal](https://github.com/opteron-x86/PenguTEX/issues/71)
+- [#72 — Read each source once and each output once during a build](https://github.com/opteron-x86/PenguTEX/issues/72)
+- [#73 — Cache only CPU-generated textures and add cache pruning](https://github.com/opteron-x86/PenguTEX/issues/73)
+- [#74 — Recheck sources once per build](https://github.com/opteron-x86/PenguTEX/issues/74)
+- [#75 — Inspect textures and meshes in parallel during analysis](https://github.com/opteron-x86/PenguTEX/issues/75)

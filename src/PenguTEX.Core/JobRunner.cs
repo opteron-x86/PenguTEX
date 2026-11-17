@@ -121,8 +121,7 @@ public static class JobRunner
         var changed = plan.Items.Where(i => i.Decision is Decision.Reduce or Decision.Rebuild).ToArray();
         if (changed.Any(i => i.Decision == Decision.Rebuild) && processor is null) throw new InvalidOperationException("This plan requires a CPU texture processor.");
         var entries = new OutputEntry[changed.Length]; int done = 0, reused = 0;
-        var stateGate = new object(); var completed = new Dictionary<string, OutputEntry>();
-        string journal = Path.Combine(cache, "job-" + identity + ".json");
+        var progressGate = new object();
         progress?.Report(new("Build", 0, changed.Length, "", "Generating textures"));
         Parallel.For(0, changed.Length, new ParallelOptions { MaxDegreeOfParallelism = workers, CancellationToken = ct }, i =>
         {
@@ -185,12 +184,7 @@ public static class JobRunner
                 finally { if (File.Exists(temporary)) File.Delete(temporary); }
             }
             entries[i] = entry;
-            lock (stateGate)
-            {
-                completed[item.Path] = entry;
-                if (completed.Count % 100 == 0 || completed.Count == changed.Length) JsonFiles.Write(journal, completed.Values.ToArray());
-                progress?.Report(new("Build", ++done, changed.Length, item.Path, entry.Recipe));
-            }
+            lock (progressGate) progress?.Report(new("Build", ++done, changed.Length, item.Path, entry.Recipe));
         });
         ct.ThrowIfCancellationRequested();
         var manifest = new OutputManifest(Product, 1, Version, DateTimeOffset.UtcNow,

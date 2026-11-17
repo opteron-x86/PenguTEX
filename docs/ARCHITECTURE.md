@@ -90,7 +90,7 @@ installed texture totals do not predict resident VRAM or FPS.
 Bound workers and decoded-memory use. Read loose files directly and extract selected
 archive entries only. Cache by source-content hash, settings/schema and encoder
 identity. Same-size/mtime changes must invalidate output. Verify cached hashes and
-headers. Persist per-item state and timings; interrupted/failed jobs are resumable.
+headers. An interrupted or failed job is simply run again; verified cached work is reused.
 
 Stage on the destination filesystem. Reject source overlap, unsafe relative paths,
 symlink escapes, conflicting jobs and foreign output directories. Publish complete
