@@ -33,7 +33,8 @@ existing ISPC 1.32.0 installation. Native outputs are under `native/bin/<rid>` a
 are copied transitively into .NET build/publish directories.
 
 Native loading failure falls back to BCnEncoder Balanced for source builds without
-the native library. `PENGUTEX_REQUIRE_NATIVE_BC7=1` makes automatic fallback an
+the native library. Every build names the encoder in use on the CLI's error stream
+and in the desktop run log, with a warning when the managed encoder is a fallback. `PENGUTEX_REQUIRE_NATIVE_BC7=1` makes automatic fallback an
 error; release packaging/CI use it to catch missing native binaries. Unsupported
 ABIs and encoding errors fail the job instead of switching encoder mid-output.
 

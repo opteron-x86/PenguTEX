@@ -45,6 +45,14 @@ public sealed class Bc7EncoderTests
     }
 
     [Fact]
+    public void RunLogNamesTheEncoderInUse()
+    {
+        Assert.Matches(@"^BC7 encoder: native BC7E Basic \((AVX2|SSE2)\)\.$", new CpuMipProcessor(Bc7Backend.Basic).EncoderSummary);
+        Assert.Contains("native BC7E Fast", new Bc7Encoder(Bc7Backend.Fast).Summary);
+        Assert.Equal("BC7 encoder: BCnEncoder (managed), selected explicitly.", new CpuMipProcessor(Bc7Backend.Managed).EncoderSummary);
+    }
+
+    [Fact]
     public void RejectsInvalidBuffersBeforeEnteringNativeCode()
     {
         var encoder = new Bc7Encoder(Bc7Backend.Basic);

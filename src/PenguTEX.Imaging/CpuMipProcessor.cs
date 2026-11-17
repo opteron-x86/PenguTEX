@@ -9,6 +9,7 @@ public sealed class CpuMipProcessor : ITextureProcessor
 {
     private readonly Bc7Encoder bc7;
     public CpuMipProcessor(Bc7Backend backend = Bc7Backend.Auto) { bc7 = new(backend); }
+    public string EncoderSummary => bc7.Summary;
     public string Identity => "bcn-2.3.0-strips-raw-area-complete-alpha-bc1-colourguard-v6"
         + (bc7.Backend == Bc7Backend.Managed ? "" : "-" + bc7.Identity);
     // Decoded pixels across all concurrent rebuilds stay within one maximum-size texture. Small

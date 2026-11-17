@@ -16,6 +16,12 @@ public sealed class Bc7Encoder
     public string Identity => Backend == Bc7Backend.Managed ? "bcn-2.3.0-balanced"
         : $"bc7e-b9438627-ispc1.32.0-{Backend.ToString().ToLowerInvariant()}-linear-alpha01-v1-{(NativeVariant.Value == 8 ? "avx2" : "sse2")}";
 
+    /// <summary>One line for the run log; says so when the much slower managed encoder is a fallback.</summary>
+    public string Summary => Backend != Bc7Backend.Managed
+        ? $"BC7 encoder: native BC7E {Backend} ({(NativeVariant.Value == 8 ? "AVX2" : "SSE2")})."
+        : NativeVariant.Value != 0 ? "BC7 encoder: BCnEncoder (managed), selected explicitly."
+        : "Warning: the native BC7 encoder could not be loaded on this system. Using the managed BCnEncoder fallback; BC7 mip completion will be far slower.";
+
     public Bc7Encoder(Bc7Backend backend = Bc7Backend.Auto)
     {
         bool requireNative = backend == Bc7Backend.Auto && Environment.GetEnvironmentVariable("PENGUTEX_REQUIRE_NATIVE_BC7") == "1";

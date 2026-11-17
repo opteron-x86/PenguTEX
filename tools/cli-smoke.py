@@ -40,7 +40,7 @@ with tempfile.TemporaryDirectory(prefix="pengutex-cli-") as temporary:
     (root / "output").mkdir()  # File-picker users commonly create the destination first.
     built = run("build", "--folder", root / "input", "--max", 8,
                 "--output", root / "output", "--cache", root / "cache",
-                progress=("Build 1/1:", "Verify 0/1:", "Verify 1/1:", "Publish 0/1:", "Publish 1/1:"))
+                progress=("BC7 encoder", "Build 1/1:", "Verify 0/1:", "Verify 1/1:", "Publish 0/1:", "Publish 1/1:"))
     assert built["Files"] == 1 and built["Reused"] == 0
     target = root / "output" / "textures" / "armor" / "example.dds"
     assert target.read_bytes()[148:] == payload[256:]

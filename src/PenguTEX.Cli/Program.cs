@@ -67,10 +67,11 @@ public static class Program
         if (args[0] == "analyze") { Print(plan); return !plan.CompleteSource ? 2 : requireComplete && !plan.Coverage.MeetsPolicy ? 3 : requireParity && plan.Comparison!.HasUnresolved ? 3 : 0; }
         if (requireComplete && !plan.Coverage.MeetsPolicy) { Print(plan.Coverage); return 3; }
         if (requireParity && plan.Comparison!.HasUnresolved) { Print(plan.Comparison); return 3; }
+        var processor = new CpuMipProcessor(); Console.Error.WriteLine(processor.EncoderSummary);
         var result = JobRunner.Build(catalog, plan,
             Get("output") ?? throw new ArgumentException("--output is required."),
             Get("cache") ?? throw new ArgumentException("--cache is required."),
-            int.Parse(Get("workers") ?? "2"), progress, ct, new CpuMipProcessor());
+            int.Parse(Get("workers") ?? "2"), progress, ct, processor);
         Print(result); return 0;
     }
     private static Dictionary<string, string> Parse(string[] args)

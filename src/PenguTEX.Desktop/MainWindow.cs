@@ -306,7 +306,7 @@ public sealed class MainWindow : Window
         if (_plan is null || _catalog is null) throw new InvalidOperationException("Analyze first.");
         if (string.IsNullOrWhiteSpace(settings.Output) || string.IsNullOrWhiteSpace(settings.Cache)) throw new ArgumentException("Choose output and cache folders.");
         _status.Text = "Build: checking output folder…"; AppendLog(_status.Text);
-        var previous = _plan;
+        var previous = _plan; var processor = new CpuMipProcessor(); AppendLog(processor.EncoderSummary);
         LastBuild = await Task.Run(() =>
         {
             JobRunner.ValidateOutputDirectory(settings.Output);
@@ -314,7 +314,7 @@ public sealed class MainWindow : Window
             var catalog = CatalogLoader.Load(settings.Source, recheck, ct, settings.Policy.CompleteKnownMaterials); var fresh = Planner.Analyze(catalog, settings.Policy, recheck, ct);
             string Signature(OptimizationPlan p) => JsonSerializer.Serialize(new { p.Items, p.Comparison, p.MaterialFingerprint }, JsonFiles.Options);
             if (Signature(fresh) != Signature(previous)) throw new IOException("Source or reference winners/metadata changed. Analyze again to review the new plan.");
-            return JobRunner.Build(catalog, fresh, settings.Output, settings.Cache, settings.Workers, progress, ct, new CpuMipProcessor());
+            return JobRunner.Build(catalog, fresh, settings.Output, settings.Cache, settings.Workers, progress, ct, processor);
         }, ct);
         _status.Text = $"Complete: {LastBuild.Files:N0} verified textures ({LastBuild.Reused:N0} reused). Output: {LastBuild.Output}. "
             + (LastBuild.Manifest.Comparison?.Assessment ?? "Built from selected originals. Review the Coverage tab for protected or unresolved textures.");
