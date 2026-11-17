@@ -18,10 +18,31 @@ public static class JsonFiles
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         string temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try { File.WriteAllText(temp, JsonSerializer.Serialize(value, Options)); File.Move(temp, path, true); }
+        try { File.WriteAllText(temp, JsonSerializer.Serialize(value, Options)); TransientIo.Replace(temp, path); }
         finally { if (File.Exists(temp)) File.Delete(temp); }
     }
     public static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+}
+
+/// <summary>
+/// On Windows, a scanner or indexer can briefly hold a file that was just written, so replacing it fails
+/// with access denied or a sharing violation. Retry for about two seconds, then report the original error.
+/// </summary>
+public static class TransientIo
+{
+    public static void Replace(string source, string destination) =>
+        Retry(() => File.Move(source, destination, true), OperatingSystem.IsWindows());
+
+    public static void Retry(Action action, bool enabled, int attempts = 10, Action<int>? wait = null)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            try { action(); return; }
+            catch (Exception e) when (enabled && attempt < attempts && e is UnauthorizedAccessException or IOException
+                && e is not (FileNotFoundException or DirectoryNotFoundException or PathTooLongException))
+            { (wait ?? Thread.Sleep)(Math.Min(20 << (attempt - 1), 320)); }
+        }
+    }
 }
 
 public sealed record SourceOptions(string? Folder = null, string? Instance = null, string? Profile = null,
