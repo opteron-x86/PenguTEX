@@ -88,6 +88,56 @@ public sealed class MaterialTests
         Assert.Equal(before, File.ReadAllText(Path.Combine(output, JobRunner.ManifestName)));
         Assert.Throws<IOException>(() => JobRunner.Build(catalog with { Materials = null }, plan, output, cache, processor: new CpuMipProcessor()));
     }
+    [Fact] public void AnalysisIsIdenticalAtAnyDegreeOfParallelism()
+    {
+        using var f = new Fixture(); var random = new Random(3);
+        for (int i = 0; i < 240; i++)
+        {
+            int size = 4 << random.Next(4);
+            f.File($"source/textures/set{i % 7}/t{i:000}.dds", i % 11 == 0 ? [1, 2, 3] : Fixture.RawDds(size, size, mipCount: random.Next(1, 3)));
+            f.File($"source/meshes/m{i:000}.nif", i % 13 == 0 ? Fixture.Mesh()[..70] : Fixture.Mesh(i / 48 % 2, $"textures/set{(i * 5) % 240 % 7}/t{(i * 5) % 240:000}.dds", flags1: i % 5 == 0 ? 1u << 4 : 0x82400301));
+        }
+        for (int i = 0; i < 10; i++)
+        {
+            f.File($"source/textures/solo/s{i}.dds", Fixture.RawDds(mipCount: 1));
+            f.File($"source/meshes/solo{i}.nif", Fixture.Mesh(i % 2, $"textures/solo/s{i}.dds", flags1: 0x82400301));
+        }
+        var source = new SourceOptions(Folder: f.Dir("source"));
+        string Describe(int workers, List<JobProgress> events)
+        {
+            var progress = new CallbackProgress(events.Add); var catalog = CatalogLoader.Load(source, progress, inspectMaterials: true, workers: workers);
+            var plan = Planner.Analyze(catalog, Fresh, progress, workers: workers);
+            return System.Text.Json.JsonSerializer.Serialize(new { plan.Items, plan.MaterialFingerprint, plan.Diagnostics, plan.Coverage }, JsonFiles.Options);
+        }
+        var sequential = new List<JobProgress>(); string expected = Describe(1, sequential);
+        Assert.Contains("\"Rebuild\"", expected); Assert.Contains("\"Invalid\"", expected); Assert.Contains("Conflicting bindings", expected); Assert.Contains("Material inspection unavailable", expected);
+        foreach (int workers in new[] { 0, 2, 8, 32 })
+        {
+            var events = new List<JobProgress>(); Assert.Equal(expected, Describe(workers, events));
+            foreach (string phase in new[] { "Materials", "Analyze" })
+            {
+                int[] done = events.Where(e => e.Phase == phase).Select(e => e.Done).ToArray();
+                Assert.Equal(new[] { 100, 200, 250 }, done); Assert.All(events.Where(e => e.Phase == phase), e => Assert.Equal(250, e.Total));
+            }
+        }
+        Assert.Equal(sequential.Where(e => e.Phase != "Resolve").Select(e => (e.Phase, e.Done)), new[] { "Materials", "Analyze" }.SelectMany(p => new[] { (p, 100), (p, 200), (p, 250) }));
+    }
+    [Fact] public void ParallelAnalysisHonoursCancellationAndReportsFailuresDirectly()
+    {
+        using var f = new Fixture(); for (int i = 0; i < 40; i++) f.File($"source/textures/t{i}.dds", Fixture.Dds());
+        var catalog = CatalogLoader.Load(new(Folder: f.Dir("source")));
+        Assert.ThrowsAny<OperationCanceledException>(() => Planner.Analyze(catalog, new(), ct: new CancellationToken(true), workers: 8));
+        using var cancel = new CancellationTokenSource(); int opened = 0;
+        var cancelling = catalog with { Assets = catalog.Assets.Select(a => a with { Open = () => { if (Interlocked.Increment(ref opened) == 5) cancel.Cancel(); return a.Open(); } }).ToArray() };
+        Assert.ThrowsAny<OperationCanceledException>(() => Planner.Analyze(cancelling, new(), ct: cancel.Token, workers: 4));
+        // An unexpected failure surfaces as itself, not wrapped, exactly as the sequential loop reported it.
+        var failing = catalog with { Assets = catalog.Assets.Select(a => a with { Open = () => throw new InvalidOperationException("boom") }).ToArray() };
+        Assert.Equal("boom", Assert.Throws<InvalidOperationException>(() => Planner.Analyze(failing, new(), workers: 8)).Message);
+        Assert.Throws<ArgumentException>(() => Planner.Analyze(catalog, new(), workers: 65)); Assert.Throws<ArgumentException>(() => BoundedParallel.Degree(-1));
+        Assert.InRange(BoundedParallel.Degree(0), 1, 8); Assert.Equal(40, Planner.Analyze(catalog, new(), workers: 64).Items.Count);
+    }
+    private sealed class CallbackProgress(Action<JobProgress> callback) : IProgress<JobProgress>
+    { public void Report(JobProgress progress) => callback(progress); }
     [Fact] public void TruncatedAndOversizedMaterialMetadataIsReported()
     {
         using var f = new Fixture(); f.File("source/meshes/broken.nif", Fixture.Mesh()[..70]);

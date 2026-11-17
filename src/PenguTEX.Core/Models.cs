@@ -45,6 +45,32 @@ public static class TransientIo
     }
 }
 
+/// <summary>Index-ordered parallel work for analysis: results land by index, so output never depends on timing.</summary>
+public static class BoundedParallel
+{
+    public static int Degree(int requested) => requested is < 0 or > 64 ? throw new ArgumentException("Analysis workers must be between 1 and 64.")
+        : requested > 0 ? requested : Math.Min(Environment.ProcessorCount, 8);
+
+    /// <param name="completed">Called with a rising count every 100 items and at the end, and the index just finished.</param>
+    public static void For(int count, int degree, CancellationToken ct, Action<int> body, Action<int, int>? completed = null)
+    {
+        int done = 0, reported = 0; var gate = new object();
+        try
+        {
+            Parallel.For(0, count, new ParallelOptions { MaxDegreeOfParallelism = Degree(degree), CancellationToken = ct }, i =>
+            {
+                body(i);
+                int now = Interlocked.Increment(ref done);
+                if (completed is null || (now % 100 != 0 && now != count)) return;
+                lock (gate) { if (now > reported) { reported = now; completed(now, i); } }
+            });
+        }
+        // Report the failure itself, as a sequential loop would.
+        catch (AggregateException e) when (e.InnerExceptions.Count > 0)
+        { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(e.Flatten().InnerExceptions[0]).Throw(); }
+    }
+}
+
 public sealed record SourceOptions(string? Folder = null, string? Instance = null, string? Profile = null,
     string? Game = null, string? Mods = null, string? Profiles = null, string? Overwrite = null,
     string? WinePrefix = null, string? Ini = null, string[]? ExcludeMods = null, string? Data = null)

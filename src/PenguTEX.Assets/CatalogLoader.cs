@@ -9,10 +9,11 @@ namespace PenguTEX.Assets;
 
 public static class CatalogLoader
 {
-    public static Catalog Load(SourceOptions options, IProgress<JobProgress>? progress = null, CancellationToken ct = default, bool inspectMaterials = false)
-        => Load(options, progress, ct, comparisonOnly: false, inspectMaterials);
+    /// <param name="workers">Meshes read at once during material inspection; 0 chooses a default.</param>
+    public static Catalog Load(SourceOptions options, IProgress<JobProgress>? progress = null, CancellationToken ct = default, bool inspectMaterials = false, int workers = 0)
+        => Load(options, progress, ct, comparisonOnly: false, inspectMaterials, workers);
 
-    private static Catalog Load(SourceOptions options, IProgress<JobProgress>? progress, CancellationToken ct, bool comparisonOnly, bool inspectMaterials = false)
+    private static Catalog Load(SourceOptions options, IProgress<JobProgress>? progress, CancellationToken ct, bool comparisonOnly, bool inspectMaterials = false, int workers = 0)
     {
         if ((options.Folder is null) == (options.Instance is null))
             throw new ArgumentException("Choose exactly one texture folder or mod-manager instance.");
@@ -159,11 +160,11 @@ public static class CatalogLoader
         MaterialCatalog? materials = null;
         if (inspectMaterials)
         {
-            materials = MaterialReader.Read(assets.Values.Where(a => a.Path.StartsWith("meshes/")).ToArray(), diagnostics, progress, ct);
+            materials = MaterialReader.Read(assets.Values.Where(a => a.Path.StartsWith("meshes/")).ToArray(), diagnostics, progress, ct, workers);
             var freshOptions = options with { ReferenceFolder = null, ReplaceMod = null };
             materials = materials with { RefreshFingerprint = token =>
             {
-                var refreshed = Load(freshOptions, progress, token, false, true);
+                var refreshed = Load(freshOptions, progress, token, false, true, workers);
                 if (refreshed.Diagnostics.Any(d => d.Severity == "Error"))
                     throw new IOException("Original source inventory became incomplete during material recheck. Analyze again.");
                 return refreshed.Materials!.Fingerprint;

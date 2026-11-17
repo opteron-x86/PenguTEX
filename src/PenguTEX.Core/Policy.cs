@@ -124,14 +124,21 @@ public sealed record Policy
 
 public static class Planner
 {
-    public static OptimizationPlan Analyze(Catalog catalog, Policy policy, IProgress<JobProgress>? progress = null, CancellationToken ct = default)
+    /// <param name="workers">Textures inspected at once; 0 chooses a default. The plan is the same at any value.</param>
+    public static OptimizationPlan Analyze(Catalog catalog, Policy policy, IProgress<JobProgress>? progress = null, CancellationToken ct = default, int workers = 0)
     {
         policy.Validate();
         if (policy.CompleteKnownMaterials && catalog.Materials is null) throw new ArgumentException("Material-aware analysis requires a catalog with mesh bindings enabled.");
-        var items = new List<PlanItem>();
         if (policy.FitReference && catalog.Reference is null) throw new ArgumentException("Choose a reference output before enabling reference fitting.");
         var references = ReferenceComparison.Read(catalog.Reference, progress, ct);
-        foreach (var asset in catalog.Assets.OrderBy(a => a.Path, StringComparer.Ordinal))
+        var ordered = catalog.Assets.OrderBy(a => a.Path, StringComparer.Ordinal).ToArray(); var items = new PlanItem[ordered.Length];
+        BoundedParallel.For(ordered.Length, workers, ct, i => items[i] = Plan(ordered[i]),
+            (done, i) => progress?.Report(new("Analyze", done, ordered.Length, ordered[i].Path, "Inspecting winning textures")));
+        return new(1, catalog.Source, policy, DateTimeOffset.UtcNow, items, catalog.Diagnostics)
+        { Comparison = ReferenceComparison.Compare(catalog, items, references), MaterialFingerprint = catalog.Materials?.Fingerprint, UnreadableMaterialMeshes = catalog.Materials?.UnreadableMeshes ?? 0 };
+
+        // Reads only shared, immutable state, so textures can be planned concurrently.
+        PlanItem Plan(Asset asset)
         {
             ct.ThrowIfCancellationRequested(); var (category, maximum, protection, protectionKind) = policy.Classify(asset.Path);
             references.TryGetValue(asset.Path, out var reference);
@@ -179,13 +186,10 @@ public static class Planner
                             while (Math.Max(info.Width >> drop, info.Height >> drop) > 1 && !ReferenceComparison.Fits(info, drop, true, previousRebuild)) drop++;
                         width = Math.Max(1, info.Width >> drop); height = Math.Max(1, info.Height >> drop);
                         var target = info with { Width = width, Height = height, MipCount = 1 + (int)Math.Log2(Math.Max(width, height)) };
-                        items.Add(new(asset.Path, asset.Origin, asset.Container, category, Decision.Rebuild,
+                        return new(asset.Path, asset.Origin, asset.Container, category, Decision.Rebuild,
                             complete ? $"Complete original mip chain; retain available levels byte-for-byte and generate missing levels with {rebuild.Semantic}; original {info.Format} format retained."
                                 : $"Explicit CPU rebuild from the top mip; {rebuild.Semantic}; original {info.Format} format retained.", info, drop, width, height,
-                            Enumerable.Range(0, target.MipCount).Sum(target.MipBytes)) { Semantic = rebuild.Semantic, PreserveExistingMips = complete, AlphaCutoff = rebuild.AlphaCutoff, Material = hint });
-                        if (items.Count % 100 == 0 || items.Count == catalog.Assets.Count)
-                            progress?.Report(new("Analyze", items.Count, catalog.Assets.Count, asset.Path, "Planning explicit mip rebuilds"));
-                        continue;
+                            Enumerable.Range(0, target.MipCount).Sum(target.MipBytes)) { Semantic = rebuild.Semantic, PreserveExistingMips = complete, AlphaCutoff = rebuild.AlphaCutoff, Material = hint };
                     }
                 }
                 else if (policy.FitReference && reference?.Info is { } previousCopy && !ReferenceComparison.Fits(info, drop, false, previousCopy))
@@ -201,17 +205,13 @@ public static class Planner
                     reason = (info.RecordLayout is null ? $"Recovered source mip count {declared} → {info.MipCount} from the exact full-chain payload length. "
                         : $"Recovered {info.MipCount} original mips from validated {info.RecordLayout}; every descriptor and footer checked. ") + reason;
                 }
-                items.Add(new(asset.Path, asset.Origin, asset.Container, category, decision, reason, info, drop,
-                    Math.Max(1, info.Width >> drop), Math.Max(1, info.Height >> drop), info.PayloadBytes - info.RemovedBytes(drop)) { Material = hint });
+                return new(asset.Path, asset.Origin, asset.Container, category, decision, reason, info, drop,
+                    Math.Max(1, info.Width >> drop), Math.Max(1, info.Height >> drop), info.PayloadBytes - info.RemovedBytes(drop)) { Material = hint };
             }
-            catch (ProtectedTextureException e) { items.Add(new(asset.Path, asset.Origin, asset.Container, category, Decision.Protected, e.Message, null, 0, 0, 0, 0)); }
-            catch (NotSupportedException e) { items.Add(new(asset.Path, asset.Origin, asset.Container, category, Decision.Unsupported, e.Message, null, 0, 0, 0, 0)); }
+            catch (ProtectedTextureException e) { return new(asset.Path, asset.Origin, asset.Container, category, Decision.Protected, e.Message, null, 0, 0, 0, 0); }
+            catch (NotSupportedException e) { return new(asset.Path, asset.Origin, asset.Container, category, Decision.Unsupported, e.Message, null, 0, 0, 0, 0); }
             catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or OverflowException or ArgumentException)
-            { items.Add(new(asset.Path, asset.Origin, asset.Container, category, Decision.Invalid, e.Message, null, 0, 0, 0, 0)); }
-            if (items.Count % 100 == 0 || items.Count == catalog.Assets.Count)
-                progress?.Report(new("Analyze", items.Count, catalog.Assets.Count, asset.Path, "Inspecting winning textures"));
+            { return new(asset.Path, asset.Origin, asset.Container, category, Decision.Invalid, e.Message, null, 0, 0, 0, 0); }
         }
-        return new(1, catalog.Source, policy, DateTimeOffset.UtcNow, items, catalog.Diagnostics)
-        { Comparison = ReferenceComparison.Compare(catalog, items, references), MaterialFingerprint = catalog.Materials?.Fingerprint, UnreadableMaterialMeshes = catalog.Materials?.UnreadableMeshes ?? 0 };
     }
 }

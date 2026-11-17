@@ -69,7 +69,8 @@ public static class Program
         if (requireParity && source.ReferenceFolder is null) throw new ArgumentException("--require-parity needs --reference.");
         if (args[0] == "build") JobRunner.ValidateOutputDirectory(Get("output") ?? throw new ArgumentException("--output is required."));
         var progress = new ConsoleProgress();
-        var catalog = CatalogLoader.Load(source, progress, ct, policy.CompleteKnownMaterials); var plan = Planner.Analyze(catalog, policy, progress, ct);
+        int analysisWorkers = BoundedParallel.Degree(int.Parse(Get("analyze-workers") ?? "0"));
+        var catalog = CatalogLoader.Load(source, progress, ct, policy.CompleteKnownMaterials, analysisWorkers); var plan = Planner.Analyze(catalog, policy, progress, ct, analysisWorkers);
         if (Get("report") is { } report) JsonFiles.Write(report, plan);
         Console.Error.WriteLine(plan.Coverage.Assessment);
         if (plan.Comparison is { } comparison) Console.Error.WriteLine($"Replacement: {comparison.LargerCount} larger, {comparison.UnknownCount} unassessed, {comparison.IncompleteMipCount} incomplete mip chains. {comparison.Assessment}");
@@ -87,7 +88,7 @@ public static class Program
     {
         string[] known = ["folder", "instance", "profile", "game", "mods", "profiles", "overwrite", "wine-prefix",
             "ini", "exclude-mods", "preset", "policy", "max", "report", "output", "cache", "workers", "data",
-            "reference", "replace-mod", "fit-reference", "fit-protected", "carry-reference", "require-parity", "recover-mip-counts", "complete-materials", "require-complete", "recover-mip-records", "days", "dry-run"];
+            "reference", "replace-mod", "fit-reference", "fit-protected", "carry-reference", "require-parity", "recover-mip-counts", "complete-materials", "require-complete", "recover-mip-records", "days", "dry-run", "analyze-workers"];
         var options = new Dictionary<string, string>();
         for (int i = 0; i < args.Length; i += 2)
         {
@@ -124,7 +125,8 @@ public static class Program
                                             Remove cache files from older versions and entries
                                             unused for N days (default 30)
 
-        Options: --preset NAME, --policy FILE, --max N, --report FILE, --workers N
+        Options: --preset NAME, --policy FILE, --max N, --report FILE, --workers N,
+                 --analyze-workers N (textures and meshes inspected at once; default up to 8)
         Fresh runs: --complete-materials true|false, --require-complete true|false.
         Recovery: --recover-mip-counts true|false, --recover-mip-records true|false.
         Comparison: --reference PATH, --replace-mod NAME (profile slot when needed),

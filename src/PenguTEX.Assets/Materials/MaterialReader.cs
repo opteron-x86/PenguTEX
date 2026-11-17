@@ -8,49 +8,54 @@ namespace PenguTEX.Assets.Materials;
 public static class MaterialReader
 {
     public const int MaximumMeshBytes = 64 * 1024 * 1024;
+    private sealed record Inspected(List<string> Signatures, IReadOnlyList<(string Path, MaterialUse Use)> Bindings, Diagnostic? Warning);
+
+    /// <param name="workers">Meshes read at once; 0 chooses a default. The result is the same at any value.</param>
     public static MaterialCatalog Read(IReadOnlyList<Asset> meshes, List<Diagnostic> diagnostics,
-        IProgress<JobProgress>? progress, CancellationToken ct)
+        IProgress<JobProgress>? progress, CancellationToken ct, int workers = 0)
     {
+        var ordered = meshes.OrderBy(m => m.Path, StringComparer.Ordinal).ToArray(); var inspected = new Inspected[ordered.Length];
+        BoundedParallel.For(ordered.Length, workers, ct, i => inspected[i] = Inspect(ordered[i], ct),
+            (done, i) => progress?.Report(new("Materials", done, ordered.Length, ordered[i].Path, "Resolving winning mesh bindings")));
+        // Fold in path order so the fingerprint, binding order and diagnostics never depend on timing.
         var uses = new Dictionary<string, List<MaterialUse>>(StringComparer.Ordinal);
-        using var signature = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        int done = 0, failed = 0;
-        foreach (var mesh in meshes.OrderBy(m => m.Path, StringComparer.Ordinal))
+        using var signature = IncrementalHash.CreateHash(HashAlgorithmName.SHA256); int failed = 0;
+        foreach (var mesh in inspected)
         {
-            ct.ThrowIfCancellationRequested();
-            byte[]? bytes = null;
-            try
+            foreach (string line in mesh.Signatures) signature.AppendData(Encoding.UTF8.GetBytes(line + "\n"));
+            foreach (var (path, use) in mesh.Bindings)
             {
-                if (mesh.Length < 0 || mesh.Length > MaximumMeshBytes) throw new InvalidDataException("Material inspection limit is 64 MiB per mesh.");
-                using var source = mesh.Open(); bytes = new byte[checked((int)mesh.Length)];
-                int at = 0;
-                while (at < bytes.Length) { ct.ThrowIfCancellationRequested(); int n = source.Read(bytes, at, Math.Min(65536, bytes.Length - at)); if (n == 0) throw new EndOfStreamException("Truncated mesh."); at += n; }
-                if (source.ReadByte() != -1) throw new InvalidDataException("Mesh length changed during inspection.");
-                AddSignature(mesh.Path + "\0" + mesh.Container + "\0" + Convert.ToHexString(SHA256.HashData(bytes)));
-                foreach (var (path, use) in ReadBindings(bytes, mesh.Path, mesh.Container))
-                {
-                    if (!uses.TryGetValue(path, out var list)) uses[path] = list = [];
-                    list.Add(use);
-                }
+                if (!uses.TryGetValue(path, out var list)) uses[path] = list = [];
+                list.Add(use);
             }
-            catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException or ArgumentException or OverflowException)
-            {
-                if (bytes is not null)
-                {
-                    // Retain paths from readable sets as unknown when another block is malformed.
-                    // This prevents a second mesh's valid binding from masking the failed use.
-                    foreach (var path in UnknownPaths(bytes))
-                    {
-                        if (!uses.TryGetValue(path, out var list)) uses[path] = list = [];
-                        list.Add(new(mesh.Path, mesh.Container, -1, -1, -1, MaterialRole.Unknown, 128, "Material metadata is malformed or unsupported."));
-                    }
-                }
-                failed++; AddSignature(mesh.Path + "\0" + mesh.Container + "\0unreadable:" + e.Message);
-                diagnostics.Add(new("Warning", $"Material inspection unavailable for {mesh.Path} ({mesh.Origin}): {e.Message}"));
-            }
-            if (++done % 100 == 0 || done == meshes.Count) progress?.Report(new("Materials", done, meshes.Count, mesh.Path, "Resolving winning mesh bindings"));
+            if (mesh.Warning is not null) { failed++; diagnostics.Add(mesh.Warning); }
         }
         return new(Convert.ToHexString(signature.GetHashAndReset()), uses.ToDictionary(k => k.Key, k => MaterialHint.Summarize(k.Value), StringComparer.Ordinal), meshes.Count, failed);
-        void AddSignature(string value) => signature.AppendData(Encoding.UTF8.GetBytes(value + "\n"));
+    }
+
+    private static Inspected Inspect(Asset mesh, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        byte[]? bytes = null; var signatures = new List<string>();
+        try
+        {
+            if (mesh.Length < 0 || mesh.Length > MaximumMeshBytes) throw new InvalidDataException("Material inspection limit is 64 MiB per mesh.");
+            using var source = mesh.Open(); bytes = new byte[checked((int)mesh.Length)];
+            int at = 0;
+            while (at < bytes.Length) { ct.ThrowIfCancellationRequested(); int n = source.Read(bytes, at, Math.Min(65536, bytes.Length - at)); if (n == 0) throw new EndOfStreamException("Truncated mesh."); at += n; }
+            if (source.ReadByte() != -1) throw new InvalidDataException("Mesh length changed during inspection.");
+            signatures.Add(mesh.Path + "\0" + mesh.Container + "\0" + Convert.ToHexString(SHA256.HashData(bytes)));
+            return new(signatures, ReadBindings(bytes, mesh.Path, mesh.Container), null);
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException or ArgumentException or OverflowException)
+        {
+            // Retain paths from readable sets as unknown when another block is malformed.
+            // This prevents a second mesh's valid binding from masking the failed use.
+            var unknown = bytes is null ? [] : UnknownPaths(bytes).Select(path =>
+                (path, new MaterialUse(mesh.Path, mesh.Container, -1, -1, -1, MaterialRole.Unknown, 128, "Material metadata is malformed or unsupported."))).ToArray();
+            signatures.Add(mesh.Path + "\0" + mesh.Container + "\0unreadable:" + e.Message);
+            return new(signatures, unknown, new("Warning", $"Material inspection unavailable for {mesh.Path} ({mesh.Origin}): {e.Message}"));
+        }
     }
 
     public static IReadOnlyList<(string Path, MaterialUse Use)> ReadBindings(byte[] data, string mesh, string container)

@@ -47,6 +47,10 @@ virtual filesystem first, or supply an unmounted original Data directory using
 `--data`. PenguTEX rejects the merged mount because it cannot reconstruct original
 files hidden by existing optimizer outputs. It does not unmount anything itself.
 
+Analysis inspects textures and meshes on several threads (up to 8 by default;
+`--analyze-workers N`, 1 to 64). The plan, its ordering and the material fingerprint
+are the same at any value; a lower value can suit a slow hard disk.
+
 Analyze is read-only. Build creates an output mod and reusable cache in separate
 directories outside the inputs. An existing empty output folder is accepted for a first build. A nonempty output
 folder must be owned by PenguTEX; extra untracked files prevent replacement. Build
