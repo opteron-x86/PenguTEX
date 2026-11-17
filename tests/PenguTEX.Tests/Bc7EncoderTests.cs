@@ -8,10 +8,15 @@ namespace PenguTEX.Tests;
 
 public sealed class Bc7EncoderTests
 {
+    // Source builds without tools/build-native.py skip these; CI and packaging set PENGUTEX_REQUIRE_NATIVE_BC7=1.
+    private static void RequireNative() => Assert.SkipUnless(Bc7Encoder.NativeAvailable || Environment.GetEnvironmentVariable("PENGUTEX_REQUIRE_NATIVE_BC7") == "1",
+        "The native BC7 encoder is not built; run tools/build-native.py.");
+
     [Theory]
     [InlineData(Bc7Backend.Basic)] [InlineData(Bc7Backend.Fast)]
     public void NativeEdgesAreValidDeterministicAndPreserveConstantAlpha(Bc7Backend backend)
     {
+        RequireNative();
         var encoder = new Bc7Encoder(backend); var decoder = new BcDecoder(); decoder.Options.IsParallel = false;
         foreach (int width in new[] { 1, 2, 3, 4, 17, 255, 257 })
         foreach (int rows in new[] { 1, 2, 3, 4 })
@@ -37,6 +42,7 @@ public sealed class Bc7EncoderTests
     [Fact]
     public void ConcurrentNativeCallsDoNotShareMutableParameters()
     {
+        RequireNative();
         byte[] rgba = new byte[259 * 4 * 4]; new Random(44).NextBytes(rgba);
         byte[] basic = new Bc7Encoder(Bc7Backend.Basic).EncodeStrip(rgba, 259, 4);
         byte[] fast = new Bc7Encoder(Bc7Backend.Fast).EncodeStrip(rgba, 259, 4);
@@ -47,6 +53,7 @@ public sealed class Bc7EncoderTests
     [Fact]
     public void RunLogNamesTheEncoderInUse()
     {
+        RequireNative();
         Assert.Matches(@"^BC7 encoder: native BC7E Basic \((AVX2|SSE2)\)\.$", new CpuMipProcessor(Bc7Backend.Basic).EncoderSummary);
         Assert.Contains("native BC7E Fast", new Bc7Encoder(Bc7Backend.Fast).Summary);
         Assert.Equal("BC7 encoder: BCnEncoder (managed), selected explicitly.", new CpuMipProcessor(Bc7Backend.Managed).EncoderSummary);
@@ -55,6 +62,7 @@ public sealed class Bc7EncoderTests
     [Fact]
     public void RejectsInvalidBuffersBeforeEnteringNativeCode()
     {
+        RequireNative();
         var encoder = new Bc7Encoder(Bc7Backend.Basic);
         Assert.Throws<ArgumentException>(() => encoder.EncodeStrip(new byte[16], 1, 5));
         Assert.Throws<ArgumentException>(() => encoder.EncodeStrip(new byte[15], 1, 4));
@@ -65,6 +73,7 @@ public sealed class Bc7EncoderTests
     [Fact]
     public void BackendChangesSeparateCachesAndRetainedMipsStayIdentical()
     {
+        RequireNative();
         using var f = new Fixture(); byte[] original = ImagingTests.SolidDds(98);
         byte[] second = (byte[])original.Clone(); second[^1] ^= 1;
         f.File("source/a.dds", original); f.File("source/b.dds", second);

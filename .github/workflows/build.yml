@@ -36,6 +36,8 @@ jobs:
         env:
           PENGUTEX_SCREENSHOTS: ${{ github.workspace }}/.artifacts/screenshots
           PENGUTEX_ORACLE_FIXTURES: ${{ github.workspace }}/.artifacts/oracle
+      - name: Build the BC7 comparison tool
+        run: dotnet build tools/Bc7Benchmark -c Release --disable-build-servers -nologo
       - name: Independent DDS decoder
         run: |
           python3 -m venv .tools/dds-oracle

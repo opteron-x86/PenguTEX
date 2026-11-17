@@ -43,7 +43,8 @@ build = work / ('build-' + rid)
 output = root / 'native' / 'bin' / rid
 subprocess.run(['cmake', '-S', str(root / 'native/bc7'), '-B', str(build),
                 '-DCMAKE_BUILD_TYPE=Release', '-DISPC_EXECUTABLE=' + str(compiler),
-                '-DCMAKE_INSTALL_PREFIX=' + str(output)], check=True)
+                '-DCMAKE_INSTALL_PREFIX=' + str(output),
+                '-DPENGUTEX_WARNINGS_AS_ERRORS=' + ('ON' if os.environ.get('CI') else 'OFF')], check=True)
 subprocess.run(['cmake', '--build', str(build), '--config', 'Release', '--parallel', '2'], check=True)
 subprocess.run(['ctest', '--test-dir', str(build), '-C', 'Release', '--output-on-failure'], check=True)
 subprocess.run(['cmake', '--install', str(build), '--config', 'Release'], check=True)

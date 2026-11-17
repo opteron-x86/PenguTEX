@@ -11,6 +11,7 @@ public sealed class Bc7Encoder
 {
     private const string Library = "pengutex_bc7";
     private static readonly Lazy<int> NativeVariant = new(Probe);
+    public static bool NativeAvailable => NativeVariant.Value != 0;
     private readonly BcEncoder? managed;
     public Bc7Backend Backend { get; }
     public string Identity => Backend == Bc7Backend.Managed ? "bcn-2.3.0-balanced"
