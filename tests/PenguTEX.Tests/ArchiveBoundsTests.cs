@@ -74,14 +74,52 @@ public sealed class ArchiveBoundsTests
         var error = Assert.Throws<InvalidDataException>(() => entries[0].Open()); Assert.Contains("overlaps the next member", error.Message);
         using var good = entries[1].Open(); Assert.Equal(16, Dds.Inspect(good, entries[1].Size).Info.Width);
     }
-    [Fact] public void RejectsDuplicateOffsetsAndOutOfFileBounds()
+    // File records follow the 24-byte folder record and its 10-byte name: hash 8, size 4, offset 4.
+    private static int SizeAt(int record) => 60 + 1 + 9 + 16 * record + 8;
+    private static uint Field(byte[] data, int at) => BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(at));
+    private static void Field(byte[] data, int at, uint value) => BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(at), value);
+    private static byte[] Bytes(BsaMember member) { using var source = member.Open(); using var copy = new MemoryStream(); source.CopyTo(copy); Assert.Equal(-1, source.ReadByte()); return copy.ToArray(); }
+
+    [Theory] [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
+    public void IdenticalFilesStoredOnceOpenForEveryPath(bool compressed, bool embedded)
+    {
+        using var f = new Fixture(); byte[] shared = Fixture.Dds(), other = Fixture.Dds(32);
+        byte[] data = Archive([shared, shared, other], compressed, embedded);
+        Assert.Equal(Field(data, SizeAt(0)), Field(data, SizeAt(1)));
+        int first = (int)Field(data, SizeAt(0) + 4), second = (int)Field(data, SizeAt(1) + 4), third = (int)Field(data, SizeAt(2) + 4);
+        // Drop the second copy; its record names the first payload and the next member moves up.
+        Field(data, SizeAt(1) + 4, (uint)first); Field(data, SizeAt(2) + 4, (uint)second);
+        data = [..data[..second], ..data[third..]];
+        var diagnostics = new List<Diagnostic>(); var members = BoundedBsa.Read(f.File("shared.bsa", data), diagnostics);
+        Assert.Empty(diagnostics); Assert.Equal(3, members.Count);
+        Assert.Equal(shared, Bytes(members[0])); Assert.Equal(shared, Bytes(members[1])); Assert.Equal(other, Bytes(members[2]));
+    }
+    [Fact] public void SharedOffsetsNeedIdenticalSizeFields()
+    {
+        using var f = new Fixture(); byte[] data = Archive([Fixture.Dds(), Fixture.Dds(32)]);
+        Field(data, SizeAt(1) + 4, Field(data, SizeAt(0) + 4));
+        var entries = BoundedBsa.Read(f.File("sizes.bsa", data));
+        Assert.All(entries, e => Assert.Contains("different sizes", Assert.Throws<InvalidDataException>(() => e.Open()).Message));
+        data = Archive([Fixture.Dds(), Fixture.Dds()]);
+        Field(data, SizeAt(1) + 4, Field(data, SizeAt(0) + 4)); Field(data, SizeAt(1), Field(data, SizeAt(1)) | 0x40000000);
+        entries = BoundedBsa.Read(f.File("compression.bsa", data));
+        Assert.All(entries, e => Assert.Contains("different sizes", Assert.Throws<InvalidDataException>(() => e.Open()).Message));
+    }
+    [Fact] public void SharedPayloadCannotRunIntoTheNextMember()
+    {
+        using var f = new Fixture(); byte[] data = Archive([Fixture.Dds(), Fixture.Dds(), Fixture.Dds()]);
+        uint first = Field(data, SizeAt(0) + 4);
+        Field(data, SizeAt(1) + 4, first); Field(data, SizeAt(2) + 4, first + 4);
+        var entries = BoundedBsa.Read(f.File("overlap.bsa", data));
+        Assert.Contains("overlaps the next member", Assert.Throws<InvalidDataException>(() => entries[0].Open()).Message);
+        Assert.Contains("overlaps the next member", Assert.Throws<InvalidDataException>(() => entries[1].Open()).Message);
+    }
+    [Fact] public void RejectsOutOfFileBounds()
     {
         using var f = new Fixture(); byte[] data = Archive([Fixture.Dds(), Fixture.Dds()]);
-        const int offset = 60 + 1 + 9 + 12; uint first = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset));
-        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(offset + 16), first);
-        var entries = BoundedBsa.Read(f.File("duplicates.bsa", data)); Assert.All(entries, e => Assert.Throws<InvalidDataException>(() => e.Open()));
-        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(offset), (uint)data.Length + 1);
-        entries = BoundedBsa.Read(f.File("outside.bsa", data)); Assert.Throws<InvalidDataException>(() => entries[0].Open());
+        Field(data, SizeAt(0) + 4, (uint)data.Length + 1);
+        var entries = BoundedBsa.Read(f.File("outside.bsa", data)); Assert.Throws<InvalidDataException>(() => entries[0].Open());
+        using var good = entries[1].Open(); Assert.Equal(16, Dds.Inspect(good, entries[1].Size).Info.Width);
     }
     [Theory] [InlineData(-1)] [InlineData(1)]
     public void DecodedSizeMismatchIsAnArchiveDiagnostic(int delta)
