@@ -1,0 +1,91 @@
+name: Upload release to Nexus
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published release tag (for example, v0.1.0-alpha.11)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: nexus-upload
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    name: Upload tested release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: nexus
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Check publishing configuration
+        env:
+          NEXUSMODS_API_KEY: ${{ secrets.NEXUSMODS_API_KEY }}
+          NEXUSMODS_MOD_ID: ${{ vars.NEXUSMODS_MOD_ID }}
+          NEXUSMODS_FILE_ID_WINDOWS: ${{ vars.NEXUSMODS_FILE_ID_WINDOWS }}
+          NEXUSMODS_FILE_ID_LINUX: ${{ vars.NEXUSMODS_FILE_ID_LINUX }}
+        run: |
+          python3 - <<'PY'
+          import os
+          if os.environ['GITHUB_REF'] != 'refs/heads/master':
+              raise SystemExit('Run this workflow from master')
+          required = ('NEXUSMODS_API_KEY', 'NEXUSMODS_MOD_ID', 'NEXUSMODS_FILE_ID_WINDOWS', 'NEXUSMODS_FILE_ID_LINUX')
+          missing = [name for name in required if not os.environ.get(name, '').strip()]
+          if missing:
+              raise SystemExit('Configure the nexus environment: ' + ', '.join(missing))
+          PY
+      - name: Download and verify the published build
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 tools/prepare-nexus-upload.py --repo "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --output build/nexus-upload
+      # PenguTEX is a tool that is extracted by hand, so mod managers are not offered the packages.
+      - name: Upload the Windows package
+        id: windows
+        uses: Nexus-Mods/upload-action@98532f7670c27cbecc78fae03fa3e278147827e2
+        with:
+          api_key: ${{ secrets.NEXUSMODS_API_KEY }}
+          file_id: ${{ vars.NEXUSMODS_FILE_ID_WINDOWS }}
+          filename: ${{ steps.release.outputs.windows }}
+          version: ${{ steps.release.outputs.version }}
+          display_name: PenguTEX Windows x64
+          description: PenguTEX for Windows. Extract the archive and run win-x64/PenguTEX.Desktop.exe.
+          category: main
+          archive_existing_version: 'true'
+          primary_mod_manager_download: 'false'
+          allow_mod_manager_download: 'false'
+      # Last, so the mod's version and changelog change only once both files are in place.
+      - name: Upload the Linux package
+        id: linux
+        uses: Nexus-Mods/upload-action@98532f7670c27cbecc78fae03fa3e278147827e2
+        with:
+          api_key: ${{ secrets.NEXUSMODS_API_KEY }}
+          file_id: ${{ vars.NEXUSMODS_FILE_ID_LINUX }}
+          mod_id: ${{ vars.NEXUSMODS_MOD_ID }}
+          filename: ${{ steps.release.outputs.linux }}
+          version: ${{ steps.release.outputs.version }}
+          display_name: PenguTEX Linux x64
+          description: PenguTEX for Linux. Extract the archive and run linux-x64/PenguTEX.Desktop.
+          category: main
+          archive_existing_version: 'true'
+          primary_mod_manager_download: 'false'
+          allow_mod_manager_download: 'false'
+          update_mod_version: 'true'
+          changelog: ${{ steps.release.outputs.changelog }}
+      - name: Record uploaded version
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          WINDOWS_VERSION_ID: ${{ steps.windows.outputs.version_id }}
+          LINUX_VERSION_ID: ${{ steps.linux.outputs.version_id }}
+        run: |
+          printf 'Uploaded PenguTEX %s to Nexus Mods (version IDs: Windows %s, Linux %s).\n' \
+            "$RELEASE_VERSION" "$WINDOWS_VERSION_ID" "$LINUX_VERSION_ID" >> "$GITHUB_STEP_SUMMARY"

@@ -57,6 +57,8 @@ ICU, OpenSSL and standard graphics/runtime libraries.
 
 ## Build and release
 
+The release and Nexus upload steps are in [RELEASING.md](RELEASING.md).
+
 Build with .NET 10 and Python 3. Linux packaging also uses tar, curl and AppStream:
 
 ```sh

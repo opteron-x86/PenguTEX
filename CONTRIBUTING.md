@@ -12,7 +12,8 @@ Never overwrite original textures or auto-enable test outputs in a real modlist.
 Changes to precedence, DDS processing, cache reuse and publication need regression
 coverage, including failure/interruption. Rendered UI and actual native GUI startup
 are distinct checks. Describe actual validation and limits in PRs. Release tags
-require tested packages, source, dependency notices and checksums.
+require tested packages, source, dependency notices and checksums. Record user-facing changes
+under `## [Unreleased]` in `CHANGELOG.md`; see [docs/RELEASING.md](docs/RELEASING.md).
 
 Layout: `src/PenguTEX.Core` for contracts, DDS, policy and jobs;
 `src/PenguTEX.Assets` for profiles and archives; `src/PenguTEX.Cli` and

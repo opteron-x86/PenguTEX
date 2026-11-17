@@ -36,9 +36,10 @@ for project in ('PenguTEX.Cli', 'PenguTEX.Desktop'):
     subprocess.run([dotnet, 'publish', f'src/{project}', '-c', 'Release', '-r', 'win-x64',
                     '--self-contained', 'true', '-o', str(payload), '--disable-build-servers',
                     '-m:1', '-nr:false', '-p:UseSharedCompilation=false'], check=True)
-for name in ('LICENSE', 'README.md'):
+for name in ('LICENSE', 'README.md', 'CHANGELOG.md'):
     shutil.copyfile(root / name, payload / name)
 shutil.copytree(root / 'docs', payload / 'docs')
+(payload / 'VERSION').write_text(version + '\n', encoding='utf-8')
 shutil.copyfile(root / 'packaging/pengutex.svg', payload / 'pengutex.svg')
 subprocess.run([sys.executable, 'tools/collect-licenses.py', '--rid', 'win-x64'], check=True)
 if not args.cross_compile:

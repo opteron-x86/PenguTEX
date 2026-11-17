@@ -11,7 +11,8 @@ for project in PenguTEX.Cli PenguTEX.Desktop; do
     "$DOTNET" publish "src/$project" -c Release -r linux-x64 --self-contained true \
         -o "$payload" --disable-build-servers -m:1 -nr:false -p:UseSharedCompilation=false
 done
-cp LICENSE README.md "$payload/"
+cp LICENSE README.md CHANGELOG.md "$payload/"
+printf '%s\n' "$version" > "$payload/VERSION"
 cp -a docs "$payload/"
 cp packaging/pengutex.svg "$payload/"
 cp tools/install-desktop.sh "$payload/"
