@@ -61,3 +61,12 @@ paths = sorted(Path(sys.argv[1]).glob("*.dds"))
 assert len(paths) == 22, f"Expected 22 synthetic fixtures, found {len(paths)}"
 levels = sum(verify(path) for path in paths)
 print(f"Pillow {__version__}: independently decoded {len(paths)} DDS files / {levels} mip levels; channels and lengths match.")
+native = sorted((Path(sys.argv[1]) / 'bc7-native').glob('*.dds'))
+assert len(native) == 112, f'Expected 112 native BC7 edge fixtures, found {len(native)}'
+for path in native:
+    _, width, height, alpha = path.stem.split('-')
+    with Image.open(path) as image:
+        image.load()
+        assert image.size == (int(width), int(height))
+        assert all(a == int(alpha) for a in image.convert('RGBA').getchannel('A').get_flattened_data()), path
+print(f'Pillow: independently decoded {len(native)} native BC7 edge fixtures; constant alpha preserved exactly.')

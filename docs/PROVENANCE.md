@@ -6,7 +6,10 @@ PenguTEX is GPL-3.0-only. Selected path/profile components are adapted from
 changes below. No neighboring checkout is required at runtime.
 
 Dependencies include Avalonia, Mutagen and BCnEncoder.NET. Package versions are pinned;
-distributions include dependency notices. No VRAMr code, binaries, exclusion
+distributions include dependency notices.
+The native BC7E source/compiler revisions and local wrapper are recorded in
+[BC7-ENCODER.md](BC7-ENCODER.md) and `native/bc7/vendor/UPSTREAM.txt`.
+No VRAMr code, binaries, exclusion
 databases, or proprietary game/mod assets are redistributed.
 
 References: [DDS layout](https://learn.microsoft.com/en-us/windows/win32/direct3ddds/dds-file-layout-for-textures),

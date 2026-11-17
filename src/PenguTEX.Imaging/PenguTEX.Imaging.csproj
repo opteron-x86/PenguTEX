@@ -1,1 +1,14 @@
-<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><ProjectReference Include="../PenguTEX.Core/PenguTEX.Core.csproj" /><PackageReference Include="BCnEncoder.Net" /></ItemGroup></Project>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Bc7Rid Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</Bc7Rid>
+    <Bc7Rid Condition="'$(Bc7Rid)' == ''">$(NETCoreSdkRuntimeIdentifier)</Bc7Rid>
+    <Bc7Library Condition="'$(Bc7Rid)' == 'linux-x64'">libpengutex_bc7.so</Bc7Library>
+    <Bc7Library Condition="'$(Bc7Rid)' == 'win-x64'">pengutex_bc7.dll</Bc7Library>
+    <Bc7Path>$(MSBuildThisFileDirectory)../../native/bin/$(Bc7Rid)/$(Bc7Library)</Bc7Path>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../PenguTEX.Core/PenguTEX.Core.csproj" /><PackageReference Include="BCnEncoder.Net" /></ItemGroup>
+  <ItemGroup Condition="'$(Bc7Library)' != '' and Exists('$(Bc7Path)')">
+    <None Include="$(Bc7Path)" Link="$(Bc7Library)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

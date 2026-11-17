@@ -41,6 +41,11 @@ for name, item in sorted(assets['libraries'].items()):
             shutil.copyfile(file, dest)
     lines.append('')
 (out / 'THIRD-PARTY-PACKAGES.txt').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+with (out / 'THIRD-PARTY-PACKAGES.txt').open('a', encoding='utf-8') as inventory:
+    inventory.write('\nNative BC7 encoder: Binomial BC7E\nLicense: Apache-2.0\n'
+                    'Source: https://github.com/richgel999/bc7enc_rdo\n'
+                    'Revision: b9438627eef73a1157e84201b6fa6eb2ffd6d9f0\n'
+                    'Compiler: ISPC 1.32.0; SSE2/AVX2; see docs/BC7-ENCODER.md\n')
 # Self-contained runtime packs are not always listed in the managed package graph.
 runtime = json.loads((out / 'PenguTEX.Desktop.runtimeconfig.json').read_text(encoding='utf-8'))['runtimeOptions']['includedFrameworks']
 for framework in runtime:

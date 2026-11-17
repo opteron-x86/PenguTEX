@@ -1,5 +1,8 @@
 # Reproducible synthetic diagnostics
 
+For native BC7 encoding and full mip-completion comparisons, see
+[BC7-ENCODER.md](BC7-ENCODER.md) and the [2026-11-17 evaluation](BC7-BENCHMARK.md).
+
 After `bash tools/build.sh`, run:
 
 ```sh

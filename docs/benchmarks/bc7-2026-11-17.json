@@ -1,0 +1,367 @@
+{
+  "date": "2026-11-17",
+  "cpu": "AMD Ryzen 9 7950X3D (16 cores / 32 threads)",
+  "os": "Linux x64",
+  "baseline": "BCnEncoder.NET 2.3.0 Balanced, single thread",
+  "native": "ISPC 1.32.0 SSE2/AVX2, equal RGBA weights, constant-alpha correction",
+  "realSamples": 36,
+  "syntheticSamples": 20,
+  "realPixels": 1937413,
+  "repeats": 3,
+  "timing": "Median per sample; one warmup and adaptive batches; pixels/s is sum(pixels)/sum(sample median seconds). Encoding and packing only. Microbenchmarks ran while other task processes were sometimes active; these are pilot measurements, not isolated CPU-lab results.",
+  "backends": [
+    {
+      "name": "BCnEncoder Balanced",
+      "semantic": {
+        "LinearData": {
+          "channelPsnrDb": [
+            47.697858253533376,
+            48.006022803560946,
+            47.98544809084193,
+            68.99586952477864
+          ],
+          "maxSampleCoverageError": 0.0,
+          "maxSampleNormalP99Degrees": 0
+        },
+        "NormalRgb": {
+          "channelPsnrDb": [
+            38.290812760293335,
+            42.294197441202655,
+            38.32437574439463,
+            45.88139609344469
+          ],
+          "maxSampleCoverageError": 0.002227783203125,
+          "maxSampleNormalP99Degrees": 9.02201753150208
+        },
+        "OpacityBlendSrgb": {
+          "channelPsnrDb": [
+            45.4401721959501,
+            46.884132730818536,
+            44.47933205020648,
+            42.406457764546566
+          ],
+          "maxSampleCoverageError": 0.00048828125,
+          "maxSampleNormalP99Degrees": 0
+        },
+        "OpacitySrgb": {
+          "channelPsnrDb": [
+            45.214941893249076,
+            47.56544724017235,
+            45.715448628221665,
+            43.80563908655172
+          ],
+          "maxSampleCoverageError": 0.0003662109375,
+          "maxSampleNormalP99Degrees": 0
+        },
+        "SrgbColor": {
+          "channelPsnrDb": [
+            48.157061240400445,
+            51.205384846772404,
+            47.480262066874076,
+            54.94193110820944
+          ],
+          "maxSampleCoverageError": 0.0032958984375,
+          "maxSampleNormalP99Degrees": 0
+        }
+      },
+      "megapixelsPerSecond": 0.02706902627742156
+    },
+    {
+      "name": "BC7E Basic",
+      "semantic": {
+        "LinearData": {
+          "channelPsnrDb": [
+            52.7138427691753,
+            52.76728454760842,
+            52.768220770412384,
+            67.41863579902346
+          ],
+          "maxSampleCoverageError": 0.0,
+          "maxSampleNormalP99Degrees": 0
+        },
+        "NormalRgb": {
+          "channelPsnrDb": [
+            40.522804542632045,
+            40.13130708552973,
+            40.24513121798083,
+            45.158414847722725
+          ],
+          "maxSampleCoverageError": 0.0009307861328125,
+          "maxSampleNormalP99Degrees": 8.372911481313416
+        },
+        "OpacityBlendSrgb": {
+          "channelPsnrDb": [
+            46.51889681759532,
+            46.44129051313354,
+            46.40462236399819,
+            42.89350972007276
+          ],
+          "maxSampleCoverageError": 0.0009765625,
+          "maxSampleNormalP99Degrees": 0
+        },
+        "OpacitySrgb": {
+          "channelPsnrDb": [
+            45.83326472164021,
+            46.63332319931392,
+            46.54952841635556,
+            44.63148041383137
+          ],
+          "maxSampleCoverageError": 0.0002899169921875,
+          "maxSampleNormalP99Degrees": 0
+        },
+        "SrgbColor": {
+          "channelPsnrDb": [
+            49.6629882749896,
+            50.8144532726974,
+            50.45990056102211,
+            50.624287213450536
+          ],
+          "maxSampleCoverageError": 0.0064697265625,
+          "maxSampleNormalP99Degrees": 0
+        }
+      },
+      "megapixelsPerSecond": 2.540088183288444
+    },
+    {
+      "name": "BC7E Fast",
+      "semantic": {
+        "LinearData": {
+          "channelPsnrDb": [
+            52.293835629060396,
+            52.36540380354896,
+            52.36959744744911,
+            66.71885552899701
+          ],
+          "maxSampleCoverageError": 0.0,
+          "maxSampleNormalP99Degrees": 0
+        },
+        "NormalRgb": {
+          "channelPsnrDb": [
+            38.12549058251904,
+            37.24640162945149,
+            40.3712680439492,
+            43.6825812522169
+          ],
+          "maxSampleCoverageError": 0.004180908203125,
+          "maxSampleNormalP99Degrees": 14.777503247658128
+        },
+        "OpacityBlendSrgb": {
+          "channelPsnrDb": [
+            46.293249499327175,
+            46.09863915735656,
+            46.002620060857794,
+            42.582164391555324
+          ],
+          "maxSampleCoverageError": 0.001708984375,
+          "maxSampleNormalP99Degrees": 0
+        },
+        "OpacitySrgb": {
+          "channelPsnrDb": [
+            45.416860577553386,
+            46.215198043007504,
+            46.17711181808253,
+            44.18170253301941
+          ],
+          "maxSampleCoverageError": 0.000396728515625,
+          "maxSampleNormalP99Degrees": 0
+        },
+        "SrgbColor": {
+          "channelPsnrDb": [
+            49.258460633398556,
+            50.64512161259667,
+            50.10110101712811,
+            50.49974520629525
+          ],
+          "maxSampleCoverageError": 0.0067138671875,
+          "maxSampleNormalP99Degrees": 0
+        }
+      },
+      "megapixelsPerSecond": 5.8417600774417275
+    },
+    {
+      "name": "bc7f analytical",
+      "semantic": {
+        "LinearData": {
+          "channelPsnrDb": [
+            49.98736881780408,
+            50.159594994121896,
+            50.16403776567643,
+            67.18784422519184
+          ],
+          "maxSampleCoverageError": 0.0,
+          "maxSampleNormalP99Degrees": 0
+        },
+        "NormalRgb": {
+          "channelPsnrDb": [
+            36.00989253270895,
+            35.159489911517994,
+            41.03364587721428,
+            46.532576021467136
+          ],
+          "maxSampleCoverageError": 0.0007781982421875,
+          "maxSampleNormalP99Degrees": 17.442251279375675
+        },
+        "OpacityBlendSrgb": {
+          "channelPsnrDb": [
+            45.11317436946554,
+            44.83263129149073,
+            44.722686055052094,
+            42.92567298865869
+          ],
+          "maxSampleCoverageError": 0.000732421875,
+          "maxSampleNormalP99Degrees": 0
+        },
+        "OpacitySrgb": {
+          "channelPsnrDb": [
+            44.49369801707145,
+            45.290789332376384,
+            45.224162236776294,
+            44.07205652552604
+          ],
+          "maxSampleCoverageError": 0.000335693359375,
+          "maxSampleNormalP99Degrees": 0
+        },
+        "SrgbColor": {
+          "channelPsnrDb": [
+            47.94082889222046,
+            49.951754361754595,
+            49.007257358513,
+            53.76651155560623
+          ],
+          "maxSampleCoverageError": 0.00970458984375,
+          "maxSampleNormalP99Degrees": 0
+        }
+      },
+      "megapixelsPerSecond": 60.73841793375455
+    },
+    {
+      "name": "bc7f partially analytical",
+      "semantic": {
+        "LinearData": {
+          "channelPsnrDb": [
+            50.02302212435984,
+            50.19712332882942,
+            50.20140642497197,
+            67.16050135531933
+          ],
+          "maxSampleCoverageError": 0.0,
+          "maxSampleNormalP99Degrees": 0
+        },
+        "NormalRgb": {
+          "channelPsnrDb": [
+            37.09541015602719,
+            36.59972501639588,
+            40.75634267103574,
+            46.63710435462175
+          ],
+          "maxSampleCoverageError": 0.00140380859375,
+          "maxSampleNormalP99Degrees": 17.37861230988115
+        },
+        "OpacityBlendSrgb": {
+          "channelPsnrDb": [
+            45.501132322263196,
+            45.25434545758675,
+            45.22765980974437,
+            42.837045769460076
+          ],
+          "maxSampleCoverageError": 0.000244140625,
+          "maxSampleNormalP99Degrees": 0
+        },
+        "OpacitySrgb": {
+          "channelPsnrDb": [
+            44.86988992038816,
+            45.72520350980193,
+            45.5966595972841,
+            44.458563009494554
+          ],
+          "maxSampleCoverageError": 0.00067138671875,
+          "maxSampleNormalP99Degrees": 0
+        },
+        "SrgbColor": {
+          "channelPsnrDb": [
+            48.23760438734463,
+            50.01729735029407,
+            49.229524914957004,
+            54.59394608332579
+          ],
+          "maxSampleCoverageError": 0.00848388671875,
+          "maxSampleNormalP99Degrees": 0
+        }
+      },
+      "megapixelsPerSecond": 36.02256813168827
+    }
+  ],
+  "snapshot": {
+    "textures": 36,
+    "sourceMiB": 96,
+    "storage": "tmpfs; empty application cache, OS caches not flushed",
+    "runs": {
+      "managed-16": [
+        {
+          "WarmCache": false,
+          "Seconds": 300.1052581,
+          "Reused": 0,
+          "Files": 36,
+          "Processor": "bcn-2.3.0-strips-raw-area-complete-alpha-bc1-colourguard-v6",
+          "Workers": 16,
+          "PeakWorkingSet": 367595520
+        },
+        {
+          "WarmCache": true,
+          "Seconds": 0.1456374,
+          "Reused": 36,
+          "Files": 36,
+          "Processor": "bcn-2.3.0-strips-raw-area-complete-alpha-bc1-colourguard-v6",
+          "Workers": 16,
+          "PeakWorkingSet": 367595520
+        }
+      ],
+      "basic-1-r2": [
+        {
+          "WarmCache": false,
+          "Seconds": 17.667403,
+          "Reused": 0,
+          "Files": 36,
+          "Processor": "bcn-2.3.0-strips-raw-area-complete-alpha-bc1-colourguard-v6-bc7e-b9438627-ispc1.32.0-basic-linear-abi1",
+          "Workers": 1,
+          "PeakWorkingSet": 230424576
+        },
+        {
+          "WarmCache": true,
+          "Seconds": 0.2890094,
+          "Reused": 36,
+          "Files": 36,
+          "Processor": "bcn-2.3.0-strips-raw-area-complete-alpha-bc1-colourguard-v6-bc7e-b9438627-ispc1.32.0-basic-linear-abi1",
+          "Workers": 1,
+          "PeakWorkingSet": 230424576
+        }
+      ],
+      "basic-16": [
+        {
+          "WarmCache": false,
+          "Seconds": 4.5953595,
+          "Reused": 0,
+          "Files": 36,
+          "Processor": "bcn-2.3.0-strips-raw-area-complete-alpha-bc1-colourguard-v6-bc7e-b9438627-ispc1.32.0-basic-linear-abi1",
+          "Workers": 16,
+          "PeakWorkingSet": 793882624
+        },
+        {
+          "WarmCache": true,
+          "Seconds": 0.1346843,
+          "Reused": 36,
+          "Files": 36,
+          "Processor": "bcn-2.3.0-strips-raw-area-complete-alpha-bc1-colourguard-v6-bc7e-b9438627-ispc1.32.0-basic-linear-abi1",
+          "Workers": 16,
+          "PeakWorkingSet": 998400000
+        }
+      ]
+    }
+  },
+  "limitations": [
+    "Real sample tiles cover the first level actually encoded after policy caps, not every mip or every material.",
+    "No in-game acceptance claim.",
+    "Whole-build snapshot results are individual pilot runs; extra retained-byte checks contribute to peak process memory.",
+    "Full-profile result is recorded separately after validation."
+  ]
+}

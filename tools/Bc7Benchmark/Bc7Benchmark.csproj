@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/PenguTEX.Assets/PenguTEX.Assets.csproj" />
+    <ProjectReference Include="../../src/PenguTEX.Imaging/PenguTEX.Imaging.csproj" />
+  </ItemGroup>
+</Project>

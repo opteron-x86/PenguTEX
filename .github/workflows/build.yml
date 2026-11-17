@@ -32,6 +32,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y xvfb libice6 libsm6 libfontconfig1 appstream
       - run: bash tools/test.sh
         env:
+          PENGUTEX_REQUIRE_NATIVE_BC7: '1'
           PENGUTEX_SCREENSHOTS: ${{ github.workspace }}/.artifacts/screenshots
           PENGUTEX_ORACLE_FIXTURES: ${{ github.workspace }}/.artifacts/oracle
       - name: Independent DDS decoder
@@ -73,6 +74,7 @@ jobs:
       PYTHONUTF8: '1'
       PENGUTEX_SCREENSHOTS: ${{ github.workspace }}/.artifacts/screenshots
       PENGUTEX_ORACLE_FIXTURES: ${{ github.workspace }}/.artifacts/oracle
+      PENGUTEX_REQUIRE_NATIVE_BC7: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
@@ -83,6 +85,8 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: python tools/version.py --check-tag "$env:RELEASE_TAG"
+      - name: Build native BC7 encoder
+        run: python tools/build-native.py
       - name: Engine and rendered desktop tests
         run: dotnet test PenguTEX.slnx -c Release --disable-build-servers -m:1 -nr:false -p:UseSharedCompilation=false --logger 'trx;LogFilePrefix=tests' --results-directory .artifacts/tests
       - name: Install independent DDS decoder

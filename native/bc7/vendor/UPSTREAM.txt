@@ -1,0 +1,8 @@
+Source: https://github.com/richgel999/bc7enc_rdo
+Revision: b9438627eef73a1157e84201b6fa6eb2ffd6d9f0
+File: bc7e.ispc
+SHA-256: e10f27ea5993679305537eafd854d9f0b58836470b5646b13858eac5593b4b8f
+Copyright (C) 2018-2020 Binomial LLC. All rights reserved.
+License: Apache-2.0 (see LICENSE).
+The upstream ISPC source is unmodified. PenguTEX's wrapper, alpha-endpoint
+correction and build configuration are separate files in the parent directory.

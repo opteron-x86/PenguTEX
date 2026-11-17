@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(dirname -- "${BASH_SOURCE[0]}")/env.sh"
+python3 tools/build-native.py
+export PENGUTEX_REQUIRE_NATIVE_BC7=1
 version="$(python3 tools/version.py)"
 payload="$PWD/dist/linux-x64"
 rm -rf -- "$payload"

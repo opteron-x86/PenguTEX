@@ -24,6 +24,11 @@ os.environ.setdefault('PYTHONUTF8', '1')
 dotnet = os.environ.get('PENGUTEX_DOTNET', 'dotnet')
 version = subprocess.check_output([sys.executable, 'tools/version.py'], text=True).strip()
 payload = root / 'dist' / 'win-x64'
+if not args.cross_compile:
+    subprocess.run([sys.executable, 'tools/build-native.py'], check=True)
+elif not (root / 'native/bin/win-x64/pengutex_bc7.dll').is_file():
+    raise SystemExit('Cross-packaging requires a separately built native/bin/win-x64/pengutex_bc7.dll')
+os.environ['PENGUTEX_REQUIRE_NATIVE_BC7'] = '1'
 if payload.exists():
     shutil.rmtree(payload)
 payload.mkdir(parents=True)

@@ -63,7 +63,9 @@ header cannot be combined with data/normal semantics. Premultiplied alpha, signe
 BC4/BC5, swizzled normal layouts, cube/array/volume textures and unsupported formats
 are not rebuilt. Existing-mip copying handles signed and premultiplied formats.
 
-BC1/2/3/4/5/7 encoding uses BCnEncoder.NET 2.3.0 Balanced. Each encoded BC1/2/3
+BC1/2/3/4/5 encoding uses BCnEncoder.NET 2.3.0 Balanced. Packaged BC7 encoding uses
+[native BC7E Basic](BC7-ENCODER.md), with BCnEncoder Balanced available as a fallback.
+Each encoded BC1/2/3
 colour block is compared with its input: that encoder can overflow an endpoint on a
 saturated channel, such as blue in tangent normal maps, and turn a whole block the
 wrong colour. A block far worse than a bounded range fit of the same texels is

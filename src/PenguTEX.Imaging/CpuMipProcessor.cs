@@ -7,7 +7,10 @@ namespace PenguTEX.Imaging;
 
 public sealed class CpuMipProcessor : ITextureProcessor
 {
-    public string Identity => "bcn-2.3.0-strips-raw-area-complete-alpha-bc1-colourguard-v6";
+    private readonly Bc7Encoder bc7;
+    public CpuMipProcessor(Bc7Backend backend = Bc7Backend.Auto) { bc7 = new(backend); }
+    public string Identity => "bcn-2.3.0-strips-raw-area-complete-alpha-bc1-colourguard-v6"
+        + (bc7.Backend == Bc7Backend.Managed ? "" : "-" + bc7.Identity);
     // Decoded pixels across all concurrent rebuilds stay within one maximum-size texture. Small
     // textures run side by side; streaming mip copies are not counted.
     public static PixelBudget Budget { get; } = new(Policy.MaximumRebuildPixels);
@@ -44,6 +47,8 @@ public sealed class CpuMipProcessor : ITextureProcessor
         if (pixels.Width != Math.Max(1, item.TargetWidth >> firstGenerated) || pixels.Height != Math.Max(1, item.TargetHeight >> firstGenerated))
             throw new InvalidDataException("Rebuild dimensions do not match plan.");
         var format = info.IsBlockCompressed ? TexturePreview.Format(info) : CompressionFormat.Unknown;
+        // JobRunner shares the processor across workers; managed codec instances are per texture.
+        var bc7Encoder = info.Format == "BC7" ? new Bc7Encoder(bc7.Backend) : null;
         var encoder = new BcEncoder(format);
         encoder.OutputOptions.GenerateMipMaps = false; encoder.OutputOptions.Quality = CompressionQuality.Balanced;
         encoder.Options.IsParallel = false;
@@ -64,7 +69,8 @@ public sealed class CpuMipProcessor : ITextureProcessor
                     for (int a = 3; a < mask.Length; a += 4) mask[a] = mask[a] >= item.AlphaCutoff ? (byte)255 : (byte)0;
                     strip = mask;
                 }
-                var blocks = encoder.EncodeToRawBytes(strip, pixels.Width, rows, PixelFormat.Rgba32)[0];
+                var blocks = bc7Encoder is not null ? bc7Encoder.EncodeStrip(strip, pixels.Width, rows)
+                    : encoder.EncodeToRawBytes(strip, pixels.Width, rows, PixelFormat.Rgba32)[0];
                 long expected = (long)((pixels.Width + 3) / 4) * info.BlockBytes;
                 if (blocks.Length != expected) throw new InvalidDataException("Encoder returned an unexpected block count.");
                 // The library's BC1 colour encoder can overflow an endpoint on saturated channels.
