@@ -297,6 +297,34 @@ public class WorkflowTests
         using var f = new Fixture(); string target = f.File("settings.json", [1]), temporary = f.File("settings.tmp", [2]);
         TransientIo.Replace(temporary, target); Assert.Equal([2], File.ReadAllBytes(target)); Assert.False(File.Exists(temporary));
     }
+    [Fact] public void HashingStreamsCoverEveryByteIncludingWhatTheConsumerSkipped()
+    {
+        byte[] data = new byte[300_000]; new Random(5).NextBytes(data); string expected = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(data));
+        using (var partial = new HashingReadStream(new MemoryStream(data)))
+        {
+            byte[] head = new byte[1000]; partial.ReadExactly(head); Assert.Equal(data[..1000], head); Assert.Equal(data[1000], partial.ReadByte());
+            Assert.Equal(expected, partial.Complete()); Assert.Equal(data.Length, partial.BytesRead); Assert.False(partial.CanSeek);
+        }
+        using (var cancelled = new HashingReadStream(new MemoryStream(data)))
+            Assert.Throws<OperationCanceledException>(() => cancelled.Complete(new CancellationToken(true)));
+        using var file = new MemoryStream(); using var output = new HashingWriteStream(file);
+        output.Write(data, 0, 10); output.Write(data.AsSpan(10)); Assert.Equal(expected, output.Complete());
+        Assert.Equal(data.Length, output.BytesWritten); Assert.Equal(data, file.ToArray());
+    }
+    [Fact] public void BuildReadsEachSourceTwiceWhenGeneratingAndOnceWhenReusing()
+    {
+        using var f = new Fixture(); byte[] original = Fixture.Dds(); f.File("source/a.dds", original);
+        var catalog = CatalogLoader.Load(new(Folder: f.Dir("source"))); int opens = 0;
+        var counted = catalog with { Assets = [catalog.Assets[0] with { Open = () => { Interlocked.Increment(ref opens); return new MemoryStream(original); } }] };
+        // A rebuild from the top level never reads the smaller source mips, but the recorded hash still covers them.
+        var plan = Planner.Analyze(counted, Small with { Rules = [new("*", 8, RebuildMips: true, Semantic: TextureSemantic.LinearData)] });
+        opens = 0; string output = Path.Combine(f.Root, "output"), cache = Path.Combine(f.Root, "cache");
+        var built = JobRunner.Build(counted, plan, output, cache, processor: new PenguTEX.Imaging.CpuMipProcessor());
+        Assert.Equal(2, opens); var entry = Assert.Single(built.Manifest.Files); Assert.Equal("Rebuild", entry.Operation);
+        Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(original)), entry.SourceHash);
+        Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(output, "textures/a.dds")))), entry.OutputHash);
+        opens = 0; Assert.Equal(1, JobRunner.Build(counted, plan, output, cache, processor: new PenguTEX.Imaging.CpuMipProcessor()).Reused); Assert.Equal(1, opens);
+    }
     [Fact] public void MissingMipsAreKeptWithReason()
     {
         using var f = new Fixture(); f.File("input/a.dds", Fixture.Dds(mipCount: 1));

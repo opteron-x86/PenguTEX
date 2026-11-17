@@ -156,27 +156,25 @@ public static class JobRunner
             }
             else
             {
-                using (var source = asset.Open())
+                // One pass: the source hash covers exactly the bytes processed, and the output is hashed as written.
+                string outputHash;
+                using (var source = new HashingReadStream(asset.Open()))
                 {
-                    if (source.CanSeek)
+                    using (var target = new HashingWriteStream(File.Create(dest)))
                     {
-                        var current = Dds.Inspect(source, asset.Length, item.Input?.DeclaredMipCount is not null, item.Input?.RecordLayout is not null, ct).Info;
-                        if (current != item.Input) throw new IOException("Source metadata changed; analyze again: " + item.Path);
-                        source.Position = 0;
+                        if (item.Decision == Decision.Rebuild) processor!.Process(source, target, item, asset.Length, ct);
+                        else Dds.Reduce(source, target, item.DropMips, asset.Length, ct, item.Input);
+                        outputHash = target.Complete();
                     }
-                    using var target = File.Create(dest);
-                    if (item.Decision == Decision.Rebuild) processor!.Process(source, target, item, asset.Length, ct);
-                    else Dds.Reduce(source, target, item.DropMips, asset.Length, ct, item.Input);
+                    if (source.Complete(ct) != hash) throw new IOException("Source changed during processing: " + item.Path);
                 }
                 using var verify = File.OpenRead(dest); var info = Dds.Inspect(verify).Info;
                 if (info.Width != item.TargetWidth || info.Height != item.TargetHeight || info.PayloadBytes != item.OutputPayload
                     || info.Format != item.Input!.Format || info.Dxgi != item.Input.Dxgi || info.Signed != item.Input.Signed || info.Premultiplied != item.Input.Premultiplied)
                     throw new InvalidDataException("Generated texture does not match the plan: " + item.Path);
-                entry = new(item.Path, item.Origin, hash, HashFile(dest, ct), info.Width, info.Height, item.DropMips, verify.Length, recipe)
+                entry = new(item.Path, item.Origin, hash, outputHash, info.Width, info.Height, item.DropMips, verify.Length, recipe)
                 { SourceContainer = asset.Container, DeclaredSourceMipCount = item.Input.DeclaredMipCount, SourceRecordLayout = item.Input.RecordLayout, Operation = item.Operation, Semantic = item.Semantic, AlphaCutoff = item.AlphaCutoff, Material = item.Material, Processor = processorIdentity };
             }
-            using (var source = asset.Open())
-                if (Hash(source, ct) != hash) throw new IOException("Source changed during processing: " + item.Path);
             if (generated)
             {
                 string temporary = cached + "." + Guid.NewGuid().ToString("N") + ".tmp";
