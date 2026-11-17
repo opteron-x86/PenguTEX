@@ -61,7 +61,7 @@ public sealed record Policy
         if (!info.IsBlockCompressed && !info.HasByteChannels) return "This uncompressed layout supports existing-mip copying only; rebuilding requires a precision-preserving decoder.";
         if (info.Signed || info.Premultiplied) return "CPU rebuilding does not support signed channels or premultiplied alpha; use existing-mip copying.";
         int level = preserveExistingMips ? info.MipCount - 1 : 0;
-        if ((long)Math.Max(1, info.Width >> level) * Math.Max(1, info.Height >> level) > MaximumRebuildPixels) return "CPU rebuilding is limited to 64 million source pixels, with one decoded texture at a time; use existing-mip copying for larger inputs.";
+        if ((long)Math.Max(1, info.Width >> level) * Math.Max(1, info.Height >> level) > MaximumRebuildPixels) return "CPU rebuilding is limited to 64 million decoded source pixels per texture; use existing-mip copying for larger inputs.";
         if (info.Srgb && semantic is not (TextureSemantic.SrgbColor or TextureSemantic.OpacitySrgb or TextureSemantic.OpacityBlendSrgb)) return "sRGB headers require an sRGB color semantic; changing the format is not supported.";
         bool rawRg = !info.IsBlockCompressed && info.RedMask != 0 && info.GreenMask != 0 && info.BlueMask == 0 && !info.Luminance;
         if (semantic == TextureSemantic.NormalRg && info.Format != "BC5" && !rawRg) return "NormalRg requires unsigned BC5 or raw RG channels; swizzled normal layouts are not inferred.";

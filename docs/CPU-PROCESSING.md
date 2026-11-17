@@ -65,10 +65,12 @@ BC1/2/3/4/5/7 encoding uses BCnEncoder.NET 2.3.0 Balanced. Source compression fo
 DXGI/FourCC, sRGB flag and alpha metadata are preserved. Every encoded level is
 decoded before publication, then the DDS structure, payload and output hash are
 verified. The content cache includes source hash, policy, semantic and encoder/filter
-identity. Rebuilding is limited to 64 million source pixels (including 8192×8192)
-and one texture per process at a time; streaming workers may continue other files.
-BC decoding and encoding operate on four-row strips; raw I/O uses scanlines. The
-largest RGBA pixel buffer is 256 MiB, plus a filtered destination and bounded codec
+identity. Rebuilding is limited to 64 million decoded source pixels (including
+8192×8192) per texture, and to the same total across textures rebuilt at once: small
+textures share the workers, a maximum-size texture runs alone, and requests are
+served in arrival order. Streaming workers may continue other files.
+BC decoding and encoding operate on four-row strips; raw I/O uses scanlines. Decoded
+RGBA pixel buffers total at most 256 MiB, plus filtered destinations and bounded codec
 scratch buffers. This is not a hard process RSS ceiling: the runtime, cache work and
 garbage collection add overhead. Interactive preview remains capped at 16 million
 pixels. Larger inputs remain available to streaming mip copying.
