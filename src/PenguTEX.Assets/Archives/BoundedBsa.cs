@@ -51,15 +51,24 @@ public static class BoundedBsa
         long metadataEnd = end + fileNames;
         var sorted = records.OrderBy(e => e.Offset).ToArray();
         var bounds = new Dictionary<long, string?>();
-        for (int i = 0; i < sorted.Length; i++)
+        for (int first = 0; first < sorted.Length;)
         {
-            var e = sorted[i]; long size = e.RawSize & 0x3fffffff;
-            long next = i + 1 < sorted.Length ? sorted[i + 1].Offset : archiveLength;
-            bounds[e.Position] = (e.RawSize & 0x80000000) != 0 ? "unknown size flag"
-                : e.Offset < metadataEnd ? "payload overlaps archive metadata"
-                : e.Offset > archiveLength || size > archiveLength - e.Offset ? "payload exceeds archive file"
-                : (i > 0 && sorted[i - 1].Offset == e.Offset) || next == e.Offset ? "duplicate payload offsets"
-                : e.Offset + size > next ? "declared member overlaps the next member" : null;
+            // Archives may store identical files once. Records naming the same offset are one payload
+            // only when their size fields agree, compression bit included; anything else is ambiguous.
+            int last = first; bool conflict = false;
+            while (last + 1 < sorted.Length && sorted[last + 1].Offset == sorted[first].Offset)
+                conflict |= sorted[++last].RawSize != sorted[first].RawSize;
+            long next = last + 1 < sorted.Length ? sorted[last + 1].Offset : archiveLength;
+            for (int i = first; i <= last; i++)
+            {
+                var e = sorted[i]; long size = e.RawSize & 0x3fffffff;
+                bounds[e.Position] = (e.RawSize & 0x80000000) != 0 ? "unknown size flag"
+                    : e.Offset < metadataEnd ? "payload overlaps archive metadata"
+                    : e.Offset > archiveLength || size > archiveLength - e.Offset ? "payload exceeds archive file"
+                    : conflict ? "records share a payload offset with different sizes"
+                    : e.Offset + size > next ? "declared member overlaps the next member" : null;
+            }
+            first = last + 1;
         }
         var result = new List<BsaMember>(); var paths = new HashSet<string>(StringComparer.Ordinal);
         foreach (var record in records)
