@@ -8,6 +8,10 @@ The usual order is PenguTEX first, then LOD generation: build and install the
 PenguTEX output, then generate LOD from the optimized textures. Running PenguTEX
 again after LOD exists changes LOD inputs, so regenerate LOD afterwards.
 
+If PenguLOD output is enabled when PenguTEX scans a profile (recognized by
+`PenguLOD.output-set.json`), its textures keep winning their paths but are never
+resized, and the analysis warns once per mod to regenerate LOD afterwards.
+
 Keep a deliberate input choice for each LOD build:
 
 - **Original textures:** disable the PenguTEX output while resolving full textures for
