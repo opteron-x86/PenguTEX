@@ -61,7 +61,11 @@ header cannot be combined with data/normal semantics. Premultiplied alpha, signe
 BC4/BC5, swizzled normal layouts, cube/array/volume textures and unsupported formats
 are not rebuilt. Existing-mip copying handles signed and premultiplied formats.
 
-BC1/2/3/4/5/7 encoding uses BCnEncoder.NET 2.3.0 Balanced. Source compression format,
+BC1/2/3/4/5/7 encoding uses BCnEncoder.NET 2.3.0 Balanced. Each encoded BC1/2/3
+colour block is compared with its input: that encoder can overflow an endpoint on a
+saturated channel, such as blue in tangent normal maps, and turn a whole block the
+wrong colour. A block far worse than a bounded range fit of the same texels is
+replaced by that fit; other blocks stay as encoded. Source compression format,
 DXGI/FourCC, sRGB flag and alpha metadata are preserved. Every encoded level is
 decoded before publication, then the DDS structure, payload and output hash are
 verified. The content cache includes source hash, policy, semantic and encoder/filter
