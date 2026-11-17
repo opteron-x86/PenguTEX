@@ -95,6 +95,8 @@ Track execution in [issues](https://github.com/opteron-x86/PenguTEX/issues) and
 - [#58 — Run CPU mip rebuilds concurrently within a decoded-pixel budget](https://github.com/opteron-x86/PenguTEX/issues/58)
 - [#59 — Resolve material bindings on shaders with Remappable_Textures](https://github.com/opteron-x86/PenguTEX/issues/59)
 - [#60 — Keep generated LOD, interface and shader protection under plain cap rules](https://github.com/opteron-x86/PenguTEX/issues/60)
+- [#65 — Repair BC1-family colour blocks whose encoded endpoints overflow](https://github.com/opteron-x86/PenguTEX/issues/65)
+- [#67 — Retry file replacement that Windows briefly denies](https://github.com/opteron-x86/PenguTEX/issues/67)
 
 Use original assets for processing and a prior optimizer output as a comparison
 reference. Reference copies are not accepted as replacements; recover original
