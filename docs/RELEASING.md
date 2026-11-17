@@ -6,7 +6,8 @@ versions are published as pre-releases.
 ## Steps
 
 1. Set `<Version>` in `Directory.Build.props` and add a matching `<release>` entry at the
-   top of `packaging/io.github.opteron_x86.PenguTEX.metainfo.xml`.
+   top of `packaging/io.github.opteron_x86.PenguTEX.metainfo.xml`. Update the package
+   names in `docs/DISTRIBUTION.md`.
 2. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [<version>] - YYYY-MM-DD` and start a
    new empty `## [Unreleased]` above it. The section becomes the release notes on GitHub
    and Nexus. Write one line per change, starting with Added, Changed, Fixed or Removed,
