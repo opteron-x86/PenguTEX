@@ -26,7 +26,8 @@ Load the profile names and choose the intended profile. Enabled original mods,
 activated archives, loose-file priority and Overwrite determine winners. Marked
 previous optimizer outputs are excluded. Disabled mods are not restored. Use
 **Excluded mods** for exact names of generated mods you want omitted; see the
-[PenguLOD handoff](PENGULOD-HANDOFF.md) for LOD/grass output handling. No particular
+[PenguLOD handoff](PENGULOD-HANDOFF.md) for LOD/grass output handling. Run
+PenguTEX before generating LOD, then generate LOD from its output. No particular
 modlist, manager location or previous optimizer is built into the application.
 
 ## First run

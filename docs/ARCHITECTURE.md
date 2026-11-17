@@ -73,9 +73,10 @@ unchanged with reasons. Independently reopen output before accepting it.
 ## Policy and review
 
 Versioned JSON presets contain maximum dimensions, category rules, exclusions and
-path overrides. Named presets are starting points, not hardware promises. Default
-protections cover large landscapes/rocks/dragons, faces, generated LOD, interface and
-unusual surfaces. Known path/suffix conventions yield a visible classification and
+path overrides. Named presets are starting points, not hardware promises. Generated
+LOD/atlases, interface and shader resources and unusual surfaces (cubemaps, arrays,
+volumes) are always protected. Character and large-surface protections are optional
+switches; new presets leave them off. Known path/suffix conventions yield a visible classification and
 reason; user overrides take precedence. Later NIF/material inference needs separate
 acceptance work. Ambiguity never enables automatic channel-dropping conversions.
 

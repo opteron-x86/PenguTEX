@@ -35,8 +35,9 @@ Maximum dimensions for newly selected presets:
 
 These are dimension policies, not universal quality or performance guarantees.
 Saved numeric settings stay unchanged; select a preset explicitly to adopt its new
-limits. Missing HeightMaximum in older policies uses MaterialMaximum. Landscape,
-character, generated LOD, interface and shader protections still apply by default.
+limits. Missing HeightMaximum in older policies uses MaterialMaximum. Generated
+LOD, interface and shader protections always apply; landscape and character
+protections are switches that new presets leave off.
 
 Fit reference selects a retained mip no larger than the reference in either dimension
 or total texture payload, and requires its chain to reach at least as small a final
