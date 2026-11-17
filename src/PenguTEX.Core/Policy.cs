@@ -1,10 +1,16 @@
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace PenguTEX.Core;
 
 public enum TextureSemantic { SrgbColor, LinearColor, LinearData, NormalRgb, NormalRg, OpacitySrgb, OpacityBlendSrgb }
+// Generated: LOD, interface and shader resources, lifted only by a rule that says so.
+// Characters and LargeSurfaces: optional switches, lifted by any rule that sets a cap.
+public enum ProtectionKind { None, Generated, Characters, LargeSurfaces, Rule }
 public sealed record PathRule(string Pattern, int? Maximum = null, bool Protect = false,
-    bool RebuildMips = false, TextureSemantic? Semantic = null, bool CompleteMipChain = false, int AlphaCutoff = 128);
+    bool RebuildMips = false, TextureSemantic? Semantic = null, bool CompleteMipChain = false, int AlphaCutoff = 128,
+    // Omitted from JSON when false, so existing policies keep their text and hash.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool OverrideGeneratedProtection = false);
 public sealed record Policy
 {
     public const long MaximumRebuildPixels = 8192L * 8192;
@@ -37,6 +43,7 @@ public sealed record Policy
         {
             if (rule.AlphaCutoff is < 0 or > 256) throw new ArgumentException("AlphaCutoff must be from 0 to 256.");
             if (string.IsNullOrWhiteSpace(rule.Pattern)) throw new ArgumentException("Empty path rule.");
+            if (rule.Protect && rule.OverrideGeneratedProtection) throw new ArgumentException("A rule cannot both Protect and OverrideGeneratedProtection.");
             if (rule.RebuildMips && rule.CompleteMipChain) throw new ArgumentException("Choose RebuildMips or CompleteMipChain, not both in one rule.");
             if ((rule.RebuildMips || rule.CompleteMipChain) && (rule.Semantic is null || !Enum.IsDefined(rule.Semantic.Value)))
                 throw new ArgumentException("Mip rebuilding/completion requires an explicit, supported Semantic in each processing rule.");
@@ -75,25 +82,43 @@ public sealed record Policy
         return null;
     }
 
-    public (string Category, int Maximum, string? Protection) Classify(string path)
+    public const string GeneratedProtection = "Generated LOD, interface or shader resource.";
+    public (string Category, int Maximum, string? Protection, ProtectionKind Kind) Classify(string path)
     {
         string p = path.Replace('\\', '/').ToLowerInvariant(), file = System.IO.Path.GetFileNameWithoutExtension(p);
         string category = file.EndsWith("_n") || file.EndsWith("_msn") || file.EndsWith("_normal") ? "Normal"
             : file.EndsWith("_p") ? "Height"
             : file.EndsWith("_m") || file.EndsWith("_rmaos") || file.EndsWith("_s") || file.EndsWith("_g") || file.EndsWith("_em") ? "Material" : "Color";
         int maximum = category == "Normal" ? NormalMaximum : category == "Height" ? HeightMaximum ?? MaterialMaximum : category == "Material" ? MaterialMaximum : Maximum;
-        string? protect = null;
-        if (p.StartsWith("textures/interface/") || p.Contains("/terrain/") || p.Contains("/lod/") || p.Contains("/dyndolod/") || p.Contains("/lodgen/") || p.Contains("/shaders/"))
-            protect = "Generated LOD, interface or shader resource.";
-        else if (ProtectCharacters && (p.Contains("/actors/character/") || p.Contains("/facegen/"))) protect = "Character and face protection.";
-        else if (ProtectLargeSurfaces && (p.Contains("/landscape/") || p.Contains("/actors/dragon") || p.Contains("/actors/alduin/"))) protect = "Large surface protection.";
+        bool generated = p.StartsWith("textures/interface/") || p.Contains("/terrain/") || p.Contains("/lod/") || p.Contains("/dyndolod/") || p.Contains("/lodgen/") || p.Contains("/shaders/");
+        var kind = generated ? ProtectionKind.Generated
+            : ProtectCharacters && (p.Contains("/actors/character/") || p.Contains("/facegen/")) ? ProtectionKind.Characters
+            : ProtectLargeSurfaces && (p.Contains("/landscape/") || p.Contains("/actors/dragon") || p.Contains("/actors/alduin/")) ? ProtectionKind.LargeSurfaces
+            : ProtectionKind.None;
+        string? explicitRule = null, capOnly = null;
         foreach (var rule in Rules)
             if (Matches(p, rule.Pattern))
             {
-                if (rule.Protect) protect = "Explicit protection rule: " + rule.Pattern;
-                else if (rule.Maximum.HasValue) { maximum = rule.Maximum.Value; protect = null; }
+                if (rule.Protect) { kind = ProtectionKind.Rule; explicitRule = rule.Pattern; capOnly = null; }
+                else if (rule.Maximum.HasValue || rule.OverrideGeneratedProtection)
+                {
+                    if (rule.Maximum.HasValue) maximum = rule.Maximum.Value;
+                    // An explicit override stays in force for later cap rules; a plain cap never lifts it.
+                    if (rule.OverrideGeneratedProtection) { generated = false; capOnly = null; }
+                    else if (generated) capOnly = rule.Pattern;
+                    kind = generated ? ProtectionKind.Generated : ProtectionKind.None;
+                }
             }
-        return (category, maximum, protect);
+        string? protection = kind switch
+        {
+            ProtectionKind.Generated => GeneratedProtection + (capOnly is null ? ""
+                : $" Rule '{capOnly}' sets a cap but does not lift this protection; add \"OverrideGeneratedProtection\": true to that rule to include these files."),
+            ProtectionKind.Characters => "Character and face protection.",
+            ProtectionKind.LargeSurfaces => "Large surface protection.",
+            ProtectionKind.Rule => "Explicit protection rule: " + explicitRule,
+            _ => null,
+        };
+        return (category, maximum, protection, kind);
     }
 }
 
@@ -108,10 +133,10 @@ public static class Planner
         var references = ReferenceComparison.Read(catalog.Reference, progress, ct);
         foreach (var asset in catalog.Assets.OrderBy(a => a.Path, StringComparer.Ordinal))
         {
-            ct.ThrowIfCancellationRequested(); var (category, maximum, protection) = policy.Classify(asset.Path);
+            ct.ThrowIfCancellationRequested(); var (category, maximum, protection, protectionKind) = policy.Classify(asset.Path);
             references.TryGetValue(asset.Path, out var reference);
             bool higherPriority = catalog.Reference is { } placement && asset.Priority > placement.Priority;
-            if (policy.FitProtectedReference && reference?.Info is not null && protection is "Character and face protection." or "Large surface protection.")
+            if (policy.FitProtectedReference && reference?.Info is not null && protectionKind is ProtectionKind.Characters or ProtectionKind.LargeSurfaces)
                 protection = null;
             try
             {

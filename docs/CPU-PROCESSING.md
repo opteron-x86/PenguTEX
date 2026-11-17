@@ -29,7 +29,9 @@ Add a path rule to a JSON policy (or the desktop's custom-rule editor):
 
 These example suffixes are not proof of shader semantics. Verify the actual material
 and channels first. Last matching processing rule wins. A rule with an explicit
-Maximum also clears default path protection; a Protect rule still prevents changes.
+Maximum also lifts character and large-surface protection; generated LOD, interface and
+shader resources additionally need `"OverrideGeneratedProtection": true`. A Protect rule
+still prevents changes.
 Rules without RebuildMips or CompleteMipChain use normal mip copying. Missing semantics reject the policy.
 
 To fill missing levels while preserving all usable original levels, use

@@ -167,7 +167,7 @@ public sealed class MainWindow : Window
             Columns(PathField("Overwrite override", _overwrite), prefix),
             Columns(Field("INI archive list override", _ini), Field("Excluded mods (separate names with |)", _exclude)),
             Field("Path rules (JSON; later matching rules win)", _rules),
-            Text("Example: [{\"Pattern\":\"textures/armor/*\",\"Maximum\":1024}]. Explicit caps can override protections.") } };
+            Text("Example: [{\"Pattern\":\"textures/armor/*\",\"Maximum\":1024}]. A cap also lifts character and landscape protection. Generated LOD, interface and shader files stay protected unless the rule adds \"OverrideGeneratedProtection\":true.") } };
         if (OperatingSystem.IsLinux()) advanced.Children.Add(Text("If Fluorine has mounted a merged Data folder, stop that VFS session or select its unmounted original Data folder above. MO2 through Wine/Proton can use native Linux overrides or its prefix to resolve Windows paths."));
         _comparisonOptions.Children.Add(Columns(PathField("Previous optimized output", _reference), Field("Mod to replace (auto-detected for installed reference)", _replaceMod)));
         _comparisonOptions.Children.Add(Columns(_fitReference, _fitProtected));
