@@ -99,7 +99,8 @@ public static class CatalogLoader
                     {
                         var actual = file;
                         loose[key] = new(key, origin, actual, new FileInfo(actual).Length,
-                            () => new FileStream(actual, FileMode.Open, FileAccess.Read, FileShare.Read, 128 * 1024, FileOptions.SequentialScan))
+                            // Small buffer: analysis opens every texture for a 148-byte header, and larger reads bypass it anyway.
+                            () => new FileStream(actual, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan))
                         { Priority = priorities.GetValueOrDefault(root) };
                     }
                 }
