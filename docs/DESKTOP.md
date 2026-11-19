@@ -13,8 +13,10 @@ Start `PenguTEX.Desktop.exe` on Windows or `PenguTEX.Desktop` on Linux in an ext
    protection switches. Import/save JSON policies; advanced path rules use the same
    schema as the CLI. Later matching rules win. Previously saved numeric limits
    remain unchanged and appear as Custom / saved limits when they differ from a preset.
-   Hover over Complete missing mipmaps, Repair mipmap counts or Recover supported
-   DDS layouts for an explanation of each option. Saved choices are preserved.
+   Hover over Complete missing mipmaps, Repair mipmap counts, Recover supported
+   DDS layouts, Compress uncompressed textures or Also compress NPC face tints for an
+   explanation of each option. Saved choices are preserved: select a preset again to
+   turn on compression in older saved settings.
 3. Choose separate output/cache folders. Output is a removable mod; the cache holds
    CPU-generated textures (rebuilt and completed mip chains) for reuse. **Clean work
    cache…** counts files left by older versions and entries unused for 30 days; a

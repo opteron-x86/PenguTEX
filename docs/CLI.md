@@ -31,6 +31,9 @@ folder containing `pfx/dosdevices` is accepted. PenguTEX itself runs natively.
 
 The folder source accepts a mod/Data root containing `textures`, or a texture folder.
 It includes loose DDS files only; use a profile for archive activation and conflicts.
+Presets compress unprotected uncompressed 8-bit textures to BC7 (BC4 for red-only)
+at the planned size; `--encode-uncompressed false` keeps them uncompressed, and
+`--encode-face-tints true` also compresses NPC face tints when characters are protected.
 `--max` changes all category caps but does not disable protection rules. An explicit
 policy rule such as `{"Pattern":"textures/armor/*","Maximum":1024}` overrides the
 category cap and lifts character and large-surface protection for matching files.

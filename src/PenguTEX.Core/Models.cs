@@ -98,7 +98,8 @@ public sealed record ReferenceCatalog(string Folder, string Placement, int Prior
 }
 public sealed record JobProgress(string Phase, int Done, int Total, string Path, string Message);
 // ReferenceCopy values are legacy: readable in old reports and manifests, never produced, rejected by every build.
-public enum TextureOperation { MipCopy, Rebuild, CompleteMips, RepairHeader, RecoverMipRecords, ReferenceCopy }
+// Encode: every output level comes from an existing uncompressed level, block-compressed without filtering.
+public enum TextureOperation { MipCopy, Rebuild, CompleteMips, RepairHeader, RecoverMipRecords, ReferenceCopy, Encode }
 public enum Decision { Keep, Reduce, Rebuild, Protected, Unsupported, Invalid, ReferenceCopy }
 public sealed record PlanItem(string Path, string Origin, string Container, string Category, Decision Decision,
     string Reason, DdsInfo? Input, int DropMips, int TargetWidth, int TargetHeight, long OutputPayload)
@@ -107,7 +108,14 @@ public sealed record PlanItem(string Path, string Origin, string Container, stri
     public bool PreserveExistingMips { get; init; }
     public int AlphaCutoff { get; init; } = 128;
     public MaterialHint? Material { get; init; }
-    public TextureOperation Operation => Input?.RecordLayout is not null && Decision == Decision.Reduce ? TextureOperation.RecoverMipRecords
+    /// <summary>Block format the output is encoded to (BC7 or BC4) when an uncompressed source is compressed; null keeps the source format.</summary>
+    public string? OutputFormat { get; init; }
+    /// <summary>The layout of the output's levels: the source's own, or the block format it is compressed to.</summary>
+    public DdsInfo? OutputInfo => Input is null || OutputFormat is null ? Input : Dds.Encoded(Input, OutputFormat);
+    /// <summary>Whether the output gains levels down to 1×1, rather than keeping the source's remaining chain.</summary>
+    public bool FullOutputChain => Operation is TextureOperation.Rebuild or TextureOperation.CompleteMips;
+    public TextureOperation Operation => OutputFormat is not null && Semantic is null ? TextureOperation.Encode
+        : Input?.RecordLayout is not null && Decision == Decision.Reduce ? TextureOperation.RecoverMipRecords
         : Decision == Decision.Rebuild ? PreserveExistingMips ? TextureOperation.CompleteMips : TextureOperation.Rebuild
         : Input?.DeclaredMipCount is not null && DropMips == 0 ? TextureOperation.RepairHeader : TextureOperation.MipCopy;
     public long SavedBytes => Input is null ? 0 : Input.PayloadBytes - OutputPayload;

@@ -24,6 +24,8 @@ public sealed record DdsInfo(int Width, int Height, int MipCount, int BlockBytes
     public long MipBytes(int mip) => checked(RowBytes(mip) * (IsBlockCompressed
         ? (Math.Max(1, Height >> mip) + 3) / 4 : Math.Max(1, Height >> mip)));
     public long RemovedBytes(int drop) => Enumerable.Range(0, drop).Sum(MipBytes);
+    /// <summary>Payload of the levels from <paramref name="drop"/> to the end of the chain.</summary>
+    public long PayloadBytesFrom(int drop) => Enumerable.Range(drop, MipCount - drop).Sum(MipBytes);
     public int DropFor(int maximum)
     {
         int drop = 0;
@@ -36,6 +38,27 @@ public sealed class ProtectedTextureException(string message) : NotSupportedExce
 
 public static class Dds
 {
+    /// <summary>The layout of a texture after compressing an uncompressed source to BC7 or BC4, keeping its sRGB flag.</summary>
+    public static DdsInfo Encoded(DdsInfo source, string format) => format switch
+    {
+        "BC7" => source with { Format = "BC7", BlockBytes = 16, Dxgi = source.Srgb ? 99 : 98 },
+        "BC4" when !source.Srgb => source with { Format = "BC4", BlockBytes = 8, Dxgi = 80 },
+        _ => throw new ArgumentException("Uncompressed sources are encoded only to BC7, or to BC4 when not sRGB."),
+    } with { HeaderBytes = 148, BitsPerPixel = 0, RowAlignment = 1, RedMask = 0, GreenMask = 0, BlueMask = 0, AlphaMask = 0,
+        Luminance = false, Signed = false, Premultiplied = false, DeclaredMipCount = null, RecordLayout = null, PayloadBytes = 0 };
+
+    /// <summary>A DX10 header for a block-compressed 2D texture with the given top level and mip count.</summary>
+    public static byte[] CreateHeader(DdsInfo format, int width, int height, int mips)
+    {
+        if (!format.IsBlockCompressed || format.Dxgi == 0) throw new ArgumentException("A DX10 block format is required.");
+        byte[] header = new byte[148];
+        void Set(int at, uint n) => BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(at), n);
+        "DDS "u8.CopyTo(header); Set(4, 124); Set(8, 0x1007); Set(76, 32); Set(80, 4); "DX10"u8.CopyTo(header.AsSpan(84)); Set(108, 0x1000);
+        Set(128, (uint)format.Dxgi); Set(132, 3); Set(140, 1);
+        ResizeHeader(header, format, width, height, mips);
+        return header;
+    }
+
     /// <summary>Levels in a complete chain down to 1×1 for a top level of this size.</summary>
     public static int FullMipCount(int width, int height) => 1 + (int)Math.Log2(Math.Max(width, height));
     public static int FullMipCount(uint width, uint height) => 1 + (int)Math.Log2(Math.Max(width, height));

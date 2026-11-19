@@ -208,6 +208,27 @@ public sealed class DesktopTests
         finally { window.Close(); }
     }
     [AvaloniaFact]
+    public async Task CompressionCheckboxesDriveThePlanAndPersist()
+    {
+        using var f = new Fixture(); f.File("source/raw.dds", Fixture.RawDds(16, 16));
+        var store = new SettingsStore(Path.Combine(f.Root, "settings.json"));
+        var window = new MainWindow(store); window.SetSettings(Settings(f) with { Policy = Settings(f).Policy with { EncodeUncompressed = true } }); window.Show();
+        try
+        {
+            Assert.True(Control<CheckBox>(window, "EncodeUncompressed").IsChecked); Assert.False(Control<CheckBox>(window, "EncodeFaceTints").IsChecked);
+            await window.AnalyzeAsync(); var item = Assert.Single(window.CurrentPlan!.Items);
+            Assert.Equal((TextureOperation.Encode, "BC7"), (item.Operation, item.OutputFormat)); Assert.Equal(1, window.VisibleCount);
+            await window.BuildAsync(); Assert.Equal("BC7", Assert.Single(window.LastBuild!.Manifest.Files).OutputFormat);
+            // Analysis switches to the review tab; return to the settings.
+            window.GetVisualDescendants().OfType<TabControl>().Single().SelectedIndex = 0; Dispatcher.UIThread.RunJobs();
+            Control<CheckBox>(window, "EncodeUncompressed").IsChecked = false; Assert.Null(window.CurrentPlan);
+            Control<CheckBox>(window, "EncodeFaceTints").IsChecked = true;
+            await window.AnalyzeAsync(); Assert.Equal(TextureOperation.MipCopy, Assert.Single(window.CurrentPlan!.Items).Operation);
+            Assert.Equal((false, true), (store.Load().Policy.EncodeUncompressed, store.Load().Policy.EncodeFaceTints));
+        }
+        finally { window.Close(); }
+    }
+    [AvaloniaFact]
     public async Task InvalidNumbersAreExplainedInPlainWords()
     {
         using var f = new Fixture(); f.File("source/a.dds", Fixture.Dds());

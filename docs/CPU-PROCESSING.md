@@ -1,6 +1,8 @@
-# Opt-in CPU mip rebuilding
+# CPU mip rebuilding and compression
 
-All presets default to copying existing mip levels. Rebuilding compressed textures
+All presets default to copying existing mip levels of compressed textures. Uncompressed
+8-bit sources are compressed to BC7 or BC4 by default; see
+[DDS formats](DDS-FORMATS.md#compressing-uncompressed-sources). Rebuilding compressed textures
 introduces another lossy encoding pass and can increase payload when repairing missing mips.
 Choose it only for known texture sets; inspect output before installation.
 

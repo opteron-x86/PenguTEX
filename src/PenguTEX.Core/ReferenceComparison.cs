@@ -94,7 +94,7 @@ public static class ReferenceComparison
             { differences.Add(new(item.Path, item.Origin, ComparisonStatus.ReferenceRetained, item.Reason, old.Info, old.Info, old.Info?.PayloadBytes, old.Info?.PayloadBytes)); continue; }
             if (assets[item.Path].Priority > reference.Priority)
             { differences.Add(new(item.Path, item.Origin, ComparisonStatus.HigherPriority, "An unchanged higher-priority source wins over both outputs.", item.Input, item.Input, item.Input?.PayloadBytes, item.Input?.PayloadBytes)); continue; }
-            DdsInfo? proposed = item.Input is null || item.Input.DeclaredMipCount is not null && item.Decision is not (Decision.Reduce or Decision.Rebuild) ? null : ReferenceComparison.Target(item.Input, item.DropMips, item.Decision == Decision.Rebuild);
+            DdsInfo? proposed = item.Input is null || item.Input.DeclaredMipCount is not null && item.Decision is not (Decision.Reduce or Decision.Rebuild) ? null : ReferenceComparison.Target(item.OutputInfo!, item.DropMips, item.FullOutputChain);
             var status = old.Info is null ? ComparisonStatus.UnknownReference : proposed is null ? ComparisonStatus.UnknownSource
                 : proposed.Width > old.Info.Width || proposed.Height > old.Info.Height || proposed.PayloadBytes > old.Info.PayloadBytes ? ComparisonStatus.Larger
                 : !CoversReferenceMips(proposed, old.Info) ? ComparisonStatus.IncompleteMips
@@ -104,7 +104,7 @@ public static class ReferenceComparison
         }
         foreach (var item in plan.Where(i => !references.ContainsKey(i.Path) && i.Decision is Decision.Reduce or Decision.Rebuild))
         {
-            var proposed = Target(item.Input!, item.DropMips, item.Decision == Decision.Rebuild);
+            var proposed = Target(item.OutputInfo!, item.DropMips, item.FullOutputChain);
             differences.Add(new(item.Path, item.Origin, proposed.PayloadBytes > item.Input!.PayloadBytes ? ComparisonStatus.Larger : ComparisonStatus.NewReduction,
                 "Compared with the original winner; the reference had no override at this path.", item.Input, proposed, item.Input.PayloadBytes, proposed.PayloadBytes));
         }

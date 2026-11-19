@@ -8,7 +8,8 @@ namespace PenguTEX.Tests;
 
 public sealed class MaterialTests
 {
-    private static Policy Fresh => Policy.Preset("balanced") with { Maximum = 8, NormalMaximum = 8, MaterialMaximum = 8 };
+    // Completion tests keep the source format; compression of uncompressed sources has its own tests.
+    private static Policy Fresh => Policy.Preset("balanced") with { Maximum = 8, NormalMaximum = 8, MaterialMaximum = 8, EncodeUncompressed = false };
     [Theory] [InlineData(0, 0, MaterialRole.Color, TextureSemantic.SrgbColor)]
     [InlineData(1, 0, MaterialRole.Normal, TextureSemantic.NormalRgb)]
     [InlineData(3, 3, MaterialRole.Height, TextureSemantic.LinearData)]

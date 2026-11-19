@@ -29,7 +29,7 @@ public sealed class PreviewWindow : Window
             Children = { new TextBlock { Text = "Source mip", VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center }, _mip, load, _channel } };
         var images = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 16 };
         images.Children.Add(new DockPanel { Children = { Label("Source", _before), _before } });
-        var right = new DockPanel { Children = { Label(item.Decision == Decision.Rebuild ? "Proposed: CPU rebuild" : $"Proposed: mip {item.DropMips}", _after), _after } }; Grid.SetColumn(right, 1); images.Children.Add(right);
+        var right = new DockPanel { Children = { Label(item.Operation == TextureOperation.Encode ? $"Proposed: mip {item.DropMips} as {item.OutputFormat}" : item.Decision == Decision.Rebuild ? "Proposed: CPU rebuild" : $"Proposed: mip {item.DropMips}", _after), _after } }; Grid.SetColumn(right, 1); images.Children.Add(right);
         var root = new Grid { Margin = new Thickness(20), RowDefinitions = new RowDefinitions("Auto,*,Auto"), RowSpacing = 14 };
         root.Children.Add(toolbar); Grid.SetRow(images, 1); root.Children.Add(images); Grid.SetRow(_status, 2); root.Children.Add(_status); Content = root;
         _channel.SelectionChanged += (_, _) => Display(); Opened += async (_, _) => await LoadAsync();

@@ -31,6 +31,8 @@ public sealed class MainWindow : Window
     private readonly CheckBox _fitProtected = new() { Name = "FitProtectedReference", Content = "Include protected landscapes and characters", IsChecked = false };
     private readonly CheckBox _recoverRecords = new() { Name = "RecoverMipRecords", Content = "Recover supported DDS layouts" };
     private readonly CheckBox _recoverMips = new() { Name = "RecoverMipCounts", Content = "Repair mipmap counts" };
+    private readonly CheckBox _encode = new() { Name = "EncodeUncompressed", Content = "Compress uncompressed textures" };
+    private readonly CheckBox _encodeFaceTints = new() { Name = "EncodeFaceTints", Content = "Also compress NPC face tints" };
     private readonly StackPanel _comparisonOptions = new() { Name = "ComparisonOptions", Spacing = 12, IsVisible = false, IsEnabled = false };
     private readonly DataGrid _comparisonTable = new() { Name = "ReferenceTable", AutoGenerateColumns = false, IsReadOnly = true, CanUserSortColumns = true };
     private readonly TextBlock _comparisonSummary = Text("Analyze to review coverage.");
@@ -78,6 +80,8 @@ public sealed class MainWindow : Window
         Tip(_replaceMod, "Detected automatically when the previous output is an installed mod.");
         Tip(_fitProtected, "Allow reductions to protected landscapes and characters when fitting to a previous output.");
         Tip(_completeMaterials, "Add missing mipmaps when source meshes identify a supported material. Existing mipmaps are preserved.");
+        Tip(_encode, "Encode unprotected uncompressed textures as BC7 (BC4 for single-channel red), about a quarter of their size. Existing mipmaps are kept; colour space and alpha are preserved.");
+        Tip(_encodeFaceTints, "Compress uncompressed NPC face tints too, at full size, while character protection keeps their dimensions.");
         Tip(_recoverMips, "Repair the declared count when the texture already contains a complete mipmap chain. Image data is preserved.");
         Tip(_recoverRecords, "Recover recognized DDS layouts after checking record sizes and boundaries. Unknown layouts stay unchanged.");
         Tip(_rules, "Example: [{\"Pattern\":\"textures/armor/*\",\"Maximum\":1024}]. A cap lifts character and landscape protection. Generated LOD, interface and shader textures stay protected unless the rule adds \"OverrideGeneratedProtection\":true.");
@@ -132,6 +136,8 @@ public sealed class MainWindow : Window
         _fitReference.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
         _recoverRecords.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
         _recoverMips.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
+        _encode.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
+        _encodeFaceTints.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
         _fitProtected.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) InvalidatePlan(); };
         _preset.SelectionChanged += (_, _) => { if (!_loading && _preset.SelectedItem is string name && name != "Custom / saved limits") SetPolicy(Policy.Preset(name)); };
         _profiles.SelectionChanged += (_, _) => { if (_profiles.SelectedItem is string name) _profile.Text = name; };
@@ -194,7 +200,7 @@ public sealed class MainWindow : Window
             Columns(_large, _characters),
             new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { import, save } },
             Columns(PathField("Output mod folder", _output), PathField("Work cache", _cache)),
-            _completeMaterials, _recoverMips, _recoverRecords, _compareReference,
+            _completeMaterials, _recoverMips, _recoverRecords, Columns(_encode, _encodeFaceTints), _compareReference,
             _comparisonOptions,
             Field("Workers (1–32)", _workers),
             new Expander { Header = "Locations and custom rules", Content = advanced, HorizontalAlignment = HorizontalAlignment.Stretch } } };
@@ -225,6 +231,7 @@ public sealed class MainWindow : Window
         var policy = new Policy { Name = _policyName, Maximum = Number(_maximum, "Color maximum"), NormalMaximum = Number(_normal, "Normal maximum"),
             MaterialMaximum = Number(_material, "Material maximum"), HeightMaximum = Number(_height, "Height maximum"), ProtectLargeSurfaces = _large.IsChecked == true,
             RecoverMipCounts = _recoverMips.IsChecked == true, RecoverMipRecords = _recoverRecords.IsChecked == true, CompleteKnownMaterials = _completeMaterials.IsChecked == true,
+            EncodeUncompressed = _encode.IsChecked == true, EncodeFaceTints = _encodeFaceTints.IsChecked == true,
             ProtectCharacters = _characters.IsChecked == true, FitReference = _compareReference.IsChecked == true && _fitReference.IsChecked == true,
             FitProtectedReference = _compareReference.IsChecked == true && _fitReference.IsChecked == true && _fitProtected.IsChecked == true,
             Rules = JsonSerializer.Deserialize<PathRule[]>(_rules.Text ?? "[]", JsonFiles.Options) ?? [] };
@@ -255,6 +262,7 @@ public sealed class MainWindow : Window
         _material.Text = policy.MaterialMaximum.ToString(); _large.IsChecked = policy.ProtectLargeSurfaces; _characters.IsChecked = policy.ProtectCharacters;
         _height.Text = (policy.HeightMaximum ?? policy.MaterialMaximum).ToString(); _fitReference.IsChecked = policy.FitReference; _fitProtected.IsChecked = policy.FitProtectedReference;
         _recoverRecords.IsChecked = policy.RecoverMipRecords; _recoverMips.IsChecked = policy.RecoverMipCounts; _completeMaterials.IsChecked = policy.CompleteKnownMaterials;
+        _encode.IsChecked = policy.EncodeUncompressed; _encodeFaceTints.IsChecked = policy.EncodeFaceTints;
         _rules.Text = JsonSerializer.Serialize(policy.Rules, JsonFiles.Options); _loading = wasLoading; InvalidatePlan();
     }
     private void SetComparisonEnabled()
@@ -412,8 +420,8 @@ public sealed class MainWindow : Window
     }
     private sealed record PlanRow(PlanItem Item)
     {
-        public string Path => Item.Path; public string Origin => Item.Origin; public string Decision => Item.PreserveExistingMips ? "Complete mips" : Item.Operation == TextureOperation.RepairHeader ? "Repair header" : Item.Decision.ToString();
-        public string Format => (Item.Input?.Format ?? "—") + (Item.Input?.Srgb == true ? " sRGB" : "");
+        public string Path => Item.Path; public string Origin => Item.Origin; public string Decision => Item.Operation == TextureOperation.Encode ? "Compress" : Item.PreserveExistingMips ? "Complete mips" : Item.Operation == TextureOperation.RepairHeader ? "Repair header" : Item.Decision.ToString();
+        public string Format => (Item.Input?.Format ?? "—") + (Item.Input?.Srgb == true ? " sRGB" : "") + (Item.OutputFormat is { } output ? " → " + output : "");
         public string Dimensions => Item.Input is null ? "—" : $"{Item.Input.Width}×{Item.Input.Height} → {Item.TargetWidth}×{Item.TargetHeight}";
         public string Saved => (Item.SavedBytes / 1048576d).ToString("N2");
     }

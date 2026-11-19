@@ -6,6 +6,11 @@ its Nexus Mods changelog. Releases before 0.1.0-alpha.11 are described on the
 
 ## [Unreleased]
 
+Build your output again: uncompressed textures are now compressed.
+
+- Added compression of uncompressed textures to BC7 (BC4 for single-channel red), on in all presets. Existing mipmaps are kept.
+- Added an option to also compress NPC face tints while characters are protected.
+
 ## [0.1.0-alpha.13] - 2026-11-17
 
 - Changed Linux portable packages to ZIP for direct upload to Nexus Mods.

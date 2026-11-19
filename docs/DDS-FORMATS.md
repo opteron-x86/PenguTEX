@@ -15,6 +15,21 @@ DXGI uncompressed support: 2, 10, 11, 16, 24, 26, 28, 29, 31, 34, 35, 37, 41,
 typed, fixed-size formats, not typeless/depth/video/planar resources. Copying a mip
 does not decode or change its precision, alpha declaration or color space.
 
+## Compressing uncompressed sources
+
+With `EncodeUncompressed` (on in presets; CLI `--encode-uncompressed`), an unprotected
+uncompressed source whose channels are all 8-bit is written as BC7, or as BC4 when it
+holds only a red channel. sRGB sources become BC7 sRGB. Each kept level is encoded as it
+is, without filtering, so the output keeps the same mip levels at about a quarter of the
+size; mip completion, when planned, continues in the new format. Luminance, alpha-only,
+packed 16-bit (565/1555/4444) and higher-precision layouts stay as they are, because no
+block format reproduces what the game samples from them. When the meshes show a texture
+is alpha-tested, its alpha is set to 0 or 255 at the material's cutoff before encoding,
+so every texel stays on the same side of the test; a level whose visible texels still
+change by more than two percentage points fails the build. `EncodeFaceTints` (CLI `--encode-face-tints`)
+compresses uncompressed NPC face tints at full size while character protection is on.
+A path rule with `Protect` keeps any texture unchanged.
+
 Uncompressed rows may be tightly packed or DWORD-aligned. Complete file length must
 uniquely justify the layout (or both layouts must be identical). Padding stays with
 each retained row; the output header records row pitch, not compressed linear size.

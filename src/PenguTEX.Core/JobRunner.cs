@@ -15,6 +15,8 @@ public sealed record OutputEntry(string Path, string Source, string SourceHash, 
     public int AlphaCutoff { get; init; } = 128;
     public MaterialHint? Material { get; init; }
     public string Processor { get; init; } = "mip-copy-v1";
+    /// <summary>BC7 or BC4 when an uncompressed source was compressed; null when the source format was kept.</summary>
+    public string? OutputFormat { get; init; }
 }
 public sealed record OutputManifest(string Product, int Schema, string Version, DateTimeOffset Created,
     string PolicyHash, IReadOnlyList<OutputEntry> Files, int Unchanged, int Protected, int Unsupported, int Invalid)
@@ -135,7 +137,8 @@ public static class JobRunner
             string processorIdentity = cacheable ? processor!.Identity : RecipeVersion;
             // Everything that determines the output bytes, and nothing else: no policy name or unrelated rule.
             string Recipe(string sourceHash) => JsonFiles.Hash(string.Join('|', sourceHash, processorIdentity, item.Operation, item.DropMips,
-                item.Semantic, item.AlphaCutoff, item.TargetWidth, item.TargetHeight, item.Input?.MipCount, item.Input?.DeclaredMipCount));
+                item.Semantic, item.AlphaCutoff, item.TargetWidth, item.TargetHeight, item.Input?.MipCount, item.Input?.DeclaredMipCount)
+                + (item.OutputFormat is null ? "" : "|" + item.OutputFormat));
             string? hash = null; string recipe = "", cached = "", metadata = "";
             string dest = Resolve(stage, item.Path); Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
             OutputEntry? entry = null;
@@ -151,7 +154,7 @@ public static class JobRunner
                     var candidate = JsonFiles.Read<OutputEntry>(metadata);
                     using var check = File.OpenRead(cached); var info = Dds.Inspect(check).Info;
                     if (candidate.Recipe == recipe && candidate.SourceHash == hash && candidate.Processor == processorIdentity
-                        && candidate.Operation == item.Operation
+                        && candidate.Operation == item.Operation && candidate.OutputFormat == item.OutputFormat && info.Format == item.OutputInfo!.Format
                         && candidate.Semantic == item.Semantic && candidate.AlphaCutoff == item.AlphaCutoff && info.Width == item.TargetWidth
                         && info.Height == item.TargetHeight && HashFile(cached, ct) == candidate.OutputHash)
                         entry = candidate with { Path = item.Path, Source = item.Origin, SourceContainer = asset.Container, DeclaredSourceMipCount = item.Input?.DeclaredMipCount, SourceRecordLayout = item.Input?.RecordLayout, Material = item.Material };
@@ -183,10 +186,11 @@ public static class JobRunner
                 }
                 using var verify = File.OpenRead(dest); var info = Dds.Inspect(verify).Info;
                 if (info.Width != item.TargetWidth || info.Height != item.TargetHeight || info.PayloadBytes != item.OutputPayload
-                    || info.Format != item.Input!.Format || info.Dxgi != item.Input.Dxgi || info.Signed != item.Input.Signed || info.Premultiplied != item.Input.Premultiplied)
+                    || info.Format != item.OutputInfo!.Format || info.Dxgi != item.OutputInfo.Dxgi || info.Srgb != item.OutputInfo.Srgb
+                    || info.Signed != item.OutputInfo.Signed || info.Premultiplied != item.OutputInfo.Premultiplied)
                     throw new InvalidDataException("Generated texture does not match the plan: " + item.Path);
                 entry = new(item.Path, item.Origin, hash, outputHash, info.Width, info.Height, item.DropMips, verify.Length, recipe)
-                { SourceContainer = asset.Container, DeclaredSourceMipCount = item.Input.DeclaredMipCount, SourceRecordLayout = item.Input.RecordLayout, Operation = item.Operation, Semantic = item.Semantic, AlphaCutoff = item.AlphaCutoff, Material = item.Material, Processor = processorIdentity };
+                { SourceContainer = asset.Container, DeclaredSourceMipCount = item.Input!.DeclaredMipCount, SourceRecordLayout = item.Input.RecordLayout, Operation = item.Operation, Semantic = item.Semantic, AlphaCutoff = item.AlphaCutoff, Material = item.Material, Processor = processorIdentity, OutputFormat = item.OutputFormat };
             }
             if (cacheable && reusedEntry is null)
             {

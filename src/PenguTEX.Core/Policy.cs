@@ -27,6 +27,10 @@ public sealed record Policy
     public bool CompleteKnownMaterials { get; init; }
     public bool RecoverMipRecords { get; init; }
     public bool RecoverMipCounts { get; init; }
+    /// <summary>Block-compress unprotected uncompressed 8-bit textures (BC7, or BC4 for single-channel red).</summary>
+    public bool EncodeUncompressed { get; init; }
+    /// <summary>Also compress uncompressed NPC face tints while character protection keeps them at full size.</summary>
+    public bool EncodeFaceTints { get; init; }
     // Retained only to reject legacy policies explicitly, rather than ignore their intent.
     public bool CarryReference { get; init; }
     public PathRule[] Rules { get; init; } = [];
@@ -55,12 +59,26 @@ public sealed record Policy
         "balanced" => new Policy(),
         "compact" => new Policy() { Name = "Compact", Maximum = 1024, NormalMaximum = 512, MaterialMaximum = 512, HeightMaximum = 256 },
         _ => throw new ArgumentException("Preset must be Quality, Balanced or Compact."),
-    }) with { ProtectLargeSurfaces = false, ProtectCharacters = false, CompleteKnownMaterials = true, RecoverMipCounts = true, RecoverMipRecords = true };
+    }) with { ProtectLargeSurfaces = false, ProtectCharacters = false, CompleteKnownMaterials = true, RecoverMipCounts = true, RecoverMipRecords = true, EncodeUncompressed = true };
     // Compiled once per pattern; Regex's own static cache holds only 15 and analysis checks every rule per texture.
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Regex> Patterns = new(StringComparer.Ordinal);
     public static bool Matches(string path, string pattern) => Patterns.GetOrAdd(pattern, p => new Regex(
         "^" + Regex.Escape(p.Replace('\\', '/')).Replace("\\*", ".*").Replace("\\?", ".") + "$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1))).IsMatch(path.Replace('\\', '/'));
+
+    /// <summary>
+    /// The block format an uncompressed source is compressed to, or null when it stays as it is. Only layouts whose
+    /// channels are all 8-bit qualify; single-channel red becomes BC4, other colour, normal and alpha layouts BC7.
+    /// Luminance, alpha-only, packed 16-bit and higher-precision layouts are left alone: no block format reproduces
+    /// what the game samples from them.
+    /// </summary>
+    public static string? CompressionTarget(DdsInfo info)
+    {
+        if (info.IsBlockCompressed || info.Signed || info.Premultiplied || info.Luminance || info.RecordLayout is not null || !info.HasByteChannels) return null;
+        uint[] masks = [info.RedMask, info.GreenMask, info.BlueMask, info.AlphaMask];
+        if (masks.Any(m => m != 0 && System.Numerics.BitOperations.PopCount(m) != 8) || info.RedMask == 0) return null;
+        return info.GreenMask == 0 && info.BlueMask == 0 && info.AlphaMask == 0 && !info.Srgb ? "BC4" : "BC7";
+    }
 
     public PathRule? ProcessingRule(string path) => Rules.LastOrDefault(r => Matches(path, r.Pattern));
 
@@ -155,6 +173,13 @@ public static class Planner
                 using var stream = asset.Open(); var (info, _) = Dds.Inspect(stream, asset.Length,
                     policy.RecoverMipCounts && !higherPriority && protection is null,
                     policy.RecoverMipRecords && !higherPriority && protection is null, ct);
+                // Uncompressed sources are block-compressed when the policy allows; their existing levels are encoded as they are.
+                string? encodeTo = policy.EncodeUncompressed && !higherPriority && protection is null
+                    && (long)info.Width * info.Height <= Policy.MaximumRebuildPixels ? Policy.CompressionTarget(info) : null;
+                if (policy.EncodeFaceTints && !higherPriority && protectionKind == ProtectionKind.Characters && protection is not null
+                    && asset.Path.Contains("/facegendata/facetint/", StringComparison.OrdinalIgnoreCase)
+                    && (long)info.Width * info.Height <= Policy.MaximumRebuildPixels && Policy.CompressionTarget(info) is { } tint)
+                    return Encoded(info, 0, tint, $"Face tint: compress uncompressed {info.Format} to {tint} at full size; character protection keeps its dimensions.", null);
                 MaterialHint? hint = null;
                 int fullSourceMips = Dds.FullMipCount(info.Width, info.Height);
                 var rebuild = policy.ProcessingRule(asset.Path);
@@ -190,11 +215,12 @@ public static class Planner
                         if (policy.FitReference && reference?.Info is { } previousRebuild)
                             while (Math.Max(info.Width >> drop, info.Height >> drop) > 1 && !ReferenceComparison.Fits(info, drop, true, previousRebuild)) drop++;
                         width = Math.Max(1, info.Width >> drop); height = Math.Max(1, info.Height >> drop);
-                        var target = info with { Width = width, Height = height, MipCount = Dds.FullMipCount(width, height) };
+                        var target = (encodeTo is null ? info : Dds.Encoded(info, encodeTo)) with { Width = width, Height = height, MipCount = Dds.FullMipCount(width, height) };
+                        string format = encodeTo is null ? $"original {info.Format} format retained." : $"{info.Format} encoded to {encodeTo}.";
                         return new(asset.Path, asset.Origin, asset.Container, category, Decision.Rebuild,
-                            complete ? $"Complete original mip chain; retain available levels byte-for-byte and generate missing levels with {rebuild.Semantic}; original {info.Format} format retained."
-                                : $"Explicit CPU rebuild from the top mip; {rebuild.Semantic}; original {info.Format} format retained.", info, drop, width, height,
-                            Enumerable.Range(0, target.MipCount).Sum(target.MipBytes)) { Semantic = rebuild.Semantic, PreserveExistingMips = complete, AlphaCutoff = rebuild.AlphaCutoff, Material = hint };
+                            complete ? $"Complete original mip chain; retain available levels {(encodeTo is null ? "byte-for-byte" : "without filtering")} and generate missing levels with {rebuild.Semantic}; {format}"
+                                : $"Explicit CPU rebuild from the top mip; {rebuild.Semantic}; {format}", info, drop, width, height,
+                            Enumerable.Range(0, target.MipCount).Sum(target.MipBytes)) { Semantic = rebuild.Semantic, PreserveExistingMips = complete, AlphaCutoff = rebuild.AlphaCutoff, Material = hint, OutputFormat = encodeTo };
                     }
                 }
                 else if (policy.FitReference && reference?.Info is { } previousCopy && !ReferenceComparison.Fits(info, drop, false, previousCopy))
@@ -210,8 +236,19 @@ public static class Planner
                     reason = (info.RecordLayout is null ? $"Recovered source mip count {declared} → {info.MipCount} from the exact full-chain payload length. "
                         : $"Recovered {info.MipCount} original mips from validated {info.RecordLayout}; every descriptor and footer checked. ") + reason;
                 }
+                if (encodeTo is not null && decision is Decision.Keep or Decision.Reduce)
+                    return Encoded(info, drop, encodeTo, $"Compress uncompressed {info.Format} to {encodeTo}; existing levels are encoded without filtering. " + reason,
+                        hint ?? catalog.Materials?.Textures.GetValueOrDefault(asset.Path));
                 return new(asset.Path, asset.Origin, asset.Container, category, decision, reason, info, drop,
                     Math.Max(1, info.Width >> drop), Math.Max(1, info.Height >> drop), info.PayloadBytes - info.RemovedBytes(drop)) { Material = hint };
+
+                PlanItem Encoded(DdsInfo source, int dropped, string format, string why, MaterialHint? material)
+                {
+                    var output = Dds.Encoded(source, format);
+                    return new(asset.Path, asset.Origin, asset.Container, category, Decision.Rebuild, why, source, dropped,
+                        Math.Max(1, source.Width >> dropped), Math.Max(1, source.Height >> dropped), output.PayloadBytesFrom(dropped))
+                    { PreserveExistingMips = true, OutputFormat = format, Material = material, AlphaCutoff = material?.Role == MaterialRole.Cutout ? material.AlphaCutoff : 128 };
+                }
             }
             catch (ProtectedTextureException e) { return new(asset.Path, asset.Origin, asset.Container, category, Decision.Protected, e.Message, null, 0, 0, 0, 0); }
             catch (NotSupportedException e) { return new(asset.Path, asset.Origin, asset.Container, category, Decision.Unsupported, e.Message, null, 0, 0, 0, 0); }

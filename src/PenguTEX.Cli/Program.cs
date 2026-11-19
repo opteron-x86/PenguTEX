@@ -62,6 +62,8 @@ public static class Program
         if (Get("complete-materials") is { } complete) policy = policy with { CompleteKnownMaterials = bool.Parse(complete) };
         if (Get("recover-mip-records") is { } records) policy = policy with { RecoverMipRecords = bool.Parse(records) };
         if (Get("recover-mip-counts") is { } recover) policy = policy with { RecoverMipCounts = bool.Parse(recover) };
+        if (Get("encode-uncompressed") is { } encode) policy = policy with { EncodeUncompressed = bool.Parse(encode) };
+        if (Get("encode-face-tints") is { } tints) policy = policy with { EncodeFaceTints = bool.Parse(tints) };
         if (Get("carry-reference") is { } carry) policy = policy with { CarryReference = bool.Parse(carry) };
         policy.Validate();
         bool requireComplete = bool.Parse(Get("require-complete") ?? "false");
@@ -95,7 +97,7 @@ public static class Program
     {
         string[] known = ["folder", "instance", "profile", "game", "mods", "profiles", "overwrite", "wine-prefix",
             "ini", "exclude-mods", "preset", "policy", "max", "report", "output", "cache", "workers", "data",
-            "reference", "replace-mod", "fit-reference", "fit-protected", "carry-reference", "require-parity", "recover-mip-counts", "complete-materials", "require-complete", "recover-mip-records", "days", "dry-run", "analyze-workers"];
+            "reference", "replace-mod", "fit-reference", "fit-protected", "carry-reference", "require-parity", "recover-mip-counts", "complete-materials", "require-complete", "recover-mip-records", "encode-uncompressed", "encode-face-tints", "days", "dry-run", "analyze-workers"];
         var options = new Dictionary<string, string>();
         for (int i = 0; i < args.Length; i += 2)
         {
@@ -134,6 +136,8 @@ public static class Program
                  --analyze-workers N (textures and meshes inspected at once; default up to 8)
         Fresh runs: --complete-materials true|false, --require-complete true|false.
         Recovery: --recover-mip-counts true|false, --recover-mip-records true|false.
+        Compression: --encode-uncompressed true|false (BC7/BC4; on in presets),
+                     --encode-face-tints true|false (also when characters are protected).
         Comparison: --reference PATH, --replace-mod NAME (profile slot when needed),
                     --require-parity true
         Profile overrides: --game PATH, --mods PATH, --profiles PATH, --overwrite PATH,

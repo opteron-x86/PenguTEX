@@ -74,7 +74,7 @@ public sealed record NativeCoverage(int TextureCount, int AboveLimit, int Incomp
             {
                 int cap = plan.Policy.Classify(i.Path).Maximum;
                 if (Math.Max(i.TargetWidth, i.TargetHeight) > cap) { above++; status = "Above limit"; }
-                int mips = i.Decision == Decision.Rebuild ? Dds.FullMipCount(i.TargetWidth, i.TargetHeight) : info.MipCount - i.DropMips;
+                int mips = i.FullOutputChain ? Dds.FullMipCount(i.TargetWidth, i.TargetHeight) : info.MipCount - i.DropMips;
                 if (mips < Dds.FullMipCount(i.TargetWidth, i.TargetHeight))
                 { missing++; status = status is null ? "Missing mip levels" : status + "; missing mips"; }
             }
