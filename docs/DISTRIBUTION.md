@@ -8,13 +8,13 @@ setup, known limits and feedback. PenguTEX itself does not run through Wine or M
 
 ## Windows
 
-Download `PenguTEX-0.1.0-alpha.13-win-x64.zip`, use **Extract All**, then open
+Download `PenguTEX-0.1.0-alpha.14-win-x64.zip`, use **Extract All**, then open
 `win-x64/PenguTEX.Desktop.exe`. Extract the entire package; the executable needs
 the libraries beside it. `PenguTEX.exe` is the CLI, for example in PowerShell:
 
 ```powershell
 .\win-x64\PenguTEX.exe --version
-Get-FileHash .\PenguTEX-0.1.0-alpha.13-win-x64.zip -Algorithm SHA256
+Get-FileHash .\PenguTEX-0.1.0-alpha.14-win-x64.zip -Algorithm SHA256
 ```
 
 Compare that hash with the ZIP's entry in `SHA256SUMS`. The alpha executables are
@@ -31,7 +31,7 @@ drivers and in-game modlists still need alpha feedback; CI is not gameplay testi
 
 ## Linux
 
-Extract `PenguTEX-0.1.0-alpha.13-linux-x64.zip`, then run
+Extract `PenguTEX-0.1.0-alpha.14-linux-x64.zip`, then run
 `linux-x64/PenguTEX.Desktop` or `linux-x64/PenguTEX --help`. Move it to its final
 location before optionally running `bash linux-x64/install-desktop.sh`. That
 explicitly installs a per-user menu entry. To uninstall, remove the portable
@@ -43,8 +43,8 @@ For AppImage, mark it executable and launch it. `--cli` selects the CLI. If moun
 AppImages through FUSE is unavailable, use:
 
 ```sh
-./PenguTEX-0.1.0-alpha.13-x86_64.AppImage --appimage-extract-and-run
-./PenguTEX-0.1.0-alpha.13-x86_64.AppImage --appimage-extract-and-run --cli --version
+./PenguTEX-0.1.0-alpha.14-x86_64.AppImage --appimage-extract-and-run
+./PenguTEX-0.1.0-alpha.14-x86_64.AppImage --appimage-extract-and-run --cli --version
 ```
 
 Use `sha256sum` on downloaded files and compare their entries in `SHA256SUMS`.

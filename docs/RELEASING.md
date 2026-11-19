@@ -18,8 +18,8 @@ versions are published as pre-releases.
 5. Tag the merge commit and push only the tag:
 
    ```bash
-   git tag -a v0.1.0-alpha.13 -m 'PenguTEX 0.1.0-alpha.13'
-   git push origin v0.1.0-alpha.13
+   git tag -a v0.1.0-alpha.14 -m 'PenguTEX 0.1.0-alpha.14'
+   git push origin v0.1.0-alpha.14
    ```
 
 The tag build checks that the tag, metainfo and changelog match the version, runs every
@@ -59,7 +59,7 @@ One-time setup:
 For each release, once the tag build has finished:
 
 1. Open **Actions → Upload release to Nexus → Run workflow**.
-2. Select `master` and enter the tag, such as `v0.1.0-alpha.13`.
+2. Select `master` and enter the tag, such as `v0.1.0-alpha.14`.
 
 If an upload fails partway, check the Files and Changelog tabs on Nexus before running it
 again, so that a file is not uploaded twice. The page description and images are edited on

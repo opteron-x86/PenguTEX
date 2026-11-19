@@ -57,7 +57,7 @@ jobs:
           file_id: ${{ vars.NEXUSMODS_FILE_ID_WINDOWS }}
           filename: ${{ steps.release.outputs.windows }}
           version: ${{ steps.release.outputs.version }}
-          display_name: PenguTEX Windows x64
+          display_name: PenguTEX Windows X64
           description: PenguTEX for Windows. Extract the archive and run win-x64/PenguTEX.Desktop.exe.
           category: main
           archive_existing_version: 'true'
@@ -73,7 +73,7 @@ jobs:
           mod_id: ${{ vars.NEXUSMODS_MOD_ID }}
           filename: ${{ steps.release.outputs.linux }}
           version: ${{ steps.release.outputs.version }}
-          display_name: PenguTEX Linux x64
+          display_name: PenguTEX Linux X64
           description: PenguTEX for Linux. Extract the archive and run linux-x64/PenguTEX.Desktop.
           category: main
           archive_existing_version: 'true'

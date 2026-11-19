@@ -6,6 +6,8 @@ its Nexus Mods changelog. Releases before 0.1.0-alpha.11 are described on the
 
 ## [Unreleased]
 
+## [0.1.0-alpha.14] - 2026-11-18
+
 Build your output again: uncompressed textures are now compressed.
 
 - Added compression of uncompressed textures to BC7 (BC4 for single-channel red), on in all presets. Existing mipmaps are kept.
