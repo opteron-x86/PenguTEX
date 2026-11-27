@@ -55,6 +55,31 @@ ARM, musl, GPU driver or desktop backend. Native X11 startup is tested through X
 Wayland sessions can use XWayland. Runtime libraries include fontconfig, X11/ICE/SM,
 ICU, OpenSSL and standard graphics/runtime libraries.
 
+## macOS (Apple Silicon, build from source)
+
+There is no macOS release package yet. On an Apple Silicon Mac with the .NET 10 SDK, Python 3 and CMake:
+
+```sh
+bash tools/build-macos.sh
+```
+
+It builds the native BC7 encoder for NEON (downloading the pinned ISPC 1.32.0 macOS arm64 compiler and
+checking its SHA-256), runs the CLI smoke test, and writes a self-contained `dist/osx-arm64/` (CLI `PenguTEX`
+and `PenguTEX.Desktop`), `dist/PenguTEX.app` and a ZIP. Every Mach-O in the package must load on macOS 12.0,
+the bundled .NET runtime's floor; the script fails otherwise.
+
+The app is ad-hoc signed, not notarized. A copy built on the same Mac opens normally. A downloaded copy is
+quarantined: on macOS 15 and later open it once, then allow it under System Settings > Privacy & Security >
+Open Anyway; on older macOS use right-click > Open. Preferences use
+`~/Library/Application Support/PenguTEX/settings.json` and the default work cache is
+`~/Library/Caches/PenguTEX`; `XDG_CONFIG_HOME`/`XDG_CACHE_HOME`, or files already at the XDG locations from an
+earlier build, still take precedence.
+
+MO2 under CrossOver or Wine: select the instance folder containing `ModOrganizer.ini` (a global instance is
+under `<bottle>/drive_c/users/<user>/AppData/Local/ModOrganizer/<instance>`) and the bottle as the Wine
+prefix, so its `dosdevices` map the INI's drive paths. NEON output is checked by the native and .NET test
+suites, not yet compared byte for byte with the x64 encoders, so it has its own cache identity.
+
 ## Build and release
 
 The release and Nexus upload steps are in [RELEASING.md](RELEASING.md).

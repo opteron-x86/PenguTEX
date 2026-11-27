@@ -9,15 +9,28 @@ set(EXT o)
 if(WIN32)
   set(EXT obj)
 endif()
-set(OBJECTS "${CMAKE_CURRENT_BINARY_DIR}/bc7e.${EXT}"
-  "${CMAKE_CURRENT_BINARY_DIR}/bc7e_sse2.${EXT}" "${CMAKE_CURRENT_BINARY_DIR}/bc7e_avx2.${EXT}")
-set(PIC)
+set(ISPC_FLAGS)
 if(NOT WIN32)
-  set(PIC --pic)
+  list(APPEND ISPC_FLAGS --pic)
+endif()
+if(APPLE)
+  list(APPEND ISPC_FLAGS --target-os=macos)
+endif()
+# Apple Silicon: one NEON target, so ISPC emits a single object with no dispatch stubs.
+# x64 keeps SSE2 + AVX2 runtime dispatch (bc7e.o plus one object per target).
+if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
+  set(ISPC_ARCH aarch64)
+  set(ISPC_TARGETS neon-i32x4)
+  set(OBJECTS "${CMAKE_CURRENT_BINARY_DIR}/bc7e.${EXT}")
+else()
+  set(ISPC_ARCH x86-64)
+  set(ISPC_TARGETS sse2-i32x4,avx2-i32x8)
+  set(OBJECTS "${CMAKE_CURRENT_BINARY_DIR}/bc7e.${EXT}"
+    "${CMAKE_CURRENT_BINARY_DIR}/bc7e_sse2.${EXT}" "${CMAKE_CURRENT_BINARY_DIR}/bc7e_avx2.${EXT}")
 endif()
 add_custom_command(OUTPUT ${OBJECTS} "${CMAKE_CURRENT_BINARY_DIR}/bc7e.h"
-  COMMAND "${ISPC_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/kernel.ispc" -O2 ${PIC}
-    --arch=x86-64 --target=sse2-i32x4,avx2-i32x8 --opt=disable-assertions
+  COMMAND "${ISPC_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/kernel.ispc" -O2 ${ISPC_FLAGS}
+    --arch=${ISPC_ARCH} --target=${ISPC_TARGETS} --opt=disable-assertions
     -o "${CMAKE_CURRENT_BINARY_DIR}/bc7e.${EXT}" -h "${CMAKE_CURRENT_BINARY_DIR}/bc7e.h"
   DEPENDS kernel.ispc vendor/bc7e.ispc VERBATIM)
 add_library(pengutex_bc7 SHARED encoder.cpp ${OBJECTS} "${CMAKE_CURRENT_BINARY_DIR}/bc7e.h")

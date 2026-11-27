@@ -6,6 +6,10 @@ its Nexus Mods changelog. Releases before 0.1.0-alpha.11 are described on the
 
 ## [Unreleased]
 
+- Added macOS Apple Silicon source builds: `tools/build-macos.sh` builds the native BC7 encoder for NEON and packages `PenguTEX.app`. No macOS release package yet.
+- Changed the native BC7 log line and cache identity to name NEON on Apple Silicon (previously reported as SSE2).
+- Changed macOS default preferences and work cache to `~/Library/Application Support/PenguTEX` and `~/Library/Caches/PenguTEX`; XDG variables and existing XDG locations still win.
+
 ## [0.1.0-alpha.14] - 2026-11-18
 
 Build your output again: uncompressed textures are now compressed.

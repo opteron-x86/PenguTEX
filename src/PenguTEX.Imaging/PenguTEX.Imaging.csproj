@@ -5,6 +5,7 @@
     <Bc7Rid Condition="'$(Bc7Rid)' == ''">$(NETCoreSdkRuntimeIdentifier)</Bc7Rid>
     <Bc7Library Condition="'$(Bc7Rid)' == 'linux-x64'">libpengutex_bc7.so</Bc7Library>
     <Bc7Library Condition="'$(Bc7Rid)' == 'win-x64'">pengutex_bc7.dll</Bc7Library>
+    <Bc7Library Condition="'$(Bc7Rid)' == 'osx-arm64'">libpengutex_bc7.dylib</Bc7Library>
     <Bc7Path>$(MSBuildThisFileDirectory)../../native/bin/$(Bc7Rid)/$(Bc7Library)</Bc7Path>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../PenguTEX.Core/PenguTEX.Core.csproj" /><PackageReference Include="BCnEncoder.Net" /></ItemGroup>

@@ -25,6 +25,28 @@ public static class DesktopPaths
     private static string Xdg(string variable, string fallback) => Path.Combine(
         Environment.GetEnvironmentVariable(variable) is { Length: > 0 } value ? value
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), fallback), "PenguTEX");
-    public static string Settings => Path.Combine(OperatingSystem.IsWindows() ? LocalData : Xdg("XDG_CONFIG_HOME", ".config"), "settings.json");
-    public static string Cache => OperatingSystem.IsWindows() ? Path.Combine(LocalData, "Cache") : Xdg("XDG_CACHE_HOME", ".cache");
+    // macOS: Finder launches do not inherit shell XDG variables, so default to the Library folders; an explicit XDG
+    // variable, or settings/cache already at the XDG location from an earlier build, still wins.
+    private static string MacLibrary(string folder)
+        => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", folder, "PenguTEX");
+    private static bool HasVariable(string variable) => Environment.GetEnvironmentVariable(variable) is { Length: > 0 };
+    public static string Settings
+    {
+        get
+        {
+            if (OperatingSystem.IsWindows()) return Path.Combine(LocalData, "settings.json");
+            string xdg = Path.Combine(Xdg("XDG_CONFIG_HOME", ".config"), "settings.json");
+            return !OperatingSystem.IsMacOS() || HasVariable("XDG_CONFIG_HOME") || File.Exists(xdg)
+                ? xdg : Path.Combine(MacLibrary("Application Support"), "settings.json");
+        }
+    }
+    public static string Cache
+    {
+        get
+        {
+            if (OperatingSystem.IsWindows()) return Path.Combine(LocalData, "Cache");
+            string xdg = Xdg("XDG_CACHE_HOME", ".cache");
+            return !OperatingSystem.IsMacOS() || HasVariable("XDG_CACHE_HOME") || Directory.Exists(xdg) ? xdg : MacLibrary("Caches");
+        }
+    }
 }

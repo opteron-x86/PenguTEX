@@ -14,6 +14,8 @@ Download an x64 alpha build from [Releases](https://github.com/opteron-x86/Pengu
 - Windows: extract the ZIP and run `win-x64/PenguTEX.Desktop.exe`.
 - Linux: extract the ZIP and run `linux-x64/PenguTEX.Desktop`, or make
   the AppImage executable and launch it.
+- macOS (Apple Silicon): no release package yet; build `PenguTEX.app` from source
+  with `bash tools/build-macos.sh`.
 
 See the [installation guide](docs/DISTRIBUTION.md) for more details.
 

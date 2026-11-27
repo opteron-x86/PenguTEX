@@ -126,6 +126,52 @@ jobs:
           path: |
             .artifacts/tests
             .artifacts/screenshots
+  macos:
+    # Apple Silicon source build: native NEON encoder, tests, app bundle and its smoke checks. Not a release input.
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      PENGUTEX_SCREENSHOTS: ${{ github.workspace }}/.artifacts/screenshots
+      PENGUTEX_ORACLE_FIXTURES: ${{ github.workspace }}/.artifacts/oracle
+      PENGUTEX_REQUIRE_NATIVE_BC7: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: '10.0.x'
+      - name: Engine and rendered desktop tests (native NEON encoder)
+        run: bash tools/test.sh
+      - name: Independent DDS decoder
+        run: |
+          python3 -m venv .tools/dds-oracle
+          .tools/dds-oracle/bin/pip install Pillow==13.0.0
+          .tools/dds-oracle/bin/python tools/independent-dds.py .artifacts/oracle
+      - name: Build app bundle and ZIP
+        run: bash tools/build-macos.sh
+      - name: Extract ZIP and verify its signature
+        run: |
+          version="$(python3 tools/version.py)"
+          ditto -x -k "dist/PenguTEX-$version-osx-arm64.zip" 'Extracted package forêt'
+          codesign --verify --deep --strict 'Extracted package forêt/PenguTEX.app'
+      - name: Extracted CLI workflow
+        run: python3 tools/cli-smoke.py 'Extracted package forêt/PenguTEX.app/Contents/MacOS/PenguTEX'
+      - name: Extracted native desktop startup
+        run: python3 tools/gui-smoke.py 'Extracted package forêt/PenguTEX.app/Contents/MacOS/PenguTEX.Desktop'
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: PenguTEX-osx-arm64
+          if-no-files-found: error
+          compression-level: 0
+          path: dist/PenguTEX-*-osx-arm64.zip
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: test-results-macos
+          include-hidden-files: true
+          path: |
+            .artifacts/tests
+            .artifacts/screenshots
   compatibility:
     name: Package compatibility (${{ matrix.image }})
     needs: linux

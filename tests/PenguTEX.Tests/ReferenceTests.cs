@@ -121,7 +121,7 @@ public sealed class ReferenceTests
         using var f = new Fixture(); string game = f.Dir("game"); f.Dir("game/Data");
         f.Text("instance/ModOrganizer.ini", $"[General]\ngamePath={game}\nselected_profile=Example\n");
         f.Text("instance/profiles/Example/settings.ini", "[General]\nLocalSettings=true\n");
-        f.Text("instance/profiles/Example/skyrim.ini", "[Archive]\nsResourceArchiveList=\nsResourceArchiveList2=\n");
+        f.Text("instance/profiles/Example/skyrim.ini", "[Archive]\nsResourceArchiveList=\nsResourceArchiveList2=\nsArchiveToLoadInMemoryList=\n");
         f.Text("instance/profiles/Example/modlist.txt", "+High\n" + (enabled ? "+" : "-") + "Previous\n+Low\n");
         f.File("instance/mods/Previous/textures/a.dds", Fixture.Dds(4, 4));
         f.File("instance/mods/Previous/textures/b.dds", Fixture.Dds(4, 4));

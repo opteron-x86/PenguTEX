@@ -18,7 +18,7 @@ public class SourceTests
         f.Text(Path.Combine(instance, "ModOrganizer.ini"), $"[General]\ngamePath=@ByteArray({Qt(game)})\nselected_profile=Profile forêt\n[Settings]\nbase_directory={Qt(library)}\nmod_directory=%BASE_DIR%/mods\nprofiles_directory=%BASE_DIR%/profiles\n");
         f.Text(Path.Combine(library, "profiles/Profile forêt/modlist.txt"), "+Textures\n-Disabled\n");
         f.Text(Path.Combine(library, "profiles/Profile forêt/settings.ini"), "[General]\nLocalSettings=true\n");
-        f.Text(Path.Combine(library, "profiles/Profile forêt/skyrim.ini"), "[Archive]\nsResourceArchiveList=\nsResourceArchiveList2=\n");
+        f.Text(Path.Combine(library, "profiles/Profile forêt/skyrim.ini"), "[Archive]\nsResourceArchiveList=\nsResourceArchiveList2=\nsArchiveToLoadInMemoryList=\n");
         f.File(Path.Combine(library, "mods/Textures/textures/forêt.dds"), Fixture.Dds());
         f.File(Path.Combine(library, "mods/Disabled/textures/disabled.dds"), Fixture.Dds());
         var opened = Mo2Instance.Open(instance);
@@ -35,7 +35,7 @@ public class SourceTests
         f.Text("instance/ModOrganizer.ini", "[General]\ngamePath=C:\\\\Games\\\\Skyrim\nselected_profile=Example\n[Settings]\nbase_directory=C:\\\\Mod library\n");
         f.Text("compatdata/pfx/drive_c/Mod library/profiles/Example/modlist.txt", "+Originals\n");
         f.Text("compatdata/pfx/drive_c/Mod library/profiles/Example/settings.ini", "[General]\nLocalSettings=true\n");
-        f.Text("compatdata/pfx/drive_c/Mod library/profiles/Example/skyrim.ini", "[Archive]\nsResourceArchiveList=\nsResourceArchiveList2=\n");
+        f.Text("compatdata/pfx/drive_c/Mod library/profiles/Example/skyrim.ini", "[Archive]\nsResourceArchiveList=\nsResourceArchiveList2=\nsArchiveToLoadInMemoryList=\n");
         f.File("compatdata/pfx/drive_c/Mod library/mods/Originals/textures/a.dds", Fixture.Dds());
         var catalog = CatalogLoader.Load(new(Instance: f.Dir("instance"), WinePrefix: f.Dir("compatdata")));
         Assert.DoesNotContain(catalog.Diagnostics, d => d.Severity == Severity.Error);
@@ -66,7 +66,7 @@ public class SourceTests
         string game = f.Dir("game"); f.Dir("game/Data"); f.Dir("instance/mods");
         f.Text("instance/ModOrganizer.ini", $"[General]\ngamePath={game}\nselected_profile=Example\n");
         f.Text("instance/profiles/Example/settings.ini", "[General]\nLocalSettings=true\n");
-        f.Text("instance/profiles/Example/skyrim.ini", "[Archive]\nsResourceArchiveList=\nsResourceArchiveList2=\n");
+        f.Text("instance/profiles/Example/skyrim.ini", "[Archive]\nsResourceArchiveList=\nsResourceArchiveList2=\nsArchiveToLoadInMemoryList=\n");
         f.Text("instance/profiles/Example/modlist.txt", "+High\n-LowDisabled\n+Low\n");
         f.Dir("instance/mods/High"); f.Dir("instance/mods/Low");
         return new(Instance: Path.Combine(f.Root, "instance"));
@@ -115,7 +115,10 @@ public class SourceTests
     [Fact] public void SameLayerCaseCollisionBlocksCompleteSource()
     {
         if (OperatingSystem.IsWindows()) return;
-        using var f = new Fixture(); f.File("input/textures/A.dds", Fixture.Dds()); f.File("input/textures/a.dds", Fixture.Dds());
+        using var f = new Fixture(); f.File("input/textures/A.dds", Fixture.Dds());
+        // A case-insensitive volume (macOS APFS default) cannot hold both names, so no collision can exist.
+        if (File.Exists(Path.Combine(f.Root, "input/textures/a.dds"))) return;
+        f.File("input/textures/a.dds", Fixture.Dds());
         var catalog = CatalogLoader.Load(new(Folder: Path.Combine(f.Root, "input")));
         Assert.Contains(catalog.Diagnostics, d => d.Severity == Severity.Error && d.Message.Contains("collision"));
         Assert.False(Planner.Analyze(catalog, new()).CompleteSource);
@@ -178,6 +181,9 @@ public class SourceTests
     }
     [Fact] public void DetectsMergedFluorineDataWithoutRejectingOrdinaryMounts()
     {
+        // Fluorine and /proc/self/mountinfo are Linux-only; the loader only checks there. On macOS the temp
+        // folder is behind the /var -> /private/var symlink, so the canonical target never matches the fixture line.
+        if (!OperatingSystem.IsLinux()) return;
         using var f = new Fixture(); var data = f.Dir("game data"); string escaped = data.Replace(" ", "\\040");
         Assert.True(CatalogLoader.IsFluorineMount(data, [$"100 90 0:99 / {escaped} ro - fuse mo2linux rw"]));
         Assert.True(CatalogLoader.IsFluorineMount(Path.Combine(data, "child"), [$"100 90 0:99 / {escaped} ro - fuse mo2linux rw"]));
@@ -192,7 +198,7 @@ public class SourceTests
     [Fact] public void MissingActiveIniArchiveBlocksPublicationButOptionalPatchDoesNot()
     {
         using var f = new Fixture(); var options = Setup(f);
-        f.Text("instance/profiles/Example/skyrim.ini", "[Archive]\nsResourceArchiveList=Required.bsa, Skyrim - Patch.bsa\nsResourceArchiveList2=\n");
+        f.Text("instance/profiles/Example/skyrim.ini", "[Archive]\nsResourceArchiveList=Required.bsa, Skyrim - Patch.bsa\nsResourceArchiveList2=\nsArchiveToLoadInMemoryList=\n");
         var catalog = CatalogLoader.Load(options);
         Assert.Contains(catalog.Diagnostics, d => d.Severity == Severity.Error && d.Message.Contains("Required.bsa"));
         Assert.Contains(catalog.Diagnostics, d => d.Severity == Severity.Warning && d.Message.Contains("Patch.bsa"));

@@ -29,8 +29,18 @@ public sealed class DesktopTests
             Environment.GetEnvironmentVariable(name) is { Length: > 0 } value ? value
                 : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), fallback), "PenguTEX");
         string local = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PenguTEX");
-        Assert.Equal(Path.Combine(OperatingSystem.IsWindows() ? local : Xdg("XDG_CONFIG_HOME", ".config"), "settings.json"), new SettingsStore().Path);
-        Assert.Equal(OperatingSystem.IsWindows() ? Path.Combine(local, "Cache") : Xdg("XDG_CACHE_HOME", ".cache"), new DesktopSettings().Cache);
+        string library = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library");
+        bool Set(string name) => Environment.GetEnvironmentVariable(name) is { Length: > 0 };
+        // macOS uses the Library folders unless XDG is set explicitly or an earlier build already used the XDG location.
+        string xdgSettings = Path.Combine(Xdg("XDG_CONFIG_HOME", ".config"), "settings.json"), xdgCache = Xdg("XDG_CACHE_HOME", ".cache");
+        string settingsPath = OperatingSystem.IsWindows() ? Path.Combine(local, "settings.json")
+            : OperatingSystem.IsMacOS() && !Set("XDG_CONFIG_HOME") && !File.Exists(xdgSettings)
+                ? Path.Combine(library, "Application Support", "PenguTEX", "settings.json") : xdgSettings;
+        string cachePath = OperatingSystem.IsWindows() ? Path.Combine(local, "Cache")
+            : OperatingSystem.IsMacOS() && !Set("XDG_CACHE_HOME") && !Directory.Exists(xdgCache)
+                ? Path.Combine(library, "Caches", "PenguTEX") : xdgCache;
+        Assert.Equal(settingsPath, new SettingsStore().Path);
+        Assert.Equal(cachePath, new DesktopSettings().Cache);
         var store = new SettingsStore(Path.Combine(f.Root, "Préférences", "settings.json"));
         var settings = Settings(f) with { Cache = f.Dir("Custom cache forêt") };
         store.Save(settings);

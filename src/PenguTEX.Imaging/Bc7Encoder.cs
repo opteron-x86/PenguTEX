@@ -14,12 +14,16 @@ public sealed class Bc7Encoder
     public static bool NativeAvailable => NativeVariant.Value != 0;
     private readonly BcEncoder? managed;
     public Bc7Backend Backend { get; }
+    // Both SSE2 and NEON report four lanes; the process architecture tells them apart. NEON has its own cache
+    // identity because its bytes are not yet proven identical to the x64 build's.
+    private static string Variant => NativeVariant.Value == 8 ? "avx2"
+        : RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "neon" : "sse2";
     public string Identity => Backend == Bc7Backend.Managed ? "bcn-2.3.0-balanced"
-        : $"bc7e-b9438627-ispc1.32.0-{Backend.ToString().ToLowerInvariant()}-linear-alpha01-v1-{(NativeVariant.Value == 8 ? "avx2" : "sse2")}";
+        : $"bc7e-b9438627-ispc1.32.0-{Backend.ToString().ToLowerInvariant()}-linear-alpha01-v1-{Variant}";
 
     /// <summary>One line for the run log; says so when the much slower managed encoder is a fallback.</summary>
     public string Summary => Backend != Bc7Backend.Managed
-        ? $"BC7 encoder: native BC7E {Backend} ({(NativeVariant.Value == 8 ? "AVX2" : "SSE2")})."
+        ? $"BC7 encoder: native BC7E {Backend} ({Variant.ToUpperInvariant()})."
         : NativeVariant.Value != 0 ? "BC7 encoder: BCnEncoder (managed), selected explicitly."
         : "Warning: the native BC7 encoder could not be loaded on this system. Using the managed BCnEncoder fallback; BC7 mip completion will be far slower.";
 

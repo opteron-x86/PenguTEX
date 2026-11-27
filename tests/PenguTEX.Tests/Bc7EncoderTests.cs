@@ -9,6 +9,17 @@ namespace PenguTEX.Tests;
 public sealed class Bc7EncoderTests
 {
     // Source builds without tools/build-native.py skip these; CI and packaging set PENGUTEX_REQUIRE_NATIVE_BC7=1.
+    [Fact]
+    public void NativeCacheIdentityNamesTheInstructionSet()
+    {
+        RequireNative();
+        // SSE2 and NEON both report four lanes; a cache entry from one must never be reused by the other.
+        string identity = new Bc7Encoder(Bc7Backend.Basic).Identity;
+        if (System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture == System.Runtime.InteropServices.Architecture.Arm64)
+            Assert.EndsWith("-neon", identity);
+        else Assert.Matches("-(sse2|avx2)$", identity);
+    }
+
     private static void RequireNative() => Assert.SkipUnless(Bc7Encoder.NativeAvailable || Environment.GetEnvironmentVariable("PENGUTEX_REQUIRE_NATIVE_BC7") == "1",
         "The native BC7 encoder is not built; run tools/build-native.py.");
 
@@ -54,7 +65,8 @@ public sealed class Bc7EncoderTests
     public void RunLogNamesTheEncoderInUse()
     {
         RequireNative();
-        Assert.Matches(@"^BC7 encoder: native BC7E Basic \((AVX2|SSE2)\)\.$", new CpuMipProcessor(Bc7Backend.Basic).EncoderSummary);
+        string expected = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture == System.Runtime.InteropServices.Architecture.Arm64 ? "NEON" : "(AVX2|SSE2)";
+        Assert.Matches($@"^BC7 encoder: native BC7E Basic \({expected}\)\.$", new CpuMipProcessor(Bc7Backend.Basic).EncoderSummary);
         Assert.Contains("native BC7E Fast", new Bc7Encoder(Bc7Backend.Fast).Summary);
         Assert.Equal("BC7 encoder: BCnEncoder (managed), selected explicitly.", new CpuMipProcessor(Bc7Backend.Managed).EncoderSummary);
     }
