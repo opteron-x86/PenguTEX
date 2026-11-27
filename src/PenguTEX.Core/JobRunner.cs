@@ -49,8 +49,8 @@ public static class JobRunner
     }
     private static bool Within(string child, string parent)
     {
-        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         child = Canonical(child); parent = Canonical(parent);
+        var comparison = PathCase.Comparison(parent);
         return child.Equals(parent, comparison) || child.StartsWith(parent + Path.DirectorySeparatorChar, comparison);
     }
     public static string Resolve(string root, string path)
@@ -110,7 +110,7 @@ public static class JobRunner
             if (Within(asset.Container, output) || Within(asset.Container, cache)) throw new IOException("A source resolves inside output/cache.");
         string parent = Path.GetDirectoryName(output) ?? throw new IOException("Output must have a parent directory.");
         Directory.CreateDirectory(parent); Directory.CreateDirectory(cache);
-        string identity = JsonFiles.Hash(OperatingSystem.IsWindows() ? output.ToUpperInvariant() : output)[..20];
+        string identity = JsonFiles.Hash(PathCase.Key(output))[..20];
         using var outputLock = new FileStream(Path.Combine(parent, ".pengutex-" + identity + ".lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
         string stage = Path.Combine(parent, ".pengutex-stage-" + identity);
         string backup = Path.Combine(parent, ".pengutex-previous-" + identity);

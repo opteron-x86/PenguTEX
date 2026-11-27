@@ -159,7 +159,7 @@ public sealed class MaterialTests
         using var f = new Fixture(); string game = f.Dir("game"); f.Dir("game/Data");
         f.Text("instance/ModOrganizer.ini", $"[General]\ngamePath={game}\nselected_profile=Test\n");
         f.Text("instance/profiles/Test/settings.ini", "[General]\nLocalSettings=true\n");
-        f.Text("instance/profiles/Test/skyrim.ini", "[Archive]\nsResourceArchiveList=\nsResourceArchiveList2=\n");
+        f.Text("instance/profiles/Test/skyrim.ini", "[Archive]\nsResourceArchiveList=\nsResourceArchiveList2=\nsArchiveToLoadInMemoryList=\n");
         f.Text("instance/profiles/Test/modlist.txt", "+Previous\n+High\n-Off\n+Low\n");
         f.Text("instance/profiles/Test/plugins.txt", "*A.esp\n*B.esp\n"); f.Text("instance/profiles/Test/loadorder.txt", "A.esp\nB.esp\n");
         f.File("instance/mods/Low/A.bsa", Fixture.Bsa(Fixture.Mesh(0), "shape.nif", "meshes"));

@@ -6,6 +6,9 @@ its Nexus Mods changelog. Releases before 0.1.0-alpha.11 are described on the
 
 ## [Unreleased]
 
+- Fixed output and cache folders that differ only in letter case being treated as separate on case-insensitive volumes (macOS APFS, Linux casefold or FAT/NTFS mounts): the overlap check now rejects them and both spellings share one output lock.
+- Fixed `~` and environment variables not being expanded in a typed instance folder (desktop **Load profiles**) and in typed output and cache folders.
+
 ## [0.1.0-alpha.14] - 2026-11-18
 
 Build your output again: uncompressed textures are now compressed.

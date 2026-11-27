@@ -78,6 +78,8 @@ public sealed class Mo2Instance
     /// </summary>
     public static Mo2Instance Open(string instanceFolder, Mo2Locations? typed = null)
     {
+        // A typed folder may start with ~ or name a Wine drive; the desktop passes the text box unchanged.
+        if (!string.IsNullOrWhiteSpace(instanceFolder)) instanceFolder = HostPath.Resolve(instanceFolder, winePrefix: typed?.WinePrefix);
         var iniPath = AssetPath.ResolveExisting(instanceFolder, "ModOrganizer.ini") ?? Path.Combine(instanceFolder, "ModOrganizer.ini");
         Dictionary<string, Dictionary<string, string>> ini;
         if (File.Exists(iniPath)) ini = ReadIni(iniPath);

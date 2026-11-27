@@ -239,7 +239,7 @@ public sealed class MainWindow : Window
         var source = new SourceOptions(_mode.SelectedIndex == 0 ? Value(_source) : null, _mode.SelectedIndex == 1 ? Value(_source) : null,
             Value(_profile), Value(_game), Value(_mods), Value(_profileRoot), Value(_overwrite), OperatingSystem.IsWindows() ? null : Value(_wine), Value(_ini), Value(_exclude)?.Split('|'), Value(_data))
         { ReferenceFolder = _compareReference.IsChecked == true ? Value(_reference) : null, ReplaceMod = _compareReference.IsChecked == true ? Value(_replaceMod) : null };
-        return new() { Source = source, Policy = policy, CompareReference = _compareReference.IsChecked == true, Output = _output.Text?.Trim() ?? "", Cache = _cache.Text?.Trim() ?? "", Workers = Number(_workers, "Workers") is var workers and >= 1 and <= 32 ? workers : throw new ArgumentException("Workers must be from 1 to 32.") };
+        return new() { Source = source, Policy = policy, CompareReference = _compareReference.IsChecked == true, Output = UserPath(_output.Text), Cache = UserPath(_cache.Text), Workers = Number(_workers, "Workers") is var workers and >= 1 and <= 32 ? workers : throw new ArgumentException("Workers must be from 1 to 32.") };
     }
     public void SetSettings(DesktopSettings settings)
     {
@@ -280,14 +280,16 @@ public sealed class MainWindow : Window
             ? (string.IsNullOrWhiteSpace(_source.Text) ? "Choose a source and analyze its textures." : "Ready to analyze the selected source.")
             : "Source or policy changed. Analyze to review a new plan.";
     }
-    private void UpdateOutputFolderAction() => _openOutput.IsEnabled = !IsWorking && !_openingOutput && Directory.Exists(_output.Text?.Trim());
+    /// <summary>A typed output or cache folder, with ~ and environment variables expanded (a Finder launch has cwd "/").</summary>
+    private static string UserPath(string? text) => text?.Trim() is { Length: > 0 } typed ? PenguTEX.Assets.Paths.HostPath.Expand(typed) : "";
+    private void UpdateOutputFolderAction() => _openOutput.IsEnabled = !IsWorking && !_openingOutput && Directory.Exists(UserPath(_output.Text));
     public async Task OpenOutputFolderAsync()
     {
         if (IsWorking || _openingOutput) return;
         _openingOutput = true; UpdateOutputFolderAction();
         try
         {
-            string? path = _output.Text?.Trim();
+            string? path = UserPath(_output.Text);
             if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
                 throw new DirectoryNotFoundException("Choose an existing output folder or build the output first.");
             var folder = new DirectoryInfo(Path.GetFullPath(path));
@@ -301,7 +303,7 @@ public sealed class MainWindow : Window
     public async Task CleanCacheAsync()
     {
         if (IsWorking || !_cleanCache.IsEnabled) return;
-        string path = _cache.Text?.Trim() ?? ""; bool confirmed = _pruneConfirmation == path;
+        string path = UserPath(_cache.Text); bool confirmed = _pruneConfirmation == path;
         _cleanCache.IsEnabled = false;
         try
         {

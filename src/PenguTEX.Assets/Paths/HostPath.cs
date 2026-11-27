@@ -1,4 +1,6 @@
 // Adapted from PenguLOD / AnvilLOD, GPL-3.0-only. See docs/PROVENANCE.md.
+using PenguTEX.Core;
+
 namespace PenguTEX.Assets.Paths;
 
 /// <summary>Host paths and Wine drive mappings. Game-relative paths remain in GamePath.</summary>
@@ -11,7 +13,8 @@ public static class HostPath
         return Directory.Exists(Path.Combine(root, "pfx", "dosdevices")) ? Path.Combine(root, "pfx") : root;
     }
 
-    private static string Expand(string path)
+    /// <summary>Expands a leading <c>~</c> and environment variables in a typed path, as a shell would.</summary>
+    public static string Expand(string path)
     {
         if (path == "~") return Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         if (path.StartsWith("~/", StringComparison.Ordinal))
@@ -62,17 +65,13 @@ public static class HostPath
         return Path.TrimEndingDirectorySeparator(current);
     }
 
-    /// <summary>Stable identity for hashing host locations; Windows aliases differ only in casing.</summary>
-    public static string ComparisonKey(string path)
-    {
-        string canonical = Canonical(path);
-        return OperatingSystem.IsWindows() ? canonical.ToUpperInvariant() : canonical;
-    }
+    /// <summary>Stable identity for hashing host locations; aliases on case-insensitive volumes differ only in casing.</summary>
+    public static string ComparisonKey(string path) => PathCase.Key(Canonical(path));
 
     public static bool IsWithin(string path, string parent)
     {
-        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         path = Canonical(path); parent = Canonical(parent);
+        var comparison = PathCase.Comparison(parent);
         return path.Equals(parent, comparison) || path.StartsWith(parent.EndsWith(Path.DirectorySeparatorChar) ? parent : parent + Path.DirectorySeparatorChar, comparison);
     }
 
